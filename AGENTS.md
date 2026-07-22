@@ -6,3 +6,4 @@ Read `docs/BOUNDARY.md` before changing code.
 - Prefer re-expression over copying mega-files.
 - Move slowly: one build-order step at a time.
 - CLI must never write the operator TOML.
+- Model-facing analysis contract: `docs/api.md` (grow code to match).

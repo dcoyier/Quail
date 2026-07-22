@@ -6,6 +6,8 @@ Familiarity-first rebuild. v0.10 at `../Quail v0.10` is a **reference and test o
 
 Rebuild Quail so the author can understand and extend it. Keep load-bearing invariants; redesign anything hard to explain or ceremonial.
 
+**Analysis contract:** [`docs/api.md`](api.md) is the model-facing API (facade types, `retrieve`/`tag`/…, regex, ranking, lexical/semantic). Grow code to match that document.
+
 ## Deployments
 
 - **Local / research:** unrestricted loopback, no sign-in.
@@ -64,22 +66,23 @@ Read TOML → apply declared state → serve. Refresh = edit file, stop, run aga
 - validate/doctor/plan/apply ceremony
 - Invitations / identity linking / live admin user APIs
 - Connector author SDK
-- Search (lexical/semantic) — phase 2
+- Search **infrastructure** (indexes/embeddings) may land after the API/AST surface; Lexical/Semantic stay in `api.md`
 - Hosting flourishes (ngrok, etc.)
 
 ## Build order (stop if you cannot explain the step)
 
 1. This boundary + empty layout
-2. Facade language
+2. Analysis contract [`api.md`](api.md) + facade/namespace grown to match it
 3. Immutable dataset import + read
 4. Session overlays + revision commit
-5. Planner + engine
+5. Planner + engine (evaluate the API, including search when ready)
 6. Worker + print-only + RPC
-7. Thin MCP adapter
+7. Thin MCP adapter (`quail_exec`, …)
 8. TOML + `quail run --config` (loopback)
 9. OIDC/Clerk + TOML allowlist
 10. Connector SDK (later)
-11. Search (phase 2)
+
+Search **infrastructure** may follow the AST/API surface; Lexical/Semantic remain part of the public contract in `api.md`.
 
 ## Working agreement
 

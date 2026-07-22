@@ -3,12 +3,14 @@
 Inspectable qualitative analysis over private corpora (rebuild in progress).
 
 This tree is intentionally small. Product decisions live in
-[`docs/BOUNDARY.md`](docs/BOUNDARY.md). The previous implementation at
+[`docs/BOUNDARY.md`](docs/BOUNDARY.md). The model-facing analysis contract is
+[`docs/api.md`](docs/api.md). The previous implementation at
 `../Quail v0.10` is reference-only.
 
 ## Status
 
-Scaffold only. No analysis engine yet.
+Scaffold plus analysis API contract. Facade implementation is partial; grow it
+to match `docs/api.md`.
 
 ## Intended operator path (not implemented)
 
