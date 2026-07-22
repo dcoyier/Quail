@@ -1,0 +1,88 @@
+# Quail v0.11 Boundary
+
+Familiarity-first rebuild. v0.10 at `../Quail v0.10` is a **reference and test oracle**, not a template.
+
+## Purpose
+
+Rebuild Quail so the author can understand and extend it. Keep load-bearing invariants; redesign anything hard to explain or ceremonial.
+
+## Deployments
+
+- **Local / research:** unrestricted loopback, no sign-in.
+- **Company (~10 users):** HTTP + Clerk/OIDC, users allowlisted in TOML.
+
+## Audiences
+
+| Who | Interface |
+| --- | --- |
+| Agent | MCP + analysis language (`quail_exec`, print-only output) |
+| Operator | Hand-edited `quail.toml` + `quail run --config …` (CLI never writes TOML) |
+| Connector author | Deferred — not in the first build |
+
+## Deployment model
+
+One process, one TOML, one authoritative DB:
+
+```text
+Deployment
+├── workspace(s)
+│   └── dataset(s)   # many datasets in one DB, not one DB per dataset
+└── users            # deployment-wide; memberships list workspaces
+```
+
+- Users are **not** nested in per-workspace files.
+- One user record with `workspaces = ["acme", "labs"]`.
+- One MCP session binds to **one** workspace at a time.
+- Unrestricted mode omits `[[users]]`.
+
+## Operator command
+
+```sh
+quail run --config /absolute/path/to/quail.toml
+```
+
+Read TOML → apply declared state → serve. Refresh = edit file, stop, run again.
+
+## Preserve (invariants — improve shape, do not weaken)
+
+- Immutable imported dataset versions
+- Session-scoped analysis overlays
+- One dataset version per `exec`
+- Print-only caller-visible output
+- Host never execs user code; worker has no DB
+- Analysis language as an explicit API (not arbitrary Python-on-DB)
+
+## Improve
+
+- Small modules; no god-object service pulling the whole deployment graph
+- Hand-edited TOML only (no console, no CLI config writers, no invite product)
+- Core importable/testable without MCP
+
+## Out of first build
+
+- Operator console
+- validate/doctor/plan/apply ceremony
+- Invitations / identity linking / live admin user APIs
+- Connector author SDK
+- Search (lexical/semantic) — phase 2
+- Hosting flourishes (ngrok, etc.)
+
+## Build order (stop if you cannot explain the step)
+
+1. This boundary + empty layout
+2. Facade language
+3. Immutable dataset import + read
+4. Session overlays + revision commit
+5. Planner + engine
+6. Worker + print-only + RPC
+7. Thin MCP adapter
+8. TOML + `quail run --config` (loopback)
+9. OIDC/Clerk + TOML allowlist
+10. Connector SDK (later)
+11. Search (phase 2)
+
+## Working agreement
+
+- Prefer re-expression over file copy from v0.10.
+- When unsure: preserve the invariant, change the API/shape.
+- Use v0.10 tests as an oracle for worker/commit behavior.
