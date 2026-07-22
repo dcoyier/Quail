@@ -202,6 +202,9 @@ Comparisons (`==`, `!=`, `<`, …) produce a **Predicate**.
 Use `AsText()` before regex when values might not already be text.  
 `Lexical` / `Semantic` must be the **last** op. Rankable scores end in
 `AsNumber`, `Length`, `Lexical`, or `Semantic`.
+`Lexical` / `Semantic` are ordinary score expressions — they are **not** tied to
+`Ranking`. Use them in predicates or as a `retrieve` unit with no ranking; wrap
+them in `Ranking(expression=...)` only when you want ordered retrieval.
 
 Regex uses a bounded RE2-style engine (not Python backtracking). Supported
 flags via `re`: `I`, `M`, `S`, `A`/`U`, etc. No lookaround, no backreferences.
