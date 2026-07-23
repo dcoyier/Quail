@@ -1,0 +1,31 @@
+QueryEngine evaluates plans for one Scope against catalog data and an in-memory overlay.
+
+It remembers db, scope, staged mutations, created fields, and value overlay.
+
+mutations:
+  Give back the staged FieldCreate, ValueWrite, and ValueDelete tuple.
+
+retrieve(plan):
+  For fields units, evaluate the field group and apply limit/order.
+  Otherwise evaluate entry ids, apply ranking, apply limit/order.
+  Materialize Expression values, Entry handles, present field values, or distinct values.
+
+count(plan):
+  Same candidate sets as retrieve, but give back the length.
+
+create_field(plan):
+  Reject source-name collision.
+  Stage FieldCreate when new and remember the analysis Field.
+
+tag(plan):
+  Require an analysis field.
+  For each selected entry, stage ValueWrite and update the overlay.
+
+untag(plan):
+  Clear matching overlay cells and stage ValueDelete.
+
+entry_value / entry_fields:
+  Read through overlay then durable source or analysis values.
+
+Helpers evaluate groups and predicates, run expression pipelines (Value, AsText,
+AsNumber, regex, Slice, Length), and reject Lexical/Semantic as not wired yet.

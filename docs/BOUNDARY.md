@@ -82,7 +82,8 @@ Read TOML → apply declared state → serve. Refresh = edit file, stop, run aga
    (no TOML reconcile yet)
 4. Session overlays + revision commit — first slice: host `commit_overlay`
    with optimistic revision (no MCP/worker yet)
-5. Planner + engine (evaluate the API, including search when ready)
+5. Planner + engine — first slice: host `plan_*` + QueryEngine + `run_analysis`
+   (Lexical/Semantic and worker sandbox still deferred)
 6. Worker + print-only + RPC
 7. Thin MCP adapter (`quail_exec`, `provide_feedback`, …) — feedback store
    separate from the core analysis DB

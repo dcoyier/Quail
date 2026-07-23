@@ -40,6 +40,8 @@ Use this when something about Quail was confusing, blocked you, or should
 improve — not for analysis results. Feedback is stored outside the core analysis
 database (dedicated feedback file or DB). If something created any friction, you
 should note that through a feedback message. The bar should be low for this.
+Friction could come in the form of expected outcomes that didn't occur or 
+anything that could have improved your experience.
 
 ---
 

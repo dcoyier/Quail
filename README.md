@@ -9,11 +9,11 @@ This tree is intentionally small. Product decisions live in
 
 ## Status
 
-Analysis facade matches `docs/api.md` as symbolic AST (evaluation still stubbed).
-Datasets: embedded Turso + UTF-8 CSV import into immutable versions, with source
-field/entry/value reads (no TOML apply yet).
-Sessions: host overlay commit with optimistic `state_revision` (create_field/tag
-persist only via `commit_overlay`; not MCP-facing).
+Analysis facade matches `docs/api.md` as symbolic AST.
+Host planner + QueryEngine evaluate retrieve/count/tag against Turso + overlay
+(`run_analysis` → `commit_overlay`); Lexical/Semantic and worker sandbox still
+deferred. Datasets: CSV import into immutable versions. Sessions: revision-checked
+overlay commit (host APIs, not MCP-facing).
 
 ## Intended operator path (not implemented)
 

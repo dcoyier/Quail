@@ -1,0 +1,19 @@
+PrintBuffer collects print text for a host-side run.
+It remembers chunks.
+write appends sep-joined values plus end.
+text gives back the joined buffer.
+
+ExecOutcome remembers printed_output and state_revision after a successful run.
+
+dispatch_call(engine, method, args, kwargs):
+  Plan the named facade method then evaluate it on the engine.
+  Supports retrieve, count, create_field, tag, untag, entry_value, entry_fields.
+  This shape is what a future worker RPC can call.
+
+run_analysis(db, session_id, dataset_id, expected_revision, driver):
+  Resolve and ensure scope.
+  Build a QueryEngine and PrintBuffer.
+  Run the driver.
+  On success, commit_overlay with staged mutations.
+  Give back ExecOutcome.
+  If the driver raises, do not commit.
