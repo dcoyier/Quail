@@ -1,0 +1,18 @@
+create_session(db, workspace_id):
+  Require a workspace id and ensure the workspace exists.
+  Create an active session with a new ses_ id and state_revision 0.
+  Commit and give back a Session.
+
+get_session(db, session_id):
+  Give back the Session row, or None if missing.
+
+close_session(db, session_id):
+  If missing, raise.
+  If already closed, return.
+  Mark status closed, refresh last_used_at, and commit.
+
+require_active_session(db, session_id):
+  Load the session.
+  If missing, raise a syntax error.
+  If closed, raise SessionClosedError.
+  Give back the active Session.

@@ -1,0 +1,8 @@
+SessionError is the base failure type for session and overlay host APIs.
+These are not agent-facing MCP errors.
+
+SessionSyntaxError means invalid session arguments or mutation shape.
+
+SessionConflictError means an optimistic revision conflict or illegal overlay state.
+
+SessionClosedError means the session is closed and cannot accept overlay commits.

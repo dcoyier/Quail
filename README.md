@@ -12,6 +12,8 @@ This tree is intentionally small. Product decisions live in
 Analysis facade matches `docs/api.md` as symbolic AST (evaluation still stubbed).
 Datasets: embedded Turso + UTF-8 CSV import into immutable versions, with source
 field/entry/value reads (no TOML apply yet).
+Sessions: host overlay commit with optimistic `state_revision` (create_field/tag
+persist only via `commit_overlay`; not MCP-facing).
 
 ## Intended operator path (not implemented)
 

@@ -1,0 +1,12 @@
+This package re-exports the host session and overlay surface.
+Agents do not call these APIs over MCP; the engine and host will.
+
+Import and expose:
+  errors SessionError, SessionSyntaxError, SessionConflictError, SessionClosedError
+  models Session, Scope, AnalysisField, CatalogField
+  mutations FieldCreate, ValueWrite, ValueDelete
+  create_session, get_session, close_session
+  resolve_scope, ensure_scope
+  analysis_fields, analysis_values, catalog_fields, commit_overlay
+
+__all__ lists those names.

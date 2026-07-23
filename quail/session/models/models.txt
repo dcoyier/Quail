@@ -1,0 +1,22 @@
+Session is a workspace-bound analysis context for the host.
+It remembers id, workspace_id, status, and state_revision.
+
+Scope pins one session to one immutable dataset version.
+It remembers session_id, workspace_id, dataset_id, and dataset_version_id.
+
+AnalysisField is one session overlay column.
+It remembers name, position, and value_revision.
+
+CatalogField is a source or analysis field in catalog order.
+It remembers name, kind ("source" or "analysis"), and position.
+
+FieldCreate is a staged mutation that creates an analysis field.
+It remembers name.
+
+ValueWrite is a staged mutation that tags one entry cell.
+It remembers field, entry_id, and value (JSON-like, not None).
+
+ValueDelete is a staged mutation that clears tagged cells.
+It remembers field, entry_id, and optional value.
+When value is None, clear the whole cell for that field and entry.
+When value is set, clear only an exact match.
