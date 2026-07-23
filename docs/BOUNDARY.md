@@ -56,6 +56,10 @@ Deployment
 Agent `provide_feedback` notes are **not** stored in the core analysis DB.
 They go to a separate append-only feedback JSONL file owned by the MCP/host
 layer (path configured beside the core DB or via constructor args).
+
+Connect-time agent orientation lives in MCP **server instructions** plus
+**tool descriptions** (not in `docs/api.md`). Dataset-specific guidance is
+fetched via `quail_get_dataset_info`, not embedded in static instructions.
 - Users are **not** nested in per-workspace files.
 - One user record with `workspaces = ["acme", "labs"]`.
 - One MCP session binds to **one** workspace at a time.

@@ -47,6 +47,31 @@ def _is_error(result) -> bool:
     return isinstance(result, CallToolResult) and bool(result.isError)
 
 
+def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
+    server, _, _ = _seed(tmp_path)
+    assert server.instructions is not None
+    assert "workspace `local`" in server.instructions
+    assert "quail_get_dataset_info" in server.instructions
+    assert "quail_get_api_docs" in server.instructions
+    assert "provide_feedback" in server.instructions
+
+    async def run() -> None:
+        tools = {tool.name: tool for tool in await server.list_tools()}
+        assert set(tools) == {
+            "quail_get_api_docs",
+            "quail_list_datasets",
+            "quail_start_session",
+            "quail_get_dataset_info",
+            "quail_exec",
+            "provide_feedback",
+        }
+        assert "analysis-language" in (tools["quail_get_api_docs"].description or "").lower()
+        assert "dataset_id" in tools["quail_exec"].inputSchema["properties"]
+        assert "message" in tools["provide_feedback"].inputSchema["properties"]
+
+    asyncio.run(run())
+
+
 def test_quail_get_api_docs(tmp_path: Path) -> None:
     server, _, _ = _seed(tmp_path)
 

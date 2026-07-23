@@ -21,27 +21,11 @@ Pass arguments by name.
 | `code` | Bounded Quail Python (no imports, no files, no network). |
 | `time_window` | `"standard"` or `"extended"` — both are finite; extended is just longer. |
 
-**Before analyzing:** list datasets if needed, start a session, read dataset
-guidance, then reuse `session_id` on later `quail_exec` calls.
-
 **Success:** `{"printed_output": "<exactly what print() wrote>"}`.  
 **Failure:** a tool error with `execution_id` (or `null`) and a `diagnostic`.
 Nothing partial is kept if quail_exec fails — no tags, no bindings, no printed text.
 
 Only `print(...)` leaves the sandbox. Return values of expressions do not.
-
-### Feedback (separate MCP tool)
-
-```text
-provide_feedback(message, *, category=None, session_id=None, dataset_id=None)
-```
-
-Use this when something about Quail was confusing, blocked you, or should
-improve — not for analysis results. Feedback is stored outside the core analysis
-database (dedicated feedback file or DB). If something created any friction, you
-should note that through a feedback message. The bar should be low for this.
-Friction could come in the form of expected outcomes that didn't occur or 
-anything that could have improved your experience.
 
 ---
 
