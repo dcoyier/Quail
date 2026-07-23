@@ -21,6 +21,8 @@ quail/.../name/
 
 Package `__init__.py` may also have a sibling `__init__.txt`. Review an existing pair (for example `quail/analysis/entry/`) before writing a new one.
 
+**1:1 twin rule:** whenever a `.py` has a paired `.txt`, keep them in lockstep. Any behavior, symbol, param, validation, or stub change in the `.py` must be reflected in the `.txt` in the same change (and the reverse if you edit the `.txt` first). Do not land a diff that updates only one side of a twin pair.
+
 Tests under `tests/` do **not** use this layout: plain `.py` test files only — no per-test folders and no `.txt` mirrors.
 
 ### `.txt` style
