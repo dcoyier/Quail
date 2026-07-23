@@ -1,38 +1,4 @@
-"""Where this file sits in Quail
-
-Facade flow (what exists today)::
-
-    agent code
-      -> builds symbolic recipes (Field, Expression, Predicate, …)
-      -> later: retrieve/tag (engine) reads Turso-backed data
-
-``literals.py`` is only used in the *middle of recipe building*, not by Turso
-and not by the engine. Example::
-
-    Expression(Field("topic"), Value()) == ["climate", "policy"]
-                                          ^^^^^^^^^^^^^^^^^^^^^^^
-                                          this Python value is sealed here
-                                          before it is stored on the Predicate
-
-Call chain for that ``==``::
-
-    Expression.__eq__
-      -> Predicate(...)
-      -> seal_literal(["climate", "policy"])   # this module
-      -> Predicate stores the sealed copy
-
-Same idea for Operation params (``RegexSearch("…")``, ``Lexical("…")``, …):
-``operations.py`` calls ``seal_mapping`` so params on the Operation are fixed.
-
-So: Field/Expression/Group describe *structure*; this file only handles the
-plain data *constants* hanging off that structure (comparison RHS, op kwargs).
-
-Sealing means: check JSON-like shape, deep-copy into an immutable snapshot,
-attach snapshot to the AST. Caller mutations afterward cannot change the recipe.
-
-``literal_as_plain`` is read-side only (e.g. ``to_record()``): make a normal
-list/dict copy for display. The AST keeps its sealed snapshot.
-"""
+"""Seal JSON-like literals into immutable snapshots for symbolic recipes."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Facade AST: symbolic language without execution."""
+"""Symbolic facade AST covering docs/api.md Start Here recipes."""
 
 from __future__ import annotations
 
@@ -10,64 +10,105 @@ from quail.analysis import (
     Expression,
     Field,
     G0,
+    G1,
+    Length,
+    Lexical,
     Predicate,
+    QuailRuntimeError,
     QuailSyntaxError,
+    Ranking,
+    RegexFindAll,
+    RegexSearch,
+    Semantic,
+    Unit,
     Value,
+    api_namespace,
+    count,
     entries,
+    fields,
     make_entry,
+    retrieve,
 )
 
 
-def test_expression_comparison_builds_predicate() -> None:
-    predicate = Expression(Field("theme"), Value()) == "trust"
-    assert isinstance(predicate, Predicate)
-    assert predicate.operator == "=="
-    assert predicate.to_record()["right"] == "trust"
+def test_filter_recipe_with_regex() -> None:
+    content = Field("content")
+    mentions = Expression(content, RegexSearch("hydrangea", flags=0)) != None  # noqa: E711
+    matching = G0.where(mentions)
+    assert isinstance(mentions, Predicate)
+    assert matching.operator == "and"
+    assert matching.right is not None
+    assert matching.right.predicate is not None
 
 
-def test_g0_where_composes_filter_group() -> None:
-    group = G0.where(Expression(Field("theme"), Value()) == "trust")
+def test_rank_recipe_with_lexical() -> None:
+    score = Expression(Field("content"), Lexical("hydrangea care"))
+    matching = G0.where(score > 0)
+    rank = Ranking(expression=score)
+    assert rank.expression is score
+    assert matching.right is not None
+
+
+def test_lexical_not_tied_to_ranking() -> None:
+    score = Expression(Field("content"), Lexical("climate"))
+    # Usable as predicate without Ranking
+    group = G0.where(score > 0)
     assert group.operator == "and"
-    assert group.left is G0
+
+
+def test_combine_regex_count_and_lexical_via_predicates() -> None:
+    hit_count = Expression(Field("content"), RegexFindAll(r"climate\w*"), Length())
+    lex = Expression(Field("content"), Lexical("climate policy"))
+    group = G0.where((hit_count >= 1) & (lex > 0))
     assert group.right is not None
     assert group.right.predicate is not None
-    assert group.right.predicate.operator == "=="
+    assert group.right.predicate.operator == "and"
 
 
-def test_predicate_boolean_ops() -> None:
-    left = Expression(Field("a"), Value()) == "x"
-    right = Expression(Field("b"), Value(), AsNumber()) > 0
-    combined = left & right
-    assert combined.operator == "and"
-    assert (~left).operator == "not"
+def test_ranking_addition_and_weight() -> None:
+    a = Expression(Field("content"), Length())
+    b = Expression(Field("content"), Lexical("x"))
+    rank = Ranking(expression=a) + (Ranking(expression=b) * 2.0)
+    assert rank.operator == "+"
+    assert isinstance(rank.right, Ranking)
+    assert rank.right.operator == "*"
 
 
-def test_pipeline_must_start_with_value() -> None:
-    with pytest.raises(QuailSyntaxError, match="Value"):
-        Expression(Field("a"), AsText())
-
-
-def test_extend_expression_pipeline() -> None:
-    expr = Expression(Expression(Field("n"), Value()), AsNumber())
+def test_pipeline_and_units() -> None:
+    expr = Expression(Field("n"), Value(), AsNumber())
     assert [op.kind for op in expr.operations] == ["Value", "AsNumber"]
+    assert entries.scope == "entries"
+    assert fields.scope == "fields"
+    assert Unit("values", Field("topic")).field is not None
+    assert G1.name == "G1"
 
 
-def test_field_direct_compare_is_rejected() -> None:
+def test_lexical_must_end_pipeline() -> None:
+    with pytest.raises(QuailSyntaxError, match="must end"):
+        Expression(Field("content"), Lexical("a"), AsText())
+
+
+def test_semantic_query_and_namespace_stubs() -> None:
+    op = Semantic("hello", input_aggregation="avg")
+    assert op.kind == "Semantic"
+    assert op.input_aggregation == "avg"
+    ns = api_namespace()
+    assert "retrieve" in ns and "G0" in ns and "re" in ns
+    with pytest.raises(QuailRuntimeError, match="not wired"):
+        retrieve(limit=1)
+    with pytest.raises(QuailRuntimeError, match="not wired"):
+        count()
+
+
+def test_entry_handle_and_field_compare_rejected() -> None:
+    entry = make_entry("e1", dataset_id="d", dataset_version_id="v")
+    assert entry.id == "e1"
+    with pytest.raises(QuailRuntimeError, match="entry.value"):
+        entry.value(Field("content"))
     with pytest.raises(QuailSyntaxError, match="Expression"):
         _ = Field("theme") == "trust"
 
 
-def test_predicate_not_usable_as_python_bool() -> None:
-    predicate = Expression(Field("theme"), Value()) == "trust"
-    with pytest.raises(QuailSyntaxError, match="G0.where"):
-        bool(predicate)
-
-
-def test_entries_unit_and_entry_handle() -> None:
-    assert entries.scope == "entries"
-    entry = make_entry("e1")
-    assert entry.entry_id == "e1"
-    with pytest.raises(QuailSyntaxError, match="Quail"):
-        from quail.analysis.facade import Entry
-
-        Entry("e1")
+def test_group_not_iterable() -> None:
+    with pytest.raises(QuailSyntaxError, match="retrieve"):
+        iter(G0)

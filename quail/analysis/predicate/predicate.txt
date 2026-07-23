@@ -1,0 +1,51 @@
+Predicate is an immutable true-or-false recipe evaluated per entry later.
+
+A Predicate remembers:
+  left
+  operator
+  right
+
+To create a Predicate from left, operator, and optional right:
+  If operator is and or or:
+    Require both sides are Predicates.
+    Store right as given.
+  If operator is not:
+    Require left is a Predicate and right is omitted.
+    Store right as None.
+  If operator is a comparison <, <=, >, >=, ==, or !=:
+    Require left is an Expression.
+    Store right after comparison-right checking and sealing.
+  Otherwise raise unsupported Predicate operator.
+  Remember left, operator, and stored right.
+
+to_record:
+  Give back a dictionary with kind Predicate, operator, and left as a record.
+  If operator is not "not", also include right as a record.
+
+and with another Predicate:
+  Create Predicate(self, "and", other).
+
+or with another Predicate:
+  Create Predicate(self, "or", other).
+
+invert with ~:
+  Create Predicate(self, "not").
+
+Using a Predicate as a Python bool:
+  Raise a syntax error to compose with &, |, and ~ and select with G0.where.
+
+Adding to a Predicate:
+  Raise a syntax error that Predicates do not support +.
+
+_comparison_right(operator, right):
+  For ordering operators:
+    If right is an Expression, keep it.
+    Otherwise require a finite non-boolean number, then seal_literal(right).
+  For equality operators:
+    If right is an Expression, keep it.
+    Otherwise seal_literal(right).
+
+_operand_record(value):
+  If value has to_record, use that.
+  If value is a mapping or tuple, use literal_as_plain.
+  Otherwise give value back.

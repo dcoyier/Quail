@@ -1,0 +1,55 @@
+GroupExpr is an immutable symbolic population of entries or fields.
+It is not a Python list until retrieve materializes it.
+
+A GroupExpr remembers:
+  scope
+  name (optional)
+  predicate (optional)
+  members (optional)
+  left (optional)
+  operator (optional)
+  right (optional)
+
+To create a GroupExpr:
+  Require scope is "entries" or "fields".
+  Require predicate is a Predicate or None.
+  Require operator is and, or, not, or None.
+  Count how many population forms are set among name, predicate, members, and composition.
+  Require exactly one population form.
+  If name is set, require (entries, G0) or (fields, G1).
+  If scope is fields and predicate is set, raise a scope error that predicates are entry-scoped.
+  If members is set:
+    Require a list.
+    For entries scope, every member must be an Entry.
+    For fields scope, every member must be a Field.
+  If composition is set:
+    Require left is a GroupExpr with the same scope.
+    For not, require right is omitted.
+    For and or or, require right is a compatible GroupExpr.
+  Remember all fields, storing members as a tuple when present.
+
+where(predicate):
+  Require entry scope.
+  Require predicate is a Predicate.
+  Return self intersected with GroupExpr(entries, predicate=predicate).
+
+to_record:
+  Give back scope, name, predicate record, member records, left record, operator, and right record.
+
+and / or / invert:
+  Build composed GroupExpr values with operators and, or, or not.
+
+Using a GroupExpr as a Python bool:
+  Raise to compose with &, |, and ~.
+
+Iterating or indexing a GroupExpr:
+  Raise that groups are symbolic and retrieve must be used instead.
+
+_member_record(member):
+  Give back member.to_record().
+
+G0:
+  Builtin entry group named G0 — every entry.
+
+G1:
+  Builtin field group named G1 — every field.

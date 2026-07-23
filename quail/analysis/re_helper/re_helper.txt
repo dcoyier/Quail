@@ -1,0 +1,28 @@
+There is a flag mask ALLOWED_REGEX_FLAGS built from re.I, re.M, re.S, re.A, and re.U.
+There is a size limit MAX_REGEX_PATTERN_BYTES of 16 kilobytes.
+
+ReFacade is the restricted regex helper injected as re.
+It is not Python's full re module.
+
+ReFacade remembers flag constants:
+  NOFLAG
+  A and ASCII
+  I and IGNORECASE
+  M and MULTILINE
+  S and DOTALL
+  U and UNICODE
+
+escape(pattern):
+  If pattern is not text, raise a syntax error that re.escape requires text.
+  Otherwise give back pattern escaped for literal use in a Quail regex.
+
+validate_regex_flags(flags):
+  If flags is a bool or not an int, raise a syntax error that regex flags must be an int.
+  If flags has bits outside ALLOWED_REGEX_FLAGS, raise a syntax error that flags are limited to re.A, re.I, re.M, re.S, and re.U.
+  If both re.A and re.U are set, raise a syntax error that those flags cannot be combined.
+
+require_regex_text(value, label):
+  If value is not a string, raise a syntax error that label must be a string.
+  Encode value as UTF-8 bytes.
+  If that encoding is longer than MAX_REGEX_PATTERN_BYTES, raise a syntax error that label cannot exceed that byte limit.
+  Give back the encoded bytes.

@@ -1,0 +1,14 @@
+QuailError is the base failure type for the analysis language.
+All other Quail analysis errors inherit from it.
+
+QuailSyntaxError means invalid symbolic construction, bad API shape, or unsupported Python.
+It usually fails while building a recipe, before reading row data.
+
+QuailScopeError means valid pieces used in the wrong combination of scopes.
+Examples: wrong group with wrong unit, entry vs field population mismatch, bad dataset version pairing.
+
+QuailFieldError means unknown field, kind mismatch, or attempted source-field mutation.
+Mostly raised later by the engine when resolving columns against real data.
+
+QuailRuntimeError means a data-dependent failure, unavailable search, timeout, or resource limit.
+Also used today for stubs that are not wired yet, such as retrieve or entry.value.

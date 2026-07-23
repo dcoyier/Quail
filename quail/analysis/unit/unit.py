@@ -1,41 +1,4 @@
-"""Where this file sits in Quail
-
-Facade flow::
-
-    agent code
-      -> group=G0 / G1 / G0.where(...)     # WHICH rows or columns (group.py)
-      -> unit=entries / fields / …        # WHAT to return from them (this file)
-      -> retrieve(unit=…, group=…, …)     # namespace stub -> later engine
-
-``Unit`` answers the retrieve/count question: "return what kind of thing?"
-It is not the population itself — that is ``GroupExpr`` (``G0``, ``G1``, …).
-
-Examples::
-
-    retrieve(unit=entries, group=G0, limit=10)
-    #          ^^^^^^^^^^^  ^^^^^^^
-    #          return Entry   from all rows
-    #          handles
-
-    retrieve(unit=fields, group=G1, limit=50)
-    #          ^^^^^^^^^^  ^^^^^^^
-    #          return Field  from all columns
-    #          definitions
-
-    retrieve(unit=Unit("values", Field("topic")), group=G0, limit=100)
-    #          distinct present topic values across selected entries
-
-Scopes:
-
-- ``"entries"`` — row handles (optional ``field``: present values of that
-  field, still one result per selected entry that has it)
-- ``"fields"`` — column definitions; must not pass ``field=``
-- ``"values"`` — distinct present values of ``field``; ``field`` required
-
-Builtins ``entries`` and ``fields`` are just ``Unit("entries")`` and
-``Unit("fields")``. Ranking is allowed for entry-aligned units, not for
-``fields`` or distinct ``values`` (see docs/api.md).
-"""
+"""Retrieve/count units: entries, fields, or field values."""
 
 from __future__ import annotations
 
@@ -69,11 +32,6 @@ class Unit:
         }
 
 
-# Injected builtins — same objects every time (immutable Units).
-entries = Unit(scope="entries")
-fields = Unit(scope="fields")
-
-
 def _require_allowed_scope(scope: Any) -> None:
     if scope not in _ALLOWED_SCOPES:
         raise QuailSyntaxError('Unit scope must be "entries", "fields", or "values"')
@@ -93,3 +51,8 @@ def _require_scope_field_combo(scope: str, field: Field | None) -> None:
         raise QuailSyntaxError('Unit("values", field) requires a Field')
     # entries + field is allowed: present values aligned to entries.
     # entries + field=None is the default (return Entry handles).
+
+
+# Injected builtins — same objects every time (immutable Units).
+entries = Unit(scope="entries")
+fields = Unit(scope="fields")

@@ -1,0 +1,95 @@
+Operation is an immutable step in an Expression pipeline.
+It remembers kind and sealed params.
+
+To create an Operation from kind and optional params dict:
+  Require kind is a non-empty string.
+  Require params is a dict or None.
+  Remember kind.
+  Seal params with seal_mapping, using an empty dict when params is None.
+
+to_record:
+  Give back a plain dictionary with kind and the plain form of params.
+
+Attribute access on an Operation:
+  For Slice, attribute end reads params end as plain.
+  Otherwise read the named param as plain.
+  If missing, raise attribute error that that operation has no such attribute.
+
+validate_operation_pipeline(operations):
+  If there are no operations, raise a syntax error that Expression requires at least one operation.
+  Track current_type starting as "any".
+  For each operation in order:
+    If kind is Value:
+      If it is not first, raise that Value is valid only as the first operation.
+      Continue.
+    If kind is AsText, set current_type to text and continue.
+    If kind is AsNumber, set current_type to number and continue.
+    If kind is RegexSearch or RegexFindAll:
+      Require current_type is any, text, or text_or_list.
+      Set current_type to list_text for RegexFindAll, otherwise text.
+      Continue.
+    If kind is RegexSub or Slice:
+      Require current_type is any, text, list_text, or text_or_list.
+      If current_type was any, set it to text_or_list.
+      Continue.
+    If kind is Length:
+      Require current_type is any, text, list_text, or text_or_list.
+      Set current_type to number.
+      Continue.
+    If kind is Lexical or Semantic:
+      Require current_type is any, text, list_text, or text_or_list.
+      Require this is the last operation.
+      Set current_type to score.
+      Continue.
+    Otherwise raise unsupported operation.
+
+Value:
+  Give back Operation kind Value.
+
+AsText:
+  Give back Operation kind AsText.
+
+AsNumber:
+  Give back Operation kind AsNumber.
+
+RegexSearch(pattern, flags default 0):
+  Build a regex Operation kind RegexSearch.
+
+RegexFindAll(pattern, flags default 0):
+  Build a regex Operation kind RegexFindAll.
+
+RegexSub(pattern, replacement, flags default 0):
+  Require replacement is a string and valid regex text.
+  Build a regex Operation kind RegexSub including replacement.
+
+Slice(start, end default None):
+  Require start is an int and not a bool.
+  Require end is None or an int and not a bool.
+  Give back Operation kind Slice with start and end params.
+
+Length:
+  Give back Operation kind Length.
+
+Lexical(query, input_aggregation default None, target_aggregation default None):
+  Build a similarity Operation kind Lexical.
+
+Semantic(query, input_aggregation default None, target_aggregation default None):
+  Build a similarity Operation kind Semantic.
+
+_regex_operation(kind, pattern, flags default 0, extra params):
+  Require pattern is valid regex text.
+  Validate flags.
+  Give back Operation with pattern, flags, and extra params.
+  Full RE2 compile checks come later with the regex engine.
+
+_similarity_operation(kind, query, input_aggregation, target_aggregation):
+  For each aggregation argument, require it is None, "total", or "avg".
+  Give back Operation with sealed query record and those aggregations.
+
+_similarity_query_record(operation_kind, query):
+  If query is a non-empty string, record kind LiteralText with that text.
+  If query is an entry-scoped GroupExpr, record kind EntryGroup with group.to_record().
+  If query is a field-scoped GroupExpr, raise a scope error that target groups must be entry-scoped.
+  If query is a list of strings with at least one non-empty string, record kind LiteralTextList.
+  If query is a non-empty list of Entry handles, record kind EntryList with entry records.
+  Otherwise raise a syntax error about allowed query shapes.

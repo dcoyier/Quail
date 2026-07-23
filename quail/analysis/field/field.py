@@ -1,35 +1,4 @@
-"""Where this file sits in Quail
-
-Facade flow::
-
-    agent code
-      -> Field("content")              # this module: name a column
-      -> Expression(Field(...), …)     # read/transform that column's values
-      -> Predicate / Group / Ranking
-      -> later: retrieve/tag (engine) resolves the name against real data
-
-A ``Field`` is only a *reference* to a column (like a column header), not the
-cell values in any row. It does not read Turso. Example::
-
-    Field("content")
-         |
-         v
-    Dataset columns:  id  |  content  |  speaker
-                           ^^^^^^^^^^
-                           this is what Field("content") points at
-
-Wrong (raises here)::
-
-    Field("topic") == "climate"
-
-Right (builds a Predicate in expression/predicate modules)::
-
-    Expression(Field("topic"), Value()) == "climate"
-
-``kind`` is optional metadata: ``None`` (resolve by name), ``"source"``
-(imported, immutable), or ``"analysis"`` (session tags from create_field).
-Whether that column actually exists is checked later by the engine.
-"""
+"""Field references (source or analysis columns)."""
 
 from __future__ import annotations
 

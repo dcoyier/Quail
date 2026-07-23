@@ -1,0 +1,47 @@
+_is_rankable(expression):
+  False if there are no operations.
+  True when the last operation kind is AsNumber, Length, Lexical, or Semantic.
+
+Ranking is an immutable ordering rule over entry scores.
+
+A Ranking remembers:
+  expression (optional)
+  left (optional)
+  operator (optional)
+  right (optional)
+
+After creating a Ranking:
+  If everything is empty, that is the empty ordering-preserving ranking — allow it.
+  If expression is set:
+    Require left, operator, and right are unset.
+    Require expression is an Expression and is rankable.
+    Return.
+  Otherwise require left is a Ranking.
+  If operator is +, require right is a Ranking.
+  If operator is *, replace right with a validated non-negative finite weight.
+  Otherwise raise that Ranking must select a supported variant.
+
+to_record:
+  For the empty ranking, mark empty true and null children.
+  Otherwise mark empty false and include expression, left, operator, and right records.
+
+Adding Rankings or Expressions:
+  Empty left ranking becomes the other side as a ranking.
+  Empty right ranking leaves self unchanged.
+  Otherwise build Ranking(left=self, operator="+", right=other_as_ranking).
+
+Multiplying a Ranking by a weight on the right:
+  Reject weighting an empty Ranking.
+  Build Ranking(left=self, operator="*", right=weight).
+
+Multiplying with weight on the left:
+  Raise that ranking weight must be on the right.
+
+_ranking_weight(value):
+  Require a finite non-negative number that is not a bool.
+  Give back that float.
+
+_as_ranking(value):
+  If value is a Ranking, keep it.
+  If value is an Expression, wrap Ranking(expression=value).
+  Otherwise raise that composition needs a Ranking or Expression.

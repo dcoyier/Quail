@@ -1,0 +1,32 @@
+retrieve(unit default entries, group default G0, limit default 1, order default "top", rank default None):
+  Meant to materialize a bounded list from unit and group.
+  Not wired yet, so raise a runtime error that retrieve is not wired yet.
+
+count(unit default entries, group default G0):
+  Meant to return a non-negative population size.
+  Not wired yet, so raise a runtime error that count is not wired yet.
+
+create_field(field):
+  Meant to create or confirm an analysis Field.
+  Not wired yet, so raise a runtime error that create_field is not wired yet.
+
+tag(group, field, value):
+  Meant to write an analysis value onto selected entries.
+  Not wired yet, so raise a runtime error that tag is not wired yet.
+
+untag(group, field, optional value):
+  Meant to clear analysis values on selected entries.
+  Not wired yet, so raise a runtime error that untag is not wired yet.
+
+quail_print(values, sep default space, end default newline):
+  Meant to append caller-visible output.
+  Not wired yet, so raise a runtime error that print is not wired yet.
+
+api_namespace:
+  Build the dict of names injected into quail_exec, minus safe Python builtins.
+  Include retrieve, count, create_field, tag, untag, print as quail_print.
+  Include G0, G1, entries, fields.
+  Include types Field, Unit, Expression, Predicate, GroupExpr, Ranking, Entry.
+  Include operation factories Value through Semantic.
+  Include re as a ReFacade instance.
+  Include QuailError and the four subclasses.
