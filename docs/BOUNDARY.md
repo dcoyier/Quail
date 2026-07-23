@@ -17,13 +17,15 @@ Rebuild Quail so the author can understand and extend it. Keep load-bearing inva
 
 | Who | Interface |
 | --- | --- |
-| Agent | MCP + analysis language (`quail_exec`, print-only output) |
+| Agent | MCP + analysis language (`quail_exec`, print-only output) plus |
+|  | `provide_feedback` for friction / improvement notes |
 | Operator | Hand-edited `quail.toml` + `quail run --config …` (CLI never writes TOML) |
 | Connector author | Deferred — not in the first build |
 
 ## Deployment model
 
-One process, one TOML, one authoritative DB:
+One process, one TOML, one authoritative **core** DB for workspaces, datasets,
+sessions, and overlays:
 
 ```text
 Deployment
@@ -32,6 +34,9 @@ Deployment
 └── users            # deployment-wide; memberships list workspaces
 ```
 
+Agent `provide_feedback` notes are **not** stored in the core analysis DB.
+They go to a separate feedback file or database owned by the MCP/host layer
+(implemented when thin MCP lands).
 - Users are **not** nested in per-workspace files.
 - One user record with `workspaces = ["acme", "labs"]`.
 - One MCP session binds to **one** workspace at a time.
@@ -79,7 +84,8 @@ Read TOML → apply declared state → serve. Refresh = edit file, stop, run aga
    with optimistic revision (no MCP/worker yet)
 5. Planner + engine (evaluate the API, including search when ready)
 6. Worker + print-only + RPC
-7. Thin MCP adapter (`quail_exec`, …)
+7. Thin MCP adapter (`quail_exec`, `provide_feedback`, …) — feedback store
+   separate from the core analysis DB
 8. TOML + `quail run --config` (loopback)
 9. OIDC/Clerk + TOML allowlist
 10. Connector SDK (later)
