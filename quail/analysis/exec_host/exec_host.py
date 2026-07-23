@@ -14,6 +14,8 @@ from quail.analysis.planner import (
     plan_tag,
     plan_untag,
 )
+from quail.analysis.worker.client import run_worker_script
+from quail.analysis.worker.protocol import ApiCall
 from quail.datasets.db import CoreDb
 from quail.session.overlay import commit_overlay, ensure_scope, resolve_scope
 
@@ -43,7 +45,7 @@ def dispatch_call(
     args: tuple[Any, ...] = (),
     kwargs: dict[str, Any] | None = None,
 ) -> Any:
-    """Plan then evaluate one facade method (stable shape for a future worker)."""
+    """Plan then evaluate one facade method (stable shape for worker RPC)."""
 
     kwargs = {} if kwargs is None else kwargs
     if method == "retrieve":
@@ -85,3 +87,33 @@ def run_analysis(
         mutations=engine.mutations,
     )
     return ExecOutcome(printed_output=prints.text, state_revision=revision)
+
+
+def exec_script(
+    db: CoreDb,
+    *,
+    session_id: str,
+    dataset_id: str,
+    expected_revision: int,
+    code: str,
+) -> ExecOutcome:
+    """Run quail_exec code in a worker subprocess; commit overlay on success."""
+
+    scope = resolve_scope(db, session_id, dataset_id)
+    ensure_scope(db, scope)
+    engine = QueryEngine(db, scope)
+
+    def on_api_call(call: ApiCall) -> Any:
+        return dispatch_call(engine, call.method, call.args, call.kwargs)
+
+    worker_result = run_worker_script(code, on_api_call=on_api_call)
+    revision = commit_overlay(
+        db,
+        scope,
+        expected_revision=expected_revision,
+        mutations=engine.mutations,
+    )
+    return ExecOutcome(
+        printed_output=worker_result.printed_output,
+        state_revision=revision,
+    )

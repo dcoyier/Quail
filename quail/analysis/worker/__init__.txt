@@ -1,0 +1,7 @@
+This package is the disposable worker side of quail_exec.
+
+Import and expose:
+  run_worker_script, WorkerResult for the host client.
+
+Protocol, sandbox, runtime, and main live in subfolders.
+The worker never opens the analysis database.

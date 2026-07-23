@@ -1,0 +1,6 @@
+validate_quail_code(code):
+  Require code is a string and parse it as a module.
+  Walk the AST and reject imports, defs, classes, lambdas, try/raise,
+  f-strings, comprehensions, is/is not, dangerous names, private attrs,
+  Entry construction, and item/attr assignment.
+  Give back the parsed Module on success.

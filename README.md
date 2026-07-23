@@ -10,10 +10,10 @@ This tree is intentionally small. Product decisions live in
 ## Status
 
 Analysis facade matches `docs/api.md` as symbolic AST.
-Host planner + QueryEngine evaluate retrieve/count/tag against Turso + overlay
-(`run_analysis` → `commit_overlay`); Lexical/Semantic and worker sandbox still
-deferred. Datasets: CSV import into immutable versions. Sessions: revision-checked
-overlay commit (host APIs, not MCP-facing).
+Host planner + QueryEngine evaluate retrieve/count/tag against Turso + overlay.
+Worker subprocess runs quail_exec scripts (`exec_script`) with NDJSON RPC and
+print-only output; Lexical/Semantic still deferred. Datasets: CSV import into
+immutable versions. Sessions: revision-checked overlay commit.
 
 ## Intended operator path (not implemented)
 

@@ -1,0 +1,9 @@
+WorkerResult remembers printed_output from a successful worker run.
+
+run_worker_script(code, on_api_call):
+  Spawn a cleared-env python -I -S -B -u subprocess with the repo on sys.path.
+  Send an execute message with the code.
+  For each api_call, invoke on_api_call and reply with api_result.
+  When result arrives ok, give back WorkerResult.
+  On worker failure or protocol errors, raise.
+  Always kill the subprocess when finished.

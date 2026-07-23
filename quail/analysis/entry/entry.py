@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from quail.analysis.errors import QuailRuntimeError, QuailSyntaxError
+from quail.analysis.errors import QuailSyntaxError
 from quail.analysis.field import Field
 
 # Private capability: only make_entry / engine may construct Entry instances.
@@ -49,19 +49,18 @@ class Entry:
         }
 
     def value(self, field: Field | str, default: Any = None) -> Any:
-        """Return one cell value (engine). Stub until evaluation is wired."""
+        """Return one cell value during worker evaluation via host RPC."""
 
-        del field, default
-        raise QuailRuntimeError(
-            "entry.value() is only available during quail_exec evaluation"
-        )
+        from quail.analysis.worker.runtime.runtime import entry_value_rpc
+
+        return entry_value_rpc(self, field, default)
 
     def fields(self) -> list[Field]:
-        """Return present fields on this row (engine). Stub until evaluation is wired."""
+        """Return present fields on this row during worker evaluation via host RPC."""
 
-        raise QuailRuntimeError(
-            "entry.fields() is only available during quail_exec evaluation"
-        )
+        from quail.analysis.worker.runtime.runtime import entry_fields_rpc
+
+        return entry_fields_rpc(self)
 
 
 def make_entry(

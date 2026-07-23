@@ -21,12 +21,12 @@ to_record:
   Used for debugging or later serialization.
 
 value(field, default):
-  Meant to give one cell value from this row.
-  Not wired yet, so raise a runtime error that value is only available during quail_exec evaluation.
+  During worker evaluation, call the host through entry_value_rpc.
+  Outside a worker run, that raises that value is only available during quail_exec evaluation.
 
 fields:
-  Meant to give the list of Field columns present on this row.
-  Not wired yet, so raise a runtime error that fields are only available during quail_exec evaluation.
+  During worker evaluation, call the host through entry_fields_rpc.
+  Outside a worker run, that raises that fields are only available during quail_exec evaluation.
 
 make_entry(entry_id, optional dataset fields):
   For the host, tests, and engine — not for agent scripts.

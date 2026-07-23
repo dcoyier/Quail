@@ -1,0 +1,13 @@
+ApiCall remembers id, method, args, kwargs, and optional line.
+
+PROTOCOL_VERSION is 1.
+
+encode_value / decode_value:
+  Round-trip literals, lists, tuples, dicts, and facade objects
+  (Field, Entry, Unit, Operation, Expression, Predicate, GroupExpr, Ranking).
+
+dumps_message / loads_message:
+  NDJSON objects with version and sorted compact JSON.
+
+encode_api_call / decode_api_call:
+  Wrap an ApiCall as a protocol api_call message and rebuild it.

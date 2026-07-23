@@ -1,0 +1,7 @@
+serve(stdin, stdout):
+  Read one NDJSON execute message with a code string.
+  Build a HostEndpoint that writes api_call lines and waits for api_result.
+  Validate the code, build the injected namespace, and exec it.
+  On success write result ok with printed_output.
+  On failure write result not ok with an empty printed_output.
+  Always clear the Entry host-call context var.

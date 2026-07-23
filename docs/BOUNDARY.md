@@ -84,7 +84,8 @@ Read TOML → apply declared state → serve. Refresh = edit file, stop, run aga
    with optimistic revision (no MCP/worker yet)
 5. Planner + engine — first slice: host `plan_*` + QueryEngine + `run_analysis`
    (Lexical/Semantic and worker sandbox still deferred)
-6. Worker + print-only + RPC
+6. Worker + print-only + RPC — first slice: subprocess `exec_script` + NDJSON
+   ApiCalls into `dispatch_call` (bindings persist and Lexical still deferred)
 7. Thin MCP adapter (`quail_exec`, `provide_feedback`, …) — feedback store
    separate from the core analysis DB
 8. TOML + `quail run --config` (loopback)
