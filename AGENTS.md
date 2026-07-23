@@ -21,6 +21,8 @@ quail/.../name/
 
 Package `__init__.py` may also have a sibling `__init__.txt`. Review an existing pair (for example `quail/analysis/entry/`) before writing a new one.
 
+Tests under `tests/` do **not** use this layout: plain `.py` test files only — no per-test folders and no `.txt` mirrors.
+
 ### `.txt` style
 
 Mirror the `.py` in reading order. Write imperative prose, not Python and not architecture essays.
