@@ -1,0 +1,8 @@
+serve(config):
+  Apply the config (import CSVs).
+  Close the apply DB handle.
+  Build create_mcp_server with database, feedback, workspace, bind, and port.
+  Block on streamable-http transport.
+
+run_from_config(config):
+  Same as serve.

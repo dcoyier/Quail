@@ -1,0 +1,7 @@
+apply_config(config):
+  For each declared dataset, require the source CSV file exists.
+  Open the core database.
+  Ensure the unrestricted workspace exists.
+  Import each CSV with activate true (idempotent on same content).
+  On failure, close the DB and raise.
+  Give back the open CoreDb.

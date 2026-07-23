@@ -9,16 +9,20 @@ This tree is intentionally small. Product decisions live in
 
 ## Status
 
-Thin loopback MCP adapter exposes the six agent tools over host APIs
-(`exec_script`, sessions, datasets) with feedback in a separate JSONL file.
-Analysis facade matches `docs/api.md` as symbolic AST.
-Host planner + QueryEngine evaluate retrieve/count/tag against Turso + overlay.
-Worker subprocess runs quail_exec scripts with NDJSON RPC and print-only output;
-Lexical/Semantic still deferred. Datasets: CSV import into immutable versions.
-Sessions: revision-checked overlay commit. TOML / `quail run` still next.
+`quail run --config /absolute/path/to/quail.toml` loads a slim hand-edited
+manifest, imports declared CSV datasets into the core DB, and serves
+unrestricted loopback MCP. Feedback stays in a separate JSONL file.
+Analysis facade, worker `exec_script`, sessions, and overlays are in place;
+Lexical/Semantic and OIDC still deferred.
 
-## Intended operator path (not implemented)
+## Operator path
+
+Edit `quail.toml` by hand (the CLI never writes it). Paths inside the file are
+relative to the manifest directory. Restart to pick up changes:
 
 ```sh
-quail run --config /absolute/path/to/quail.toml
+# from a checkout, using the checked-in example (use a real absolute path)
+uv run quail run --config /absolute/path/to/Quail/examples/quail.toml
 ```
+
+See [`examples/quail.toml`](examples/quail.toml).

@@ -1,0 +1,16 @@
+[core]
+database = "data/quail.turso"
+feedback = "data/feedback.jsonl"
+
+[auth]
+mode = "unrestricted"
+workspace = "local"
+
+[hosting]
+bind = "127.0.0.1"
+port = 8000
+
+[[datasets]]
+id = "notes"
+source = "data/notes.csv"
+name = "Notes"

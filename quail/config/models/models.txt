@@ -1,0 +1,15 @@
+DatasetSpec is one CSV dataset declared in the manifest.
+DatasetSpec remembers:
+  dataset_id
+  source
+  name (optional)
+
+QuailConfig is the resolved slim deployment config for unrestricted loopback run.
+QuailConfig remembers:
+  manifest_path
+  database
+  feedback
+  workspace_id
+  bind
+  port
+  datasets

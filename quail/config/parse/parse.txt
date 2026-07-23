@@ -1,0 +1,17 @@
+There are private allowed-key sets for root, core, auth, hosting, and dataset tables.
+
+load_config(config_path):
+  Require an absolute path.
+  Resolve and require the file exists.
+  Read UTF-8 text.
+  Parse with parse_config using that manifest path.
+
+parse_config(raw_text, manifest_path):
+  Require an absolute manifest_path.
+  Parse TOML; reject unknown root keys.
+  Require [core] with database and feedback paths; resolve them against the manifest dir.
+  Require [auth] with mode unrestricted and workspace.
+  Require [hosting] with bind and port 1..65535.
+  Optional [[datasets]] entries each need id and source; name is optional.
+  Reject duplicate dataset ids.
+  Give back a QuailConfig.

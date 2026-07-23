@@ -7,10 +7,10 @@ _server_instructions(workspace_id):
   that dataset guidance comes from quail_get_dataset_info,
   exec success/failure shape, and provide_feedback.
 
-create_mcp_server(db_path, feedback_path, workspace_id default local, api_docs_path default None):
+create_mcp_server(db_path, feedback_path, workspace_id default local, api_docs_path default None, host default 127.0.0.1, port default 8000):
   Open the core DB.
   Remember an McpContext with workspace, feedback path, and api docs path.
-  Build a loopback FastMCP named quail with those server instructions.
+  Build a loopback FastMCP named quail with those server instructions, host, and port.
   Register the six tools and give back the server.
 
 _register_tools(server, context):

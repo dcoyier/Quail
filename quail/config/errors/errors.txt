@@ -1,0 +1,1 @@
+ConfigError means invalid slim quail.toml or --config usage.

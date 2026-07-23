@@ -59,6 +59,8 @@ def create_mcp_server(
     *,
     workspace_id: str = DEFAULT_WORKSPACE_ID,
     api_docs_path: str | Path | None = None,
+    host: str = "127.0.0.1",
+    port: int = 8000,
 ) -> FastMCP:
     """Build an unrestricted loopback FastMCP app with the six core tools."""
 
@@ -73,7 +75,8 @@ def create_mcp_server(
     server = FastMCP(
         "quail",
         instructions=_server_instructions(workspace_id),
-        host="127.0.0.1",
+        host=host,
+        port=port,
     )
     _register_tools(server, context)
     return server
