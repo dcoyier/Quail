@@ -9,11 +9,13 @@ This tree is intentionally small. Product decisions live in
 
 ## Status
 
+Thin loopback MCP adapter exposes the six agent tools over host APIs
+(`exec_script`, sessions, datasets) with feedback in a separate JSONL file.
 Analysis facade matches `docs/api.md` as symbolic AST.
 Host planner + QueryEngine evaluate retrieve/count/tag against Turso + overlay.
-Worker subprocess runs quail_exec scripts (`exec_script`) with NDJSON RPC and
-print-only output; Lexical/Semantic still deferred. Datasets: CSV import into
-immutable versions. Sessions: revision-checked overlay commit.
+Worker subprocess runs quail_exec scripts with NDJSON RPC and print-only output;
+Lexical/Semantic still deferred. Datasets: CSV import into immutable versions.
+Sessions: revision-checked overlay commit. TOML / `quail run` still next.
 
 ## Intended operator path (not implemented)
 

@@ -1,0 +1,165 @@
+"""Thin MCP adapter: agent loop + separate feedback store."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from pathlib import Path
+
+from mcp.types import CallToolResult
+
+from quail.datasets import import_csv_dataset, open_core_db
+from quail.mcp import create_mcp_server
+from quail.session import catalog_fields, get_session, resolve_scope
+
+
+def _seed(tmp_path: Path):
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text(
+        "id,title,body\ne1,Hello,hydrangea care tips\ne2,Other,climate notes\n",
+        encoding="utf-8",
+    )
+    db_path = tmp_path / "core.turso"
+    feedback_path = tmp_path / "feedback.jsonl"
+    with open_core_db(db_path) as db:
+        import_csv_dataset(db, "local", "notes", csv_path, activate=True)
+    server = create_mcp_server(db_path, feedback_path, workspace_id="local")
+    return server, db_path, feedback_path
+
+
+async def _call(server, name: str, arguments: dict | None = None):
+    return await server.call_tool(name, arguments or {})
+
+
+def _as_dict(result) -> dict:
+    if isinstance(result, CallToolResult):
+        assert result.structuredContent is not None
+        return dict(result.structuredContent)
+    if isinstance(result, dict):
+        return result
+    # FastMCP may unwrap structured content to a plain mapping-like object
+    if hasattr(result, "keys"):
+        return dict(result)
+    raise AssertionError(f"Unexpected tool result type: {type(result)!r}")
+
+
+def _is_error(result) -> bool:
+    return isinstance(result, CallToolResult) and bool(result.isError)
+
+
+def test_quail_get_api_docs(tmp_path: Path) -> None:
+    server, _, _ = _seed(tmp_path)
+
+    async def run() -> None:
+        result = _as_dict(await _call(server, "quail_get_api_docs"))
+        assert "Quail Analysis API" in result["documentation"]
+        assert "provide_feedback(message" not in result["documentation"]
+        assert "Feedback is stored outside" not in result["documentation"]
+
+    asyncio.run(run())
+
+
+def test_list_and_dataset_info(tmp_path: Path) -> None:
+    server, _, _ = _seed(tmp_path)
+
+    async def run() -> None:
+        listed = _as_dict(await _call(server, "quail_list_datasets"))
+        assert listed["datasets"][0]["dataset_id"] == "notes"
+        assert listed["datasets"][0]["active_version_id"]
+        info = _as_dict(await _call(server, "quail_get_dataset_info", {"dataset_id": "notes"}))
+        assert info["dataset_id"] == "notes"
+        assert "quail_exec" in info["documentation"]
+
+    asyncio.run(run())
+
+
+def test_start_session_and_exec_start_here(tmp_path: Path) -> None:
+    server, _, _ = _seed(tmp_path)
+
+    async def run() -> None:
+        started = _as_dict(await _call(server, "quail_start_session"))
+        session_id = started["session_id"]
+        assert started["state_revision"] == 0
+        code = """
+for field in retrieve(unit=fields, group=G1, limit=50):
+    print(field.name, field.kind)
+samples = retrieve(limit=1)
+sample = samples[0]
+for field in sample.fields():
+    print(field.name, repr(sample.value(field)))
+"""
+        outcome = _as_dict(
+            await _call(
+                server,
+                "quail_exec",
+                {
+                    "session_id": session_id,
+                    "dataset_id": "notes",
+                    "code": code,
+                },
+            )
+        )
+        assert "title source" in outcome["printed_output"]
+        assert "title 'Hello'" in outcome["printed_output"]
+
+    asyncio.run(run())
+
+
+def test_failed_exec_returns_diagnostic_without_overlay(tmp_path: Path) -> None:
+    server, db_path, _ = _seed(tmp_path)
+
+    async def run() -> None:
+        started = _as_dict(await _call(server, "quail_start_session"))
+        session_id = started["session_id"]
+        result = await _call(
+            server,
+            "quail_exec",
+            {
+                "session_id": session_id,
+                "dataset_id": "notes",
+                "code": 'create_field("topic")\nprint(1 / 0)\n',
+            },
+        )
+        assert _is_error(result)
+        payload = _as_dict(result)
+        assert payload["execution_id"] is None
+        assert payload["diagnostic"]["error_class"]
+        assert payload["diagnostic"]["stable_error_code"]
+        assert payload["diagnostic"]["message"]
+        with open_core_db(db_path) as db:
+            session = get_session(db, session_id)
+            assert session is not None and session.state_revision == 0
+            scope = resolve_scope(db, session_id, "notes")
+            assert all(field.kind == "source" for field in catalog_fields(db, scope))
+
+    asyncio.run(run())
+
+
+def test_provide_feedback_appends_jsonl(tmp_path: Path) -> None:
+    server, db_path, feedback_path = _seed(tmp_path)
+    core_before = db_path.read_bytes()
+
+    async def run() -> None:
+        result = _as_dict(
+            await _call(
+                server,
+                "provide_feedback",
+                {
+                    "message": "Dataset list was clear but docs felt long.",
+                    "category": "docs",
+                },
+            )
+        )
+        assert result == {"accepted": True}
+
+    asyncio.run(run())
+    lines = feedback_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1
+    record = json.loads(lines[0])
+    assert record["workspace_id"] == "local"
+    assert record["message"].startswith("Dataset list")
+    assert record["category"] == "docs"
+    assert record["session_id"] is None
+    assert record["dataset_id"] is None
+    assert "timestamp" in record
+    assert db_path.read_bytes() == core_before

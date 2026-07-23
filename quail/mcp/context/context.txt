@@ -1,0 +1,8 @@
+There is a default workspace id called local.
+
+McpContext is the process-fixed unrestricted MCP context.
+McpContext remembers:
+  db
+  workspace_id
+  feedback_path
+  api_docs_path

@@ -1,0 +1,26 @@
+There is a private set of time windows: standard and extended.
+
+success_printed_output(printed_output):
+  Give back a success CallToolResult with {"printed_output": printed_output}.
+
+success_result(payload):
+  Give back a CallToolResult with isError false and the payload as structuredContent.
+
+validate_time_window(time_window):
+  Give back None when time_window is None.
+  Require a string that is standard or extended.
+  Do not change budgets yet.
+
+error_result(error, execution_id default None, repair_hint default None):
+  Build a diagnostic from the exception.
+  Give back a CallToolResult with isError true, execution_id, and diagnostic.
+
+diagnostic_from_exception(error, repair_hint default None):
+  Classify the exception into error_class and stable_error_code.
+  Remember message from the exception text.
+  Optionally remember repair_hint.
+  Give back the diagnostic object.
+
+classify_exception(error):
+  Map Quail, Session, Dataset, and ValueError types to stable codes.
+  Unknown errors become InternalError / internal_error.

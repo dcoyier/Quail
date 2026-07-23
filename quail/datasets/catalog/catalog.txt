@@ -20,6 +20,9 @@ import_csv_dataset(db, workspace_id, dataset_id, csv_path, name default None, ac
 active_version(db, workspace_id, dataset_id):
   Give back ActiveVersion for the dataset's active ready version, or None.
 
+list_datasets(db, workspace_id):
+  Give back DatasetRef rows for the workspace in id order.
+
 get_dataset(db, workspace_id, dataset_id):
   Give back a DatasetRef for the dataset, or None.
   version_id and content_hash follow the active version when set.

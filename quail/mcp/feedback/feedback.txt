@@ -1,0 +1,7 @@
+append_feedback(path, workspace_id, message, category default None, session_id default None, dataset_id default None):
+  Require a non-empty message and workspace_id.
+  Optional category, session_id, and dataset_id must be strings or None.
+  Empty optional strings become None.
+  Build one JSON object with timestamp, workspace_id, message, and the optional fields.
+  Ensure the parent directory exists.
+  Append the object as one JSON line.

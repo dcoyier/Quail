@@ -201,6 +201,27 @@ def active_version(db: CoreDb, workspace_id: str, dataset_id: str) -> ActiveVers
     return ActiveVersion(version_id=str(row[0]), content_hash=str(row[1]))
 
 
+def list_datasets(db: CoreDb, workspace_id: str) -> list[DatasetRef]:
+    """List datasets in a workspace (id order)."""
+
+    workspace_id = _require_scope_id(workspace_id, label="Workspace id")
+    rows = db.connection.execute(
+        """
+        SELECT id
+        FROM quail_datasets
+        WHERE workspace_id = ?
+        ORDER BY id ASC
+        """,
+        (workspace_id,),
+    ).fetchall()
+    datasets: list[DatasetRef] = []
+    for row in rows:
+        ref = get_dataset(db, workspace_id, str(row[0]))
+        if ref is not None:
+            datasets.append(ref)
+    return datasets
+
+
 def get_dataset(db: CoreDb, workspace_id: str, dataset_id: str) -> DatasetRef | None:
     workspace_id = _require_scope_id(workspace_id, label="Workspace id")
     dataset_id = _require_scope_id(dataset_id, label="Dataset id")

@@ -1,0 +1,39 @@
+There is a private repo-root path to docs/api.md.
+There is a short dataset info stub string.
+
+create_mcp_server(db_path, feedback_path, workspace_id default local, api_docs_path default None):
+  Open the core DB.
+  Remember an McpContext with workspace, feedback path, and api docs path.
+  Build a loopback FastMCP named quail.
+  Register the six tools and give back the server.
+
+_register_tools(server, context):
+  quail_get_api_docs:
+    Read api docs text.
+    On failure, give back an error result.
+    Otherwise give back {"documentation": text}.
+
+  quail_list_datasets:
+    List datasets for the fixed workspace.
+    Give back {"datasets": [{dataset_id, name, active_version_id}, ...]}.
+
+  quail_start_session:
+    Create a session in the fixed workspace.
+    Give back session_id, workspace_id, and state_revision.
+
+  quail_get_dataset_info(dataset_id):
+    Load the dataset.
+    If missing, raise.
+    Give back dataset_id, name, active_version_id, and a short documentation string.
+
+  quail_exec(session_id, dataset_id, code, time_window default standard):
+    Validate time_window as standard or extended (budgets ignored for now).
+    Require an active session in this workspace.
+    Load the session revision and run exec_script.
+    On success, give back {"printed_output": ...}.
+    On failure, give back an error with execution_id null and a diagnostic.
+
+  provide_feedback(message, category default None, session_id default None, dataset_id default None):
+    Optionally check session_id and dataset_id exist.
+    Append one feedback JSONL line outside the core DB.
+    Give back {"accepted": true}.

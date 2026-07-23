@@ -22,6 +22,25 @@ Rebuild Quail so the author can understand and extend it. Keep load-bearing inva
 | Operator | Hand-edited `quail.toml` + `quail run --config …` (CLI never writes TOML) |
 | Connector author | Deferred — not in the first build |
 
+### MCP agent tools (first slice)
+
+Unrestricted loopback FastMCP (`create_mcp_server`) exposes only:
+
+| Tool | Role |
+| --- | --- |
+| `quail_get_api_docs` | Analysis language text from `docs/api.md` |
+| `quail_list_datasets` | Workspace dataset catalog |
+| `quail_start_session` | Create an active session |
+| `quail_get_dataset_info` | Name/id plus short guidance |
+| `quail_exec` | Worker `exec_script` for one session + dataset |
+| `provide_feedback` | Append friction/improvement notes to a JSONL file |
+
+`provide_feedback(message, *, category=None, session_id=None, dataset_id=None)`
+is for confusing, blocked, or improvable Quail behavior — not analysis results.
+The bar is low: expected outcomes that did not occur, or anything that would
+have improved the experience. Agents learn this tool from MCP, not from
+`docs/api.md`.
+
 ## Deployment model
 
 One process, one TOML, one authoritative **core** DB for workspaces, datasets,
@@ -35,8 +54,8 @@ Deployment
 ```
 
 Agent `provide_feedback` notes are **not** stored in the core analysis DB.
-They go to a separate feedback file or database owned by the MCP/host layer
-(implemented when thin MCP lands).
+They go to a separate append-only feedback JSONL file owned by the MCP/host
+layer (path configured beside the core DB or via constructor args).
 - Users are **not** nested in per-workspace files.
 - One user record with `workspaces = ["acme", "labs"]`.
 - One MCP session binds to **one** workspace at a time.
@@ -86,8 +105,10 @@ Read TOML → apply declared state → serve. Refresh = edit file, stop, run aga
    (Lexical/Semantic and worker sandbox still deferred)
 6. Worker + print-only + RPC — first slice: subprocess `exec_script` + NDJSON
    ApiCalls into `dispatch_call` (bindings persist and Lexical still deferred)
-7. Thin MCP adapter (`quail_exec`, `provide_feedback`, …) — feedback store
-   separate from the core analysis DB
+7. Thin MCP adapter — **first slice done:** unrestricted loopback FastMCP with
+   `quail_get_api_docs`, `quail_list_datasets`, `quail_start_session`,
+   `quail_get_dataset_info`, `quail_exec`, and `provide_feedback` (JSONL store
+   separate from the core analysis DB). TOML / `quail run` still next.
 8. TOML + `quail run --config` (loopback)
 9. OIDC/Clerk + TOML allowlist
 10. Connector SDK (later)
