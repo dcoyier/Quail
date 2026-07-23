@@ -1,0 +1,23 @@
+load_csv_dataset(path):
+  Resolve path to an absolute regular file and read its bytes with a size bound.
+  If the file is missing or not a regular file, raise that the CSV does not exist.
+  Decode as UTF-8 with optional BOM.
+  Parse with DictReader.
+  Require a header row with unique nonempty stripped headers and an id column.
+  field_names are the headers except id, and must stay within the field limit.
+  For each data row:
+    Reject too many rows, ragged rows, and cell-budget overflow.
+    Strip cell text; blank cells become absence.
+    Require a nonempty unique id within the entry-id byte limit.
+    Build an entry that always remembers id and only present non-id fields.
+    Charge estimated durable bytes for each present source value.
+  If there are no data rows, raise.
+  content_hash comes from dataset_content_hash over entries and field_names.
+  version_id is csv_ plus that hash.
+  Give back a CsvDataset with path, ids, sizes, field_names, and entries.
+  This does not write the database.
+
+_read_bounded(handle):
+  Read the file in chunks until EOF.
+  If total bytes exceed MAX_CSV_BYTES, raise.
+  Give back the joined payload.

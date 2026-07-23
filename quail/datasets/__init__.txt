@@ -1,0 +1,11 @@
+This package re-exports the public dataset catalog surface.
+
+Import and expose:
+  errors DatasetError, DatasetSyntaxError, DatasetConflictError
+  models ActiveVersion, CsvDataset, DatasetRef, SourceEntry, SourceField
+  CoreDb, open_core_db, ensure_workspace
+  load_csv_dataset
+  import_csv_dataset, active_version, get_dataset
+  source_fields, source_entries, source_values
+
+__all__ lists those public names.

@@ -6,7 +6,9 @@ readme = "README.md"
 requires-python = ">=3.12,<3.14"
 license = { text = "Proprietary" }
 authors = [{ name = "Dashiell Coyier" }]
-dependencies = []
+dependencies = [
+  "pyturso==0.7.0",
+]
 
 [project.scripts]
 quail = "quail.cli:main"

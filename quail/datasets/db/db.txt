@@ -1,0 +1,40 @@
+CoreDb is a process-local handle to one embedded core database file.
+It remembers path and connection.
+
+close:
+  Close the connection once.
+
+Context manager enter/exit:
+  Enter gives back self.
+  Exit closes.
+
+open_core_db(path):
+  Resolve path, require a file name, create parent directories.
+  Connect with turso, enable foreign keys, WAL, and full synchronous.
+  Apply migrations.
+  Give back a CoreDb.
+  On setup failure, close the connection and raise.
+
+ensure_workspace(db, workspace_id):
+  Require a nonempty bounded workspace id.
+  Insert the workspace if missing.
+  Commit.
+
+_apply_migrations(connection):
+  Ensure quail_schema_migrations exists on an empty database.
+  Reject leftover schema without a ledger.
+  Load packaged migrations and verify already-applied rows match checksums.
+  Apply remaining migrations in contiguous order inside transactions.
+  Record each applied version, name, and checksum.
+
+_load_migrations:
+  Read *.sql files under quail/datasets/migrations.
+  Parse version_name from the file stem.
+  Checksum each SQL body with SHA-256.
+  Require contiguous versions starting at 1.
+
+_split_sql(sql):
+  Split on semicolons and keep nonempty statements.
+
+_require_scope_id(value, label):
+  Require a nonempty stripped string within the scope id byte limit.

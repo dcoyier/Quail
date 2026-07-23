@@ -73,7 +73,8 @@ Read TOML → apply declared state → serve. Refresh = edit file, stop, run aga
 
 1. This boundary + empty layout
 2. Analysis contract [`api.md`](api.md) + facade/namespace grown to match it
-3. Immutable dataset import + read
+3. Immutable dataset import + read — first slice: embedded Turso + UTF-8 CSV
+   (no TOML reconcile yet)
 4. Session overlays + revision commit
 5. Planner + engine (evaluate the API, including search when ready)
 6. Worker + print-only + RPC

@@ -9,8 +9,9 @@ This tree is intentionally small. Product decisions live in
 
 ## Status
 
-Scaffold plus analysis API contract. Facade implementation is partial; grow it
-to match `docs/api.md`.
+Analysis facade matches `docs/api.md` as symbolic AST (evaluation still stubbed).
+Datasets: embedded Turso + UTF-8 CSV import into immutable versions, with source
+field/entry/value reads (no TOML apply yet).
 
 ## Intended operator path (not implemented)
 

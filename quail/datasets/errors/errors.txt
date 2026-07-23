@@ -1,0 +1,5 @@
+DatasetError is the base failure type for dataset catalog and CSV import.
+
+DatasetSyntaxError means invalid CSV shape, ids, or catalog arguments.
+
+DatasetConflictError means an immutable version identity conflicts with stored data.
