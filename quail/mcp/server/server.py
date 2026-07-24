@@ -9,6 +9,7 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import CallToolResult
 
+from quail.analysis.errors import QuailRuntimeError
 from quail.analysis.exec_host import exec_script
 from quail.auth import (
     AllowlistedPrincipal,
@@ -48,6 +49,11 @@ _DATASET_INFO_STUB = (
     "Use this dataset_id with quail_exec. Imported source data is immutable; "
     "analysis tags and bindings stay on the session. Call quail_get_api_docs "
     "for the analysis language before writing code."
+)
+
+_DEFAULT_EXEC_REPAIR = (
+    "Fix the diagnostic, keep the same session_id, and retry. "
+    "Failed exec does not commit tags or bindings."
 )
 
 
@@ -267,7 +273,8 @@ def _register_unrestricted_tools(server: FastMCP, context: McpContext) -> None:
 
         code must follow quail_get_api_docs. Success: printed_output only.
         Failure: diagnostic with execution_id null; no tags/bindings/prints
-        are kept. time_window is "standard" or "extended" (budgets TBD).
+        are kept. time_window is "standard" (30s wall / 15s CPU) or
+        "extended" (100s wall / 60s CPU); worker RSS is capped at 256 MiB.
         """
 
         try:
@@ -283,15 +290,13 @@ def _register_unrestricted_tools(server: FastMCP, context: McpContext) -> None:
                 code=code,
                 similarity=context.similarity,
                 lexical=context.lexical,
+                time_window=time_window,
             )
         except Exception as error:
             return error_result(
                 error=error,
                 execution_id=None,
-                repair_hint=(
-                    "Fix the diagnostic, keep the same session_id, and retry. "
-                    "Failed exec does not commit tags or bindings."
-                ),
+                repair_hint=_exec_repair_hint(error),
             )
         return success_printed_output(outcome.printed_output)
 
@@ -541,15 +546,13 @@ def _register_clerk_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
                     code=code,
                     similarity=runtime.similarity,
                     lexical=runtime.lexical,
+                    time_window=time_window,
                 )
         except Exception as error:
             return error_result(
                 error=error,
                 execution_id=None,
-                repair_hint=(
-                    "Fix the diagnostic, keep the same session_id, and retry. "
-                    "Failed exec does not commit tags or bindings."
-                ),
+                repair_hint=_exec_repair_hint(error),
             )
         return success_printed_output(outcome.printed_output)
 
@@ -621,3 +624,11 @@ def _mcp_session_id(ctx: Context | None) -> str | None:
     if session_id is None:
         return None
     return str(session_id)
+
+
+def _exec_repair_hint(error: BaseException) -> str | None:
+    """Prefer QuailRuntimeError.repair_hint over the generic exec failure hint."""
+
+    if isinstance(error, QuailRuntimeError) and error.repair_hint:
+        return None
+    return _DEFAULT_EXEC_REPAIR

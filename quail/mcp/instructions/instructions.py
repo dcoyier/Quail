@@ -32,7 +32,8 @@ def unrestricted_instructions(workspace_id: str) -> str:
         "Dataset-specific guidance comes from quail_get_dataset_info.\n"
         "\n"
         'quail_exec success is {"printed_output"}; failure is a diagnostic '
-        'and commits nothing. time_window is "standard" or "extended".\n'
+        'and commits nothing. time_window is "standard" (30s wall / 15s CPU) or '
+        '"extended" (100s wall / 60s CPU); worker RSS is capped at 256 MiB.\n'
         "\n"
         "provide_feedback for friction or improvements (low bar for entry) — not for "
         "analysis results. Optional category, session_id, dataset_id."

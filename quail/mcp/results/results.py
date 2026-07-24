@@ -25,9 +25,6 @@ from quail.session.errors import (
 )
 
 
-_TIME_WINDOWS = frozenset({"standard", "extended"})
-
-
 def success_printed_output(printed_output: str) -> CallToolResult:
     """Success payload for quail_exec."""
 
@@ -45,16 +42,12 @@ def success_result(payload: dict[str, Any]) -> CallToolResult:
     )
 
 
-def validate_time_window(time_window: str | None) -> str | None:
-    """Accept standard|extended or None; ignore budgets for now."""
+def validate_time_window(time_window: str | None) -> str:
+    """Accept standard|extended or None (treated as standard)."""
 
-    if time_window is None:
-        return None
-    if not isinstance(time_window, str):
-        raise ValueError("time_window must be a string or None")
-    if time_window not in _TIME_WINDOWS:
-        raise ValueError('time_window must be "standard" or "extended"')
-    return time_window
+    from quail.analysis.limits import validate_time_window as _validate
+
+    return _validate(time_window)
 
 
 def error_result(

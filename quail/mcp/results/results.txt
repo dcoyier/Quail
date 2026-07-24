@@ -1,5 +1,3 @@
-There is a private set of time windows: standard and extended.
-
 success_printed_output(printed_output):
   Give back a success CallToolResult with {"printed_output": printed_output}.
 
@@ -7,9 +5,9 @@ success_result(payload):
   Give back a CallToolResult with isError false and the payload as structuredContent.
 
 validate_time_window(time_window):
-  Give back None when time_window is None.
-  Require a string that is standard or extended.
-  Do not change budgets yet.
+  Delegate to quail.analysis.limits.validate_time_window.
+  Treat None as standard.
+  Require standard or extended.
 
 error_result(error, execution_id default None, repair_hint default None):
   Build a diagnostic from the exception.

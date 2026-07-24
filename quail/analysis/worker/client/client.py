@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import os
+import signal
 import subprocess
 import sys
+import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -15,6 +18,13 @@ from quail.analysis.bindings import (
     bindings_to_payload,
 )
 from quail.analysis.errors import QuailRuntimeError, QuailSyntaxError
+from quail.analysis.limits import (
+    STANDARD_LIMITS,
+    ExecLimits,
+    cpu_timeout_error,
+    memory_limit_error,
+    wall_timeout_error,
+)
 from quail.analysis.worker.protocol import (
     ApiCall,
     decode_api_call,
@@ -38,11 +48,15 @@ def run_worker_script(
     *,
     on_api_call: Callable[[ApiCall], Any],
     bindings: Mapping[str, EncodedBinding] | None = None,
+    limits: ExecLimits | None = None,
+    rss_sampler: Callable[[int], int | None] | None = None,
 ) -> WorkerResult:
     """Spawn the worker, feed execute, handle api_call, return printed_output."""
 
     if not isinstance(code, str):
         raise QuailSyntaxError("code must be a string")
+    active = limits if limits is not None else STANDARD_LIMITS
+    sample_rss = rss_sampler or _rss_bytes
 
     site_packages = _site_packages_path()
     bootstrap = (
@@ -73,19 +87,64 @@ def run_worker_script(
     assert process.stdout is not None
     assert process.stderr is not None
 
+    done = threading.Event()
+    wall_exceeded = threading.Event()
+    memory_exceeded = threading.Event()
+
+    def _watch_wall() -> None:
+        if done.wait(active.wall_seconds):
+            return
+        wall_exceeded.set()
+        _kill_process_group(process)
+
+    def _watch_memory() -> None:
+        while not done.wait(0.05):
+            if process.poll() is not None:
+                return
+            rss = sample_rss(process.pid)
+            if rss is not None and rss > active.max_memory_bytes:
+                memory_exceeded.set()
+                _kill_process_group(process)
+                return
+
+    wall_thread = threading.Thread(target=_watch_wall, name="quail-wall", daemon=True)
+    memory_thread = threading.Thread(target=_watch_memory, name="quail-rss", daemon=True)
+    wall_thread.start()
+    memory_thread.start()
+
     try:
         execute = {
             "type": "execute",
             "code": code,
             "bindings": bindings_to_payload(bindings or {}),
+            "limits": {
+                "cpu_seconds": active.cpu_seconds,
+                "max_memory_bytes": active.max_memory_bytes,
+            },
         }
         process.stdin.write(dumps_message(execute) + "\n")
         process.stdin.flush()
 
         while True:
+            _raise_if_resource_exceeded(
+                wall_exceeded=wall_exceeded,
+                memory_exceeded=memory_exceeded,
+                limits=active,
+            )
             line = process.stdout.readline()
+            _raise_if_resource_exceeded(
+                wall_exceeded=wall_exceeded,
+                memory_exceeded=memory_exceeded,
+                limits=active,
+            )
             if not line:
                 stderr = process.stderr.read()
+                _raise_if_resource_exceeded(
+                    wall_exceeded=wall_exceeded,
+                    memory_exceeded=memory_exceeded,
+                    limits=active,
+                )
+                _raise_if_cpu_signal(process, stderr, active)
                 raise QuailRuntimeError(
                     f"Worker exited without a result: {stderr.strip() or 'no stderr'}"
                 )
@@ -109,12 +168,23 @@ def run_worker_script(
                         "message": f"{type(error).__name__}: {error}",
                         "result": encode_value(None),
                     }
+                _raise_if_resource_exceeded(
+                    wall_exceeded=wall_exceeded,
+                    memory_exceeded=memory_exceeded,
+                    limits=active,
+                )
                 process.stdin.write(dumps_message(response) + "\n")
                 process.stdin.flush()
                 continue
             if message_type == "result":
                 if not message.get("ok"):
-                    raise QuailRuntimeError(str(message.get("message") or "worker failed"))
+                    message_text = str(message.get("message") or "worker failed")
+                    if _looks_like_cpu_timeout(message_text):
+                        raise cpu_timeout_error(
+                            active.cpu_seconds,
+                            already_extended=active.already_extended,
+                        )
+                    raise QuailRuntimeError(message_text)
                 printed = message.get("printed_output", "")
                 if not isinstance(printed, str):
                     raise QuailRuntimeError("worker printed_output must be a string")
@@ -130,6 +200,7 @@ def run_worker_script(
                 )
             raise QuailRuntimeError(f"Unexpected worker message type: {message_type!r}")
     finally:
+        done.set()
         try:
             process.stdin.close()
         except Exception:  # noqa: BLE001
@@ -142,6 +213,87 @@ def run_worker_script(
             process.wait(timeout=2)
         except Exception:  # noqa: BLE001
             pass
+        wall_thread.join(timeout=1)
+        memory_thread.join(timeout=1)
+
+
+def _raise_if_resource_exceeded(
+    *,
+    wall_exceeded: threading.Event,
+    memory_exceeded: threading.Event,
+    limits: ExecLimits,
+) -> None:
+    if memory_exceeded.is_set():
+        raise memory_limit_error(limits.max_memory_bytes)
+    if wall_exceeded.is_set():
+        raise wall_timeout_error(
+            limits.wall_seconds,
+            already_extended=limits.already_extended,
+        )
+
+
+def _raise_if_cpu_signal(
+    process: subprocess.Popen[str],
+    stderr: str,
+    limits: ExecLimits,
+) -> None:
+    if _looks_like_cpu_timeout(stderr):
+        raise cpu_timeout_error(
+            limits.cpu_seconds,
+            already_extended=limits.already_extended,
+        )
+    returncode = process.returncode
+    if returncode is not None and returncode < 0:
+        sig = -returncode
+        if sig in {getattr(signal, "SIGXCPU", -1), signal.SIGKILL}:
+            # Soft CPU limit may surface as SIGXCPU; hard limit as SIGKILL.
+            if sig == getattr(signal, "SIGXCPU", -1) or "CPU" in stderr.upper():
+                raise cpu_timeout_error(
+                    limits.cpu_seconds,
+                    already_extended=limits.already_extended,
+                )
+
+
+def _looks_like_cpu_timeout(text: str) -> bool:
+    lowered = text.lower()
+    return "cpu-time limit" in lowered or "cpu time limit" in lowered
+
+
+def _kill_process_group(process: subprocess.Popen[str]) -> None:
+    try:
+        if process.pid is not None:
+            os.killpg(process.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            process.kill()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _rss_bytes(pid: int) -> int | None:
+    """Best-effort resident set size for the worker process."""
+
+    status_path = Path(f"/proc/{pid}/status")
+    if status_path.is_file():
+        try:
+            for line in status_path.read_text(encoding="utf-8").splitlines():
+                if line.startswith("VmRSS:"):
+                    parts = line.split()
+                    return int(parts[1]) * 1024
+        except (OSError, ValueError, IndexError):
+            return None
+    try:
+        output = subprocess.check_output(
+            ["ps", "-o", "rss=", "-p", str(pid)],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+        value = output.strip()
+        if not value:
+            return None
+        return int(value) * 1024
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        return None
 
 
 def _site_packages_path() -> Path:

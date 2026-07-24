@@ -19,7 +19,7 @@ Pass arguments by name.
 | `session_id` | Durable analysis context. Bindings and tags stick to this session. |
 | `dataset_id` | Exactly one dataset for this call (its active immutable version). |
 | `code` | Bounded Quail Python (no imports, no files, no network). |
-| `time_window` | `"standard"` or `"extended"` — both are finite; extended is just longer. |
+| `time_window` | `"standard"` (30s wall / 15s CPU) or `"extended"` (100s wall / 60s CPU). Both are finite; extended is just longer. Worker RSS is always capped at 256 MiB. |
 
 **Success:** `{"printed_output": "<exactly what print() wrote>"}`.  
 **Failure:** a tool error with `execution_id` (or `null`) and a `diagnostic`.
@@ -142,8 +142,14 @@ Use `== None` / `!= None`, not `is None`.
 5. **Later lines see earlier tags** in the same successful run; failed runs roll back.
 6. **No outside world** — no imports, files, network, DB handles, or env.
 
-Deployments also bound time, memory, output size, call counts, and similar.
-Hitting a limit fails the whole exec.
+Deployments bound each `quail_exec` with fixed product ceilings (not TOML knobs):
+
+- `time_window="standard"`: 30s wall-clock, 15s worker CPU
+- `time_window="extended"`: 100s wall-clock, 60s worker CPU
+- Worker RSS memory: 256 MiB in both windows
+
+Extended only lengthens time. Hitting any ceiling fails the whole exec
+atomically (no tags, bindings, or printed output).
 
 ---
 
@@ -342,5 +348,4 @@ miss it; don’t restore the old long form by default.
 Open knobs:
 
 - How much query-syntax / aggregation detail agents need up front
-- How loud to be about resource limits vs keeping that deployment-local
 - Exact diagnostic field schema (keep stable codes; trim redacted_context lore)

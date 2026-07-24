@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import resource
+import signal
 import sys
-from typing import Any, TextIO
+from contextlib import contextmanager
+from typing import Any, Iterator, TextIO
 
 from quail.analysis.bindings import (
     RESERVED_NAMES,
@@ -64,6 +67,14 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
             {"type": "result", "ok": False, "message": f"invalid bindings: {error}"},
         )
         return
+    try:
+        cpu_seconds, max_memory_bytes = _parse_limits(message.get("limits"))
+    except QuailRuntimeError as error:
+        _write(
+            output_stream,
+            {"type": "result", "ok": False, "message": str(error)},
+        )
+        return
 
     pending: dict[str, Any] | None = None
 
@@ -89,7 +100,9 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
         namespace = build_namespace(endpoint, prints)
         namespace.update(decode_namespace(initial_bindings))
         compiled = compile(program.tree, "<quail_exec>", "exec")
-        exec(compiled, namespace, namespace)  # noqa: S102 - intentional worker sandbox
+        _apply_memory_ceiling(max_memory_bytes)
+        with _cpu_timeout_guard(cpu_seconds):
+            exec(compiled, namespace, namespace)  # noqa: S102 - intentional worker sandbox
 
         changed: dict[str, Any] = {}
         for name in sorted(program.assigned_names):
@@ -152,6 +165,62 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
 def _write(stream: TextIO, message: dict[str, Any]) -> None:
     stream.write(dumps_message(message) + "\n")
     stream.flush()
+
+
+def _parse_limits(raw: object) -> tuple[int, int]:
+    if raw is None:
+        return 15, 256 * 1024 * 1024
+    if not isinstance(raw, dict):
+        raise QuailRuntimeError("execute.limits must be an object")
+    cpu_seconds = raw.get("cpu_seconds", 15)
+    if isinstance(cpu_seconds, bool) or not isinstance(cpu_seconds, int) or cpu_seconds <= 0:
+        raise QuailRuntimeError("execute.limits.cpu_seconds must be a positive integer")
+    max_memory_bytes = raw.get("max_memory_bytes", 256 * 1024 * 1024)
+    if (
+        isinstance(max_memory_bytes, bool)
+        or not isinstance(max_memory_bytes, int)
+        or max_memory_bytes <= 0
+    ):
+        raise QuailRuntimeError("execute.limits.max_memory_bytes must be a positive integer")
+    return cpu_seconds, max_memory_bytes
+
+
+def _apply_memory_ceiling(max_memory_bytes: int) -> None:
+    """Best-effort address-space ceiling (enforced on Linux; host also watches RSS)."""
+
+    if not hasattr(resource, "RLIMIT_AS"):
+        return
+    try:
+        resource.setrlimit(resource.RLIMIT_AS, (max_memory_bytes, max_memory_bytes))
+    except (ValueError, OSError):
+        return
+
+
+@contextmanager
+def _cpu_timeout_guard(cpu_seconds: int) -> Iterator[None]:
+    """Apply RLIMIT_CPU and turn SIGXCPU into a QuailRuntimeError."""
+
+    cpu_signal = getattr(signal, "SIGXCPU", None)
+    if cpu_signal is None or not hasattr(resource, "RLIMIT_CPU"):
+        yield
+        return
+
+    def _on_cpu(_signum: int, _frame: object) -> None:
+        raise QuailRuntimeError(f"quail_exec exceeded its {cpu_seconds:g}s CPU-time limit")
+
+    previous = signal.signal(cpu_signal, _on_cpu)
+    soft = cpu_seconds
+    hard = max(cpu_seconds + 1, soft)
+    try:
+        resource.setrlimit(resource.RLIMIT_CPU, (soft, hard))
+    except (ValueError, OSError):
+        signal.signal(cpu_signal, previous)
+        yield
+        return
+    try:
+        yield
+    finally:
+        signal.signal(cpu_signal, previous)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,21 @@
+There is a fixed worker memory ceiling of 256 MiB for every time_window.
+
+STANDARD_LIMITS is 30s wall and 15s CPU.
+EXTENDED_LIMITS is 100s wall and 60s CPU.
+
+ExecLimits remembers wall_seconds, cpu_seconds, and max_memory_bytes.
+
+validate_time_window(time_window):
+  Treat None as standard.
+  Require standard or extended.
+  Give back the normalized window name.
+
+limits_for_time_window(time_window):
+  Give back the hardcoded ExecLimits for that window.
+
+wall_timeout_error / cpu_timeout_error / memory_limit_error:
+  Build QuailRuntimeError with a repair_hint matched to the failure.
+  Time timeouts omit the "retry with extended" clause when already extended.
+
+time_repair_hint(already_extended):
+  Give back the standard or extended-window timeout repair text.

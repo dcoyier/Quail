@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from quail.analysis.engine import QueryEngine
+from quail.analysis.limits import ExecLimits
 from quail.analysis.planner import (
     plan_count,
     plan_create_field,
@@ -101,8 +102,12 @@ def exec_script(
     code: str,
     similarity: SimilarityService | None = None,
     lexical: LexicalService | None = None,
+    time_window: str | None = "standard",
+    limits: ExecLimits | None = None,
 ) -> ExecOutcome:
     """Run quail_exec code in a worker subprocess; commit overlay on success."""
+
+    from quail.analysis.limits import limits_for_time_window
 
     scope = resolve_scope(db, session_id, dataset_id)
     ensure_scope(db, scope)
@@ -112,10 +117,12 @@ def exec_script(
         return dispatch_call(engine, call.method, call.args, call.kwargs)
 
     initial_bindings = load_bindings(db, session_id)
+    active_limits = limits if limits is not None else limits_for_time_window(time_window)
     worker_result = run_worker_script(
         code,
         on_api_call=on_api_call,
         bindings=initial_bindings,
+        limits=active_limits,
     )
     revision = commit_overlay(
         db,
