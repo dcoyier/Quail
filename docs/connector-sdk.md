@@ -1,0 +1,99 @@
+# Connector SDK
+
+Author guide for Quail v0.11 trusted connectors. Import **only**
+`quail.connectors.sdk`. Do not import `quail.connectors.load`, MCP internals,
+CoreDb, search, or analysis modules from connector packages.
+
+## What a connector is
+
+```text
+connector package =
+  tools
+  dataset docs
+  widgets (MCP UI)
+  + thin glue (manifest, errors, context)
+```
+
+Operators install a wheel, pin it in hand-edited TOML, and activate it per
+workspace. Quail finds packages via entry points (`quail.connectors`), not
+file paths in TOML. Hosting / ngrok stays outside the SDK
+(`hosting.public_base_url`).
+
+## Public types
+
+| Kind | Symbols |
+| --- | --- |
+| Declarations | `ConnectorManifest`, `ToolSpec`, `ResourceSpec`, `WidgetSpec` |
+| Lifecycle | `ConnectorFactory`, `Connector`, `Provider` |
+| Env / request | `ConnectorEnvironment`, `WorkspaceConnectorRuntime`, `ConnectorContext`, `ConnectorHost`, `DatasetRef` |
+| Results | `ToolResult`, `ConnectorError` |
+
+### Required methods
+
+- **Connector:** `manifest`, `read_resource(uri)`, `connect(runtime) -> Provider`
+- **Provider:** `call_tool(context, name, args)`, `dataset_document(context, dataset_id) -> str | None`
+- **ConnectorHost (v1):** `dataset`, `require_dataset` only
+
+Tool input schemas must be closed JSON Schema objects (`type: object`,
+`additionalProperties: false`) with Python-safe property names.
+
+## Lifecycle
+
+1. Operator pins `[[extensions]]` id + version (deployment-wide).
+2. Operator activates with `[[connectors]]` (unrestricted) or
+   `[[workspaces.connectors]]` (Clerk), including optional `config` and
+   `datasets` bindings.
+3. On `quail run`, Quail loads the entry point, checks version match, connects
+   each workspace binding, and **fails closed** if two+ bound connectors both
+   return documentation for the same `dataset_id`.
+4. MCP registers tools / resources / widgets. `quail_get_dataset_info` calls
+   the owning provider’s `dataset_document` when present.
+
+Tools may overlap on the same dataset; only competing **docs** are rejected.
+
+## TOML shape
+
+```toml
+[[extensions]]
+id = "garden_gate"
+version = "1.0.0"
+
+[[connectors]]
+id = "garden_gate"
+
+[connectors.config]
+heading = "Garden Gate"
+
+[[connectors.datasets]]
+id = "garden-gate"
+```
+
+Unknown keys in `config` must be listed on `ConnectorManifest.config_keys` or
+`quail run` fails. Secrets ceremony is deferred; keep config JSON-shaped and
+small.
+
+## Dataset documentation
+
+Return a non-empty string from `dataset_document` for ids you own; return
+`None` for ids you do not document. Empty strings are rejected at load.
+Guidance is SDK-only — there is no TOML `info=` field.
+
+## Widgets
+
+Declare `WidgetSpec` with `ui://…` URIs. Host serves them as MCP resources
+(`text/html;profile=mcp-app`). Prefer in-MCP widgets; do not rely on HTTP
+route hosting in v1.
+
+## Example
+
+See [`examples/garden-gate-connector/`](../examples/garden-gate-connector/) for
+a runnable package (tool + garden-gate docs + widget) and install notes.
+
+## Fail-closed operator errors
+
+| Situation | Behavior |
+| --- | --- |
+| Missing entry point / package | `quail run` fails |
+| TOML version ≠ manifest / distribution | `quail run` fails |
+| Two connectors document the same bound `dataset_id` | `quail run` fails |
+| Connector active only in workspace A | Does not appear in workspace B |

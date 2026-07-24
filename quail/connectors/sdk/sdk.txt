@@ -1,0 +1,36 @@
+Public connector author types and protocols.
+
+ToolSpec is one MCP tool declaration (name, title, description, closed JSON
+Schema input, optional output schema and hints).
+
+ResourceSpec is one readable MCP resource (uri, title, description, mime_type).
+
+WidgetSpec is one MCP UI widget with a ui:// uri and optional compatibility uris.
+
+ConnectorManifest remembers id, version, tools, resources, widgets, and
+config_keys.
+
+DatasetRef remembers id, name, active_version_id.
+
+ConnectorContext remembers workspace_id, optional user_id, extension id/version,
+and bound dataset_ids. require_dataset raises PermissionError when unbound.
+
+ToolResult remembers structured_content and optional text.
+
+ConnectorError remembers stable_code, message, repair_hint, and context.
+
+ConnectorHost:
+  dataset / require_dataset for bound dataset identity checks.
+
+ConnectorEnvironment remembers host, public_base_url, and base_path.
+
+WorkspaceConnectorRuntime remembers workspace_id, config, and dataset_ids.
+
+ConnectorFactory builds a Connector from ConnectorEnvironment.
+
+Connector:
+  manifest property, read_resource(uri), connect(runtime) -> Provider.
+
+Provider:
+  call_tool(context, name, arguments) -> ToolResult or mapping.
+  dataset_document(context, dataset_id) -> text or None.

@@ -51,10 +51,10 @@ from quail.session.sessions import require_active_session
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_API_DOCS = _REPO_ROOT / "docs" / "api.md"
 
-_DATASET_INFO_STUB = (
-    "Use this dataset_id with quail_exec. Imported source data is immutable; "
-    "analysis tags and bindings stay on the session. Call quail_get_api_docs "
-    "for the analysis language before writing code."
+_DATASET_INFO_FALLBACK = (
+    "No connector documentation is installed for this dataset. "
+    "Use quail_exec inspection and quail_get_api_docs for the analysis language. "
+    "Imported source data is immutable; analysis tags and bindings stay on the session."
 )
 
 _DEFAULT_EXEC_REPAIR = (
@@ -87,6 +87,7 @@ def create_mcp_server(
     host: str = "127.0.0.1",
     port: int = 8000,
     search_runtime: SearchRuntime | None = None,
+    connector_catalog: Any | None = None,
 ) -> FastMCP:
     """Build an unrestricted loopback FastMCP app with the six core tools."""
 
@@ -104,7 +105,15 @@ def create_mcp_server(
         host=host,
         port=port,
     )
-    _register_unrestricted_tools(server, context)
+    _register_unrestricted_tools(server, context, connector_catalog=connector_catalog)
+    if connector_catalog is not None:
+        from quail.connectors.mcp_wire import register_connectors
+
+        register_connectors(
+            server,
+            connector_catalog,
+            resolve_workspace=lambda _ctx: (workspace_id, None),
+        )
     return server
 
 
@@ -120,6 +129,10 @@ def create_mcp_server_from_config(
 
     configure_execution_slots(config.max_concurrent_executions)
     runtime = search_runtime_from_config(config)
+    from quail.connectors.load import load_connector_catalog
+
+    with open_core_db(config.database) as db:
+        connector_catalog = load_connector_catalog(config, db)
     if config.auth_mode == "unrestricted":
         assert config.workspace_id is not None
         return create_mcp_server(
@@ -130,6 +143,7 @@ def create_mcp_server_from_config(
             host=config.bind,
             port=config.port,
             search_runtime=runtime,
+            connector_catalog=connector_catalog,
         )
     assert config.clerk_domain is not None
     return create_clerk_mcp_server(
@@ -137,6 +151,7 @@ def create_mcp_server_from_config(
         api_docs_path=api_docs_path,
         verifier=verifier or ClerkJwtVerifier(config.clerk_domain),
         search_runtime=runtime,
+        connector_catalog=connector_catalog,
     )
 
 
@@ -146,6 +161,7 @@ def create_clerk_mcp_server(
     verifier: TokenVerifier,
     api_docs_path: str | Path | None = None,
     search_runtime: SearchRuntime | None = None,
+    connector_catalog: Any | None = None,
 ) -> FastMCP:
     """Build Clerk-authenticated MCP with list/switch workspace tools."""
 
@@ -176,11 +192,53 @@ def create_clerk_mcp_server(
         token_verifier=ClerkAccessTokenVerifier(verifier),
     )
     register_clerk_oauth_discovery(server, clerk_domain=config.clerk_domain)
-    _register_clerk_tools(server, runtime)
+    _register_clerk_tools(server, runtime, connector_catalog=connector_catalog)
+    if connector_catalog is not None:
+        from quail.connectors.mcp_wire import register_connectors
+
+        register_connectors(
+            server,
+            connector_catalog,
+            resolve_workspace=lambda ctx: _resolve_clerk_connector_workspace(runtime, ctx),
+        )
     return server
 
 
-def _register_unrestricted_tools(server: FastMCP, context: McpContext) -> None:
+def _resolve_clerk_connector_workspace(
+    runtime: ClerkMcpRuntime,
+    ctx: Context | None,
+) -> tuple[str, str | None]:
+    """Resolve sticky workspace for a connector tool call."""
+
+    authorization = _authorization_header(ctx)
+    principal = authenticate_bearer(
+        authorization,
+        users=runtime.users,
+        verifier=runtime.verifier,
+    )
+    session_id = _mcp_session_id(ctx)
+    connection_key = (
+        f"sess:{session_id}" if session_id is not None else f"user:{principal.clerk_user_id}"
+    )
+    workspace_id = runtime.sticky.active(connection_key)
+    if workspace_id is None:
+        workspace_id = runtime.sticky.ensure_initial_bind(connection_key, principal.user)
+    if workspace_id is None:
+        raise QuailRuntimeError(
+            "No sticky workspace is bound for this connection.",
+            repair_hint=UNBOUND_REPAIR_HINT,
+        )
+    if workspace_id not in principal.user.workspaces:
+        raise ForbiddenError("Not a member of the active workspace")
+    return workspace_id, principal.user.user_id
+
+
+def _register_unrestricted_tools(
+    server: FastMCP,
+    context: McpContext,
+    *,
+    connector_catalog: Any | None = None,
+) -> None:
     @server.tool(title="Get Quail API docs")
     async def quail_get_api_docs() -> CallToolResult:
         """Return the analysis-language docs for code inside quail_exec.
@@ -262,9 +320,12 @@ def _register_unrestricted_tools(server: FastMCP, context: McpContext) -> None:
                     ref = get_dataset(db, context.workspace_id, dataset_id)
                     if ref is None:
                         raise ValueError(f"Dataset not found: {dataset_id}")
-                    display = ref.name or ref.dataset_id
-                    documentation = (
-                        f"Dataset {display} ({ref.dataset_id}). {_DATASET_INFO_STUB}"
+                    documentation = _dataset_documentation(
+                        connector_catalog,
+                        workspace_id=context.workspace_id,
+                        user_id=None,
+                        dataset_id=ref.dataset_id,
+                        display_name=ref.name or ref.dataset_id,
                     )
             except Exception as error:
                 return error_result(error=error)
@@ -361,7 +422,12 @@ def _register_unrestricted_tools(server: FastMCP, context: McpContext) -> None:
         return await run_blocking(work)
 
 
-def _register_clerk_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
+def _register_clerk_tools(
+    server: FastMCP,
+    runtime: ClerkMcpRuntime,
+    *,
+    connector_catalog: Any | None = None,
+) -> None:
     def _auth(ctx: Context | None) -> AllowlistedPrincipal | CallToolResult:
         try:
             return authenticate_bearer(
@@ -552,9 +618,12 @@ def _register_clerk_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
                     ref = get_dataset(db, workspace_id, dataset_id)
                     if ref is None:
                         raise ValueError(f"Dataset not found: {dataset_id}")
-                    display = ref.name or ref.dataset_id
-                    documentation = (
-                        f"Dataset {display} ({ref.dataset_id}). {_DATASET_INFO_STUB}"
+                    documentation = _dataset_documentation(
+                        connector_catalog,
+                        workspace_id=workspace_id,
+                        user_id=principal.user.user_id,
+                        dataset_id=ref.dataset_id,
+                        display_name=ref.name or ref.dataset_id,
                     )
             except Exception as error:
                 return error_result(error=error)
@@ -694,3 +763,28 @@ def _exec_repair_hint(error: BaseException) -> str | None:
     if isinstance(error, QuailRuntimeError) and error.repair_hint:
         return None
     return _DEFAULT_EXEC_REPAIR
+
+
+def _dataset_documentation(
+    connector_catalog: Any | None,
+    *,
+    workspace_id: str,
+    user_id: str | None,
+    dataset_id: str,
+    display_name: str,
+) -> str:
+    """Resolve connector docs, else the short fallback string."""
+
+    if connector_catalog is not None:
+        from quail.connectors.load import resolve_dataset_documentation
+
+        bundle = connector_catalog.for_workspace(workspace_id)
+        document = resolve_dataset_documentation(
+            bundle,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            dataset_id=dataset_id,
+        )
+        if document is not None and document.strip():
+            return document
+    return f"Dataset {display_name} ({dataset_id}). {_DATASET_INFO_FALLBACK}"

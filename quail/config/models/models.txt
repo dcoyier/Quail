@@ -26,10 +26,22 @@ DatasetSpec remembers:
   name (optional)
   embedding (optional EmbeddingProfile)
 
+ExtensionPin is a deployment-wide trusted connector package identity.
+ExtensionPin remembers:
+  extension_id
+  version
+
+ConnectorBinding is one connector activated in one workspace.
+ConnectorBinding remembers:
+  extension_id
+  config (JSON-shaped mapping)
+  dataset_ids
+
 WorkspaceSpec is one workspace and its declared datasets.
 WorkspaceSpec remembers:
   workspace_id
   datasets
+  connectors (default empty)
 
 UserSpec is a TOML allowlisted Clerk user.
 UserSpec remembers:
@@ -57,3 +69,4 @@ QuailConfig remembers:
   providers
   search_warm
   max_concurrent_executions
+  extensions (deployment-wide ExtensionPin tuple)

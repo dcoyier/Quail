@@ -1,13 +1,19 @@
 # Quail v0.11
 
-Inspectable qualitative analysis over private corpora (rebuild in progress).
+Inspectable qualitative analysis over private corpora.
 
-This tree is intentionally small. Product decisions live in
+This tree stays small. Product decisions live in
 [`docs/BOUNDARY.md`](docs/BOUNDARY.md). The model-facing analysis contract is
-[`docs/api.md`](docs/api.md). The previous implementation at
+[`docs/api.md`](docs/api.md). Change routing is
+[`docs/development.md`](docs/development.md). The previous implementation at
 `../Quail v0.10` is reference-only.
 
 ## Status
+
+First-build spine through Clerk, search warm, `quail_exec` concurrency, and the
+Connector SDK (extra tools, dataset docs, MCP UI widgets) is in place. Author
+guide: [`docs/connector-sdk.md`](docs/connector-sdk.md). Example package:
+[`examples/garden-gate-connector/`](examples/garden-gate-connector/).
 
 `quail process --config /absolute/path/to/quail.toml` imports declared CSVs and
 warms Lexical FTS plus corpus embeddings into the search database.

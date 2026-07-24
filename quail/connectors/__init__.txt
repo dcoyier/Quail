@@ -1,0 +1,4 @@
+Trusted connector packages.
+
+Public author surface is quail.connectors.sdk. Host discovery, TOML connect, and
+MCP registration live in sibling host modules — authors must not import them.

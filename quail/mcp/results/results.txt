@@ -16,10 +16,12 @@ error_result(error, execution_id default None, repair_hint default None):
 diagnostic_from_exception(error, repair_hint default None):
   Classify the exception into error_class and stable_error_code.
   Remember message from the exception text.
-  Prefer an explicit repair_hint; otherwise use QuailRuntimeError.repair_hint when present.
+  Prefer an explicit repair_hint; otherwise use QuailRuntimeError.repair_hint or
+  ConnectorError.repair_hint when present.
   Give back the diagnostic object.
 
 classify_exception(error):
+  Map ConnectorError to ConnectorError / stable_code (lowercased).
   Map Quail, Auth, Session, Dataset, and ValueError types to stable codes.
   QuailServerBusyError becomes QuailRuntimeError / server_busy.
   QuailSessionBusyError becomes QuailRuntimeError / session_busy.

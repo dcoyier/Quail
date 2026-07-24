@@ -1,0 +1,21 @@
+Load and connect TOML-pinned connector packages.
+
+ENTRY_POINT_GROUP is quail.connectors.
+
+ConnectedProvider remembers extension id/version, manifest, connector, provider,
+dataset_ids, and provides_docs.
+
+WorkspaceConnectorBundle remembers workspace_id, providers, and docs_by_dataset.
+
+ConnectorCatalog maps workspace id to WorkspaceConnectorBundle.
+
+ConnectorLoadError is a ConfigError for fail-closed quail run failures.
+
+load_connector_catalog(config, db):
+  Discover pinned entry points, construct connectors with a CoreHost that reopens
+  CoreDb by path per dataset read, connect each workspace binding, and fail closed
+  on version mismatch or competing dataset docs.
+  Ownership is per dataset_id where dataset_document returns non-empty text.
+
+make_request_context / resolve_dataset_documentation:
+  Build request context and resolve documentation for one dataset id.

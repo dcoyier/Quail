@@ -8,6 +8,8 @@ Rebuild Quail so the author can understand and extend it. Keep load-bearing inva
 
 **Analysis contract:** [`docs/api.md`](api.md) is the model-facing API (facade types, `retrieve`/`tag`/…, regex, ranking, lexical/semantic). Grow code to match that document.
 
+**Change routing:** [`docs/development.md`](development.md).
+
 ## Deployments
 
 - **Local / research:** unrestricted loopback, no sign-in.
@@ -19,21 +21,25 @@ Rebuild Quail so the author can understand and extend it. Keep load-bearing inva
 | --- | --- |
 | Agent | MCP + analysis language (`quail_exec`, print-only output) plus |
 |  | `provide_feedback` for friction / improvement notes |
-| Operator | Hand-edited `quail.toml` + `quail process` / `quail run` (CLI never writes TOML) |
-| Connector author | Deferred — not in the first build |
+| Operator | Hand-edited `quail.toml` + `quail process` / `quail run` (CLI never writes TOML); |
+|  | install connector wheels and pin/connect them in TOML |
+| Connector author | Thin SDK (`quail.connectors.sdk`): tools, dataset docs, MCP UI widgets |
 
-### MCP agent tools (first slice)
+### MCP agent tools (core)
 
-Unrestricted loopback FastMCP (`create_mcp_server`) exposes only:
+Unrestricted loopback FastMCP (`create_mcp_server`) exposes:
 
 | Tool | Role |
 | --- | --- |
 | `quail_get_api_docs` | Analysis language text from `docs/api.md` |
 | `quail_list_datasets` | Workspace dataset catalog |
 | `quail_start_session` | Create an active session |
-| `quail_get_dataset_info` | Name/id plus short guidance |
+| `quail_get_dataset_info` | Name/id plus guidance (`dataset_document` from connectors when present) |
 | `quail_exec` | Worker `exec_script` for one session + dataset |
 | `provide_feedback` | Append friction/improvement notes to a JSONL file |
+
+Connected connectors may add further tools, resources, and MCP UI widgets for the
+active workspace.
 
 `provide_feedback(message, *, category=None, session_id=None, dataset_id=None)`
 is for confusing, blocked, or improvable Quail behavior — not analysis results.
@@ -108,6 +114,16 @@ protected-resource metadata for `{public_base_url}/mcp` and a proxied
 `hosting.public_base_url` defaults from `bind`/`port`. Operators allowlist users
 by pasting Clerk `user_…` ids into `[[users]]`.
 
+### Connectors (operator)
+
+- Install the connector wheel into Quail’s environment (`uv pip install …`).
+- Pin exact `id` + `version` under deployment-wide `[[extensions]]`.
+- Activate per workspace with `[[workspaces.connectors]]` (config + dataset
+  bindings). No TOML path to source; discovery uses Python entry points.
+- `quail run` **fail-closes** on missing/mismatched pins, construct/connect
+  errors, or two+ connectors providing dataset docs for the same bound
+  `dataset_id` in one workspace (tools may still overlap).
+
 ## Preserve (invariants — improve shape, do not weaken)
 
 - Immutable imported dataset versions
@@ -128,47 +144,29 @@ by pasting Clerk `user_…` ids into `[[users]]`.
 - Operator console
 - validate/doctor/plan/apply ceremony
 - Invitations / identity linking / live admin user APIs
-- Connector author SDK
-- Search **infrastructure**: Semantic uses per-dataset embedding profiles
-  (Ollama/OpenRouter), a rebuildable Turso vector cache, and **exact** batch
-  cosine via `-vector_distance_dot`. Lexical uses Turso **native FTS** in the
-  same rebuildable search DB (in-process). Both accept `str`, `list[str]`, entry
-  `GroupExpr`, and `list[Entry]` query targets. Session bindings persist across
-  successful execs. ANN and lexical workers/artifact roots are deferred.
-- Hosting flourishes (ngrok, etc.)
+- Search **infrastructure** extras: ANN and lexical workers/artifact roots
+- Hosting flourishes (ngrok as product; `public_base_url` remains)
+- HTTP connector routes / events host API
+
+Semantic uses per-dataset embedding profiles (Ollama/OpenRouter), a rebuildable
+Turso vector cache, and **exact** batch cosine via `-vector_distance_dot`.
+Lexical uses Turso **native FTS** in the same rebuildable search DB
+(in-process). Both accept `str`, `list[str]`, entry `GroupExpr`, and
+`list[Entry]` query targets. Session bindings persist across successful execs.
 
 ## Build order (stop if you cannot explain the step)
 
-1. This boundary + empty layout
-2. Analysis contract [`api.md`](api.md) + facade/namespace grown to match it
-3. Immutable dataset import + read — first slice: embedded Turso + UTF-8 CSV
-   (no TOML reconcile yet)
-4. Session overlays + revision commit — first slice: host `commit_overlay`
-   with optimistic revision (no MCP/worker yet)
-5. Planner + engine — first slice: host `plan_*` + QueryEngine + `run_analysis`
-   (Lexical/Semantic and worker sandbox still deferred)
-6. Worker + print-only + RPC — **done:** subprocess `exec_script` + NDJSON
-   ApiCalls into `dispatch_call`, with session bindings persist/restore/`del`.
-7. Thin MCP adapter — **first slice done:** unrestricted loopback FastMCP with
-   `quail_get_api_docs`, `quail_list_datasets`, `quail_start_session`,
-   `quail_get_dataset_info`, `quail_exec`, and `provide_feedback` (JSONL store
-   separate from the core analysis DB).
-8. TOML + `quail run --config` — **first slice done:** slim native TOML, CSV
-   reconcile on run, streamable-http loopback MCP.
-9. Clerk + TOML allowlist — **first slice done:** Clerk JWT / OAuth tokens,
-   `[[users]]` / `[[workspaces]]`, sticky `quail_list_workspaces` /
-   `quail_switch_workspace` on one deployment URL; optional `default_workspace` /
-   `lock_workspace`. MCP OAuth discovery (protected-resource metadata + AS
-   metadata proxy) and `hosting.public_base_url` for the resource origin.
-   Invitations and generic OIDC still out.
-10. Connector SDK (later)
-
-Semantic scoring is **Turso exact batch cosine** (per-dataset embedding profile,
-Ollama/OpenRouter HTTP, rebuildable vector cache, `-vector_distance_dot`).
-Lexical scoring is **Turso native FTS** in the shared search DB (in-process).
-Both accept the full api.md query shapes including entry groups and Entry lists.
-Session bindings persist across successful execs. ANN remains deferred.
-Lexical/Semantic remain part of the public contract in `api.md`.
+1. This boundary + empty layout — **done**
+2. Analysis contract [`api.md`](api.md) + facade/namespace — **done**
+3. Immutable dataset import + read — **done**
+4. Session overlays + revision commit — **done**
+5. Planner + engine (plus Lexical/Semantic and worker) — **done**
+6. Worker + print-only + RPC — **done**
+7. Thin MCP adapter — **done**
+8. TOML + `quail process` / `quail run` — **done**
+9. Clerk + TOML allowlist + OAuth discovery — **done** (invitations / generic OIDC still out)
+10. Connector SDK — **done:** tools, dataset docs (`dataset_document` →
+    `quail_get_dataset_info`), MCP UI widgets; see [`connector-sdk.md`](connector-sdk.md)
 
 ## Working agreement
 

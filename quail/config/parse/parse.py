@@ -8,8 +8,10 @@ from typing import Any
 
 from quail.config.errors import ConfigError
 from quail.config.models import (
+    ConnectorBinding,
     DatasetSpec,
     EmbeddingProfile,
+    ExtensionPin,
     OllamaProvider,
     OpenRouterProvider,
     ProvidersConfig,
@@ -20,10 +22,19 @@ from quail.config.models import (
 )
 
 _ALLOWED_ROOT_UNRESTRICTED = frozenset(
-    {"core", "auth", "hosting", "datasets", "providers", "search"}
+    {"core", "auth", "hosting", "datasets", "providers", "search", "extensions", "connectors"}
 )
 _ALLOWED_ROOT_CLERK = frozenset(
-    {"core", "auth", "hosting", "workspaces", "users", "providers", "search"}
+    {
+        "core",
+        "auth",
+        "hosting",
+        "workspaces",
+        "users",
+        "providers",
+        "search",
+        "extensions",
+    }
 )
 _ALLOWED_CORE = frozenset({"database", "feedback", "search_database"})
 _ALLOWED_AUTH_UNRESTRICTED = frozenset({"mode", "workspace"})
@@ -34,7 +45,7 @@ _MIN_MAX_CONCURRENT_EXECUTIONS = 1
 _MAX_MAX_CONCURRENT_EXECUTIONS = 100
 _ALLOWED_DATASET = frozenset({"id", "source", "name", "embedding"})
 _ALLOWED_EMBEDDING = frozenset({"provider", "model", "dimensions", "revision", "fields"})
-_ALLOWED_WORKSPACE = frozenset({"id", "datasets"})
+_ALLOWED_WORKSPACE = frozenset({"id", "datasets", "connectors"})
 _ALLOWED_USER = frozenset(
     {"id", "clerk_user_id", "workspaces", "default_workspace", "lock_workspace"}
 )
@@ -43,6 +54,8 @@ _ALLOWED_OLLAMA = frozenset({"base_url"})
 _ALLOWED_OPENROUTER = frozenset({"base_url", "api_key"})
 _ALLOWED_SEARCH = frozenset({"warm"})
 _ALLOWED_SEARCH_WARM = frozenset({"embed_batch_size", "max_concurrent_embed_requests"})
+_ALLOWED_EXTENSION = frozenset({"id", "version"})
+_ALLOWED_CONNECTOR = frozenset({"id", "config", "datasets"})
 _DEFAULT_EMBED_BATCH_SIZE = 32
 _DEFAULT_MAX_CONCURRENT_EMBED_REQUESTS = 2
 _MIN_EMBED_BATCH_SIZE = 1
@@ -172,7 +185,18 @@ def _parse_unrestricted(
         workspace_id=workspace_id,
         base=manifest_path.parent,
     )
-    workspace = WorkspaceSpec(workspace_id=workspace_id, datasets=datasets)
+    extensions = _parse_extensions(data.get("extensions", []))
+    connectors = _parse_connectors(
+        data.get("connectors", []),
+        extension_ids={pin.extension_id for pin in extensions},
+        dataset_ids={spec.dataset_id for spec in datasets},
+        label_prefix="connectors",
+    )
+    workspace = WorkspaceSpec(
+        workspace_id=workspace_id,
+        datasets=datasets,
+        connectors=connectors,
+    )
     return QuailConfig(
         manifest_path=manifest_path,
         database=database,
@@ -190,6 +214,7 @@ def _parse_unrestricted(
         providers=providers,
         search_warm=search_warm,
         max_concurrent_executions=max_concurrent_executions,
+        extensions=extensions,
     )
 
 
@@ -215,6 +240,8 @@ def _parse_clerk(
     if "datasets" in data:
         raise ConfigError("root [[datasets]] is not allowed when auth.mode is clerk")
     clerk_domain = _require_string(auth, "clerk_domain", label="auth.clerk_domain")
+    extensions = _parse_extensions(data.get("extensions", []))
+    extension_ids = {pin.extension_id for pin in extensions}
 
     workspaces_raw = data.get("workspaces")
     if not isinstance(workspaces_raw, list) or not workspaces_raw:
@@ -242,7 +269,19 @@ def _parse_clerk(
             if any(existing.dataset_id == spec.dataset_id for existing in flat_datasets):
                 raise ConfigError(f"Duplicate dataset id: {spec.dataset_id}")
         flat_datasets.extend(datasets)
-        workspaces.append(WorkspaceSpec(workspace_id=workspace_id, datasets=datasets))
+        connectors = _parse_connectors(
+            entry.get("connectors", []),
+            extension_ids=extension_ids,
+            dataset_ids={spec.dataset_id for spec in datasets},
+            label_prefix=f"{label}.connectors",
+        )
+        workspaces.append(
+            WorkspaceSpec(
+                workspace_id=workspace_id,
+                datasets=datasets,
+                connectors=connectors,
+            )
+        )
 
     users_raw = data.get("users")
     if not isinstance(users_raw, list) or not users_raw:
@@ -318,6 +357,7 @@ def _parse_clerk(
         providers=providers,
         search_warm=search_warm,
         max_concurrent_executions=max_concurrent_executions,
+        extensions=extensions,
     )
 
 
@@ -526,6 +566,115 @@ def _validate_embedding_wiring(config: QuailConfig) -> None:
         raise ConfigError(
             "[providers.openrouter] is required for datasets using provider openrouter"
         )
+
+
+def _parse_extensions(raw: object) -> tuple[ExtensionPin, ...]:
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise ConfigError("[[extensions]] must be an array of tables")
+    pins: list[ExtensionPin] = []
+    seen: set[str] = set()
+    for index, entry in enumerate(raw):
+        label = f"extensions[{index}]"
+        if not isinstance(entry, dict):
+            raise ConfigError(f"{label} must be a table")
+        _reject_unknown(entry, _ALLOWED_EXTENSION, label=label)
+        extension_id = _require_string(entry, "id", label=f"{label}.id")
+        if extension_id in seen:
+            raise ConfigError(f"Duplicate extension id: {extension_id}")
+        seen.add(extension_id)
+        version = _require_string(entry, "version", label=f"{label}.version")
+        pins.append(ExtensionPin(extension_id=extension_id, version=version))
+    return tuple(pins)
+
+
+def _parse_connectors(
+    raw: object,
+    *,
+    extension_ids: set[str],
+    dataset_ids: set[str],
+    label_prefix: str,
+) -> tuple[ConnectorBinding, ...]:
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise ConfigError(f"[[{label_prefix}]] must be an array of tables")
+    bindings: list[ConnectorBinding] = []
+    seen: set[str] = set()
+    for index, entry in enumerate(raw):
+        label = f"{label_prefix}[{index}]"
+        if not isinstance(entry, dict):
+            raise ConfigError(f"{label} must be a table")
+        _reject_unknown(entry, _ALLOWED_CONNECTOR, label=label)
+        extension_id = _require_string(entry, "id", label=f"{label}.id")
+        if extension_id not in extension_ids:
+            raise ConfigError(f"{label}.id is not pinned in [[extensions]]: {extension_id}")
+        if extension_id in seen:
+            raise ConfigError(f"Duplicate connector id in {label_prefix}: {extension_id}")
+        seen.add(extension_id)
+        config_raw = entry.get("config", {})
+        if config_raw is None:
+            config_raw = {}
+        if not isinstance(config_raw, dict):
+            raise ConfigError(f"{label}.config must be a table")
+        config = _json_shaped_config(config_raw, label=f"{label}.config")
+        bound_datasets = entry.get("datasets", [])
+        if bound_datasets is None:
+            bound_datasets = []
+        if not isinstance(bound_datasets, list):
+            raise ConfigError(f"{label}.datasets must be an array of tables")
+        ids: list[str] = []
+        seen_ds: set[str] = set()
+        for d_index, ds_entry in enumerate(bound_datasets):
+            ds_label = f"{label}.datasets[{d_index}]"
+            if not isinstance(ds_entry, dict):
+                raise ConfigError(f"{ds_label} must be a table")
+            if set(ds_entry) - {"id"}:
+                raise ConfigError(f"{ds_label} only allows id")
+            dataset_id = _require_string(ds_entry, "id", label=f"{ds_label}.id")
+            if dataset_id not in dataset_ids:
+                raise ConfigError(f"{ds_label}.id is not a dataset in this workspace: {dataset_id}")
+            if dataset_id in seen_ds:
+                raise ConfigError(f"{ds_label} duplicates {dataset_id}")
+            seen_ds.add(dataset_id)
+            ids.append(dataset_id)
+        bindings.append(
+            ConnectorBinding(
+                extension_id=extension_id,
+                config=config,
+                dataset_ids=tuple(ids),
+            )
+        )
+    return tuple(bindings)
+
+
+def _json_shaped_config(raw: dict[str, Any], *, label: str, depth: int = 0) -> dict[str, object]:
+    if depth > 64:
+        raise ConfigError(f"{label} exceeds max nesting depth")
+    result: dict[str, object] = {}
+    for key, value in raw.items():
+        if not isinstance(key, str) or not key:
+            raise ConfigError(f"{label} keys must be non-empty strings")
+        result[key] = _json_shaped_value(value, label=f"{label}.{key}", depth=depth + 1)
+    return result
+
+
+def _json_shaped_value(value: object, *, label: str, depth: int) -> object:
+    if isinstance(value, bool | int | str):
+        return value
+    if isinstance(value, float):
+        if value != value or value in (float("inf"), float("-inf")):
+            raise ConfigError(f"{label} must be a finite number")
+        return value
+    if isinstance(value, list):
+        return [
+            _json_shaped_value(item, label=f"{label}[{index}]", depth=depth + 1)
+            for index, item in enumerate(value)
+        ]
+    if isinstance(value, dict):
+        return _json_shaped_config(value, label=label, depth=depth)
+    raise ConfigError(f"{label} has unsupported TOML type for connector config")
 
 
 def _normalize_base_url(value: str) -> str:

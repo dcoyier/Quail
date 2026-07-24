@@ -1,0 +1,7 @@
+Register connected connector tools, resources, and widgets on FastMCP.
+
+register_connectors(server, catalog, resolve_workspace):
+  Attach tools/resources/widgets. resolve_workspace receives FastMCP Context (or
+  None) and returns workspace_id and optional user_id. Tool handlers fail when
+  the tool is not active in that workspace. Required tool parameters are bound
+  before optional ones and Context.

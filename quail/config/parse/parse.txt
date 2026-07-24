@@ -1,5 +1,6 @@
 There are private allowed-key sets for unrestricted and clerk roots, auth, core,
-hosting, workspace, dataset, embedding, providers, and user tables.
+hosting, workspace, dataset, embedding, providers, user, extension, and connector
+tables.
 
 load_config(config_path):
   Require an absolute path.
@@ -17,12 +18,27 @@ parse_config(raw_text, manifest_path):
   (default 2, range 1..100), and optional public_base_url (http(s) origin; defaults
   from bind/port, mapping 0.0.0.0/:: to 127.0.0.1).
   Optional [providers.ollama] / [providers.openrouter] (api_key must be env:NAME).
+  Parse optional [[extensions]] (id + version pins, unique ids).
   If unrestricted: require auth.workspace and optional root [[datasets]]; reject clerk-only keys.
+  Parse optional root [[connectors]] against pinned extension ids and workspace dataset ids.
   If clerk: require auth.clerk_domain, [[workspaces]] with nested datasets, and [[users]];
   reject auth.workspace and root [[datasets]].
+  Parse optional workspaces[].connectors against pinned extension ids and that workspace's
+  dataset ids.
   For datasets: optional [datasets.embedding] with provider, model, dimensions > 0, revision,
   and optional fields (non-empty string array of CSV columns to embed; omit = all fields).
   Lexical warm always uses every source field; fields only limits embedding warm.
   For users: validate memberships, optional default_workspace, optional lock_workspace (requires default).
   When any dataset has embedding: require search_database and the matching provider blocks.
   Give back a QuailConfig.
+
+_parse_extensions(raw):
+  Require an array of tables with id and version.
+  Reject duplicate ids.
+  Give back ExtensionPin tuples.
+
+_parse_connectors(raw, extension_ids, dataset_ids, label_prefix):
+  Require an array of tables with id pinned in extensions.
+  Optional config table (JSON-shaped) and datasets array of {id} tables in dataset_ids.
+  Reject duplicate connector ids and unknown dataset ids.
+  Give back ConnectorBinding tuples.

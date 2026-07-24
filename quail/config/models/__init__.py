@@ -2,9 +2,11 @@
 
 from .models import (
     AuthMode,
+    ConnectorBinding,
     DatasetSpec,
     EmbeddingProfile,
     EmbeddingProviderName,
+    ExtensionPin,
     OllamaProvider,
     OpenRouterProvider,
     ProvidersConfig,
@@ -16,9 +18,11 @@ from .models import (
 
 __all__ = [
     "AuthMode",
+    "ConnectorBinding",
     "DatasetSpec",
     "EmbeddingProfile",
     "EmbeddingProviderName",
+    "ExtensionPin",
     "OllamaProvider",
     "OpenRouterProvider",
     "ProvidersConfig",

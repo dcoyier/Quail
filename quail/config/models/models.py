@@ -60,6 +60,23 @@ class ProvidersConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ExtensionPin:
+    """Deployment-wide trusted connector package identity."""
+
+    extension_id: str
+    version: str
+
+
+@dataclass(frozen=True, slots=True)
+class ConnectorBinding:
+    """One connector activated in one workspace."""
+
+    extension_id: str
+    config: dict[str, object]
+    dataset_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class DatasetSpec:
     """One CSV dataset declared in the manifest."""
 
@@ -76,6 +93,7 @@ class WorkspaceSpec:
 
     workspace_id: str
     datasets: tuple[DatasetSpec, ...]
+    connectors: tuple[ConnectorBinding, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,3 +137,4 @@ class QuailConfig:
     providers: ProvidersConfig = ProvidersConfig()
     search_warm: SearchWarmConfig = SearchWarmConfig()
     max_concurrent_executions: int = 2
+    extensions: tuple[ExtensionPin, ...] = ()

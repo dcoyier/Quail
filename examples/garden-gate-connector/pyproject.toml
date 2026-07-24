@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quail-garden-gate-connector"
+version = "1.0.0"
+description = "Example Quail connector: garden-gate dataset docs, tool, and MCP UI widget"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "quail>=0.11.0a0",
+]
+
+[project.entry-points."quail.connectors"]
+garden_gate = "quail_garden_gate_connector:create_connector"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/quail_garden_gate_connector"]

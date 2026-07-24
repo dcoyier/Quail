@@ -18,6 +18,7 @@ from quail.analysis.errors import (
     QuailSyntaxError,
 )
 from quail.auth.errors import AuthError, ForbiddenError, UnauthorizedError
+from quail.connectors.sdk import ConnectorError
 from quail.datasets.errors import DatasetConflictError, DatasetError, DatasetSyntaxError
 from quail.session.errors import (
     SessionClosedError,
@@ -88,12 +89,16 @@ def diagnostic_from_exception(
     hint = repair_hint
     if hint is None and isinstance(error, QuailRuntimeError):
         hint = error.repair_hint
+    if hint is None and isinstance(error, ConnectorError):
+        hint = error.repair_hint
     if hint is not None:
         diagnostic["repair_hint"] = hint
     return diagnostic
 
 
 def classify_exception(error: BaseException) -> tuple[str, str]:
+    if isinstance(error, ConnectorError):
+        return "ConnectorError", error.stable_code.casefold()
     if isinstance(error, QuailSyntaxError):
         return "QuailSyntaxError", "quail_syntax_error"
     if isinstance(error, QuailScopeError):
