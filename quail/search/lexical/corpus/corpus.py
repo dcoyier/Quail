@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from quail.analysis.errors import QuailRuntimeError
@@ -110,13 +112,42 @@ def resolve_corpus(
     return LexicalCorpus(doc_table=doc_table, terms_table=terms_table)
 
 
+def load_entry_segment_counts(
+    search: SearchDb,
+    corpus: LexicalCorpus,
+    *,
+    entry_ids: Sequence[str],
+) -> dict[str, int]:
+    """Return entry_id → segment count for entries that already have FTS rows."""
+
+    if not entry_ids:
+        return {}
+    doc_table = validate_table_ident(corpus.doc_table)
+    candidates_json = json.dumps(list(entry_ids), separators=(",", ":"), allow_nan=False)
+    rows = search.connection.execute(
+        f"""
+        SELECT entry_id, COUNT(*)
+        FROM {doc_table}
+        WHERE entry_id IN (SELECT value FROM json_each(?))
+        GROUP BY entry_id
+        """,
+        (candidates_json,),
+    ).fetchall()
+    return {str(row[0]): int(row[1]) for row in rows}
+
+
 def ensure_entry_segments(
     search: SearchDb,
     corpus: LexicalCorpus,
     *,
     entry_segments: dict[str, list[str]],
 ) -> dict[str, int]:
-    """Replace indexed segments for each entry; return segment counts."""
+    """Replace indexed segments for each entry; return segment counts.
+
+    Used by ``quail process`` warm and by score-time fallback when lexical warm
+    is missing or incomplete. Score paths should prefer
+    ``load_entry_segment_counts`` when the warm receipt is lexical-ready.
+    """
 
     connection = search.connection
     counts: dict[str, int] = {}

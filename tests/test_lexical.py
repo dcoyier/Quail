@@ -63,6 +63,75 @@ def test_parse_rejects_pure_negative_and_explicit_or() -> None:
         parse_queries(("*",))
 
 
+def test_lexical_score_reuses_warm_segments_without_rewrite(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from quail.config.models import SearchWarmConfig
+    from quail.search.lexical import corpus as corpus_mod
+    from quail.search.warm import warm_dataset
+
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text(
+        "id,body\ne1,hydrangea care tips\ne2,climate policy notes\n",
+        encoding="utf-8",
+    )
+    db = open_core_db(tmp_path / "core.turso")
+    imported = import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+    search = open_search_db(tmp_path / "search.turso")
+    warm_dataset(
+        db,
+        search,
+        workspace_id="ws",
+        dataset_id="notes",
+        version_id=imported.version_id,
+        profile=None,
+        warm=SearchWarmConfig(),
+        embedder_factory=lambda _profile: (_ for _ in ()).throw(RuntimeError("no embed")),
+    )
+
+    ensure_calls: list[int] = []
+    original_ensure = corpus_mod.ensure_entry_segments
+
+    def _counting_ensure(*args: object, **kwargs: object) -> dict[str, int]:
+        ensure_calls.append(1)
+        return original_ensure(*args, **kwargs)
+
+    monkeypatch.setattr(corpus_mod, "ensure_entry_segments", _counting_ensure)
+    monkeypatch.setattr(
+        "quail.search.lexical.service.service.ensure_entry_segments",
+        _counting_ensure,
+    )
+
+    service = LexicalService(search=search)
+    corpus = {
+        "e1": "hydrangea care tips",
+        "e2": "climate policy notes",
+    }
+    first = service.lexical_scores_for_entries(
+        workspace_id="ws",
+        dataset_id="notes",
+        version_id=imported.version_id,
+        corpus_by_entry=corpus,
+        query_record={"kind": "LiteralText", "text": "hydrangea"},
+        input_aggregation=None,
+        target_aggregation=None,
+    )
+    second = service.lexical_scores_for_entries(
+        workspace_id="ws",
+        dataset_id="notes",
+        version_id=imported.version_id,
+        corpus_by_entry=corpus,
+        query_record={"kind": "LiteralText", "text": "hydrangea"},
+        input_aggregation=None,
+        target_aggregation=None,
+    )
+    assert first["e1"] > 0
+    assert first["e2"] == 0.0
+    assert second == first
+    assert ensure_calls == []
+    search.close()
+
+
 def test_lexical_match_and_miss(tmp_path: Path) -> None:
     search = open_search_db(tmp_path / "search.turso")
     service = LexicalService(search=search)

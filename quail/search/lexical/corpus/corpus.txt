@@ -16,6 +16,13 @@ ensure_entry_segments(search, corpus, entry_segments):
   insert segments, and insert-or-ignore prefix dictionary terms.
   Give back entry_id -> segment count.
   Raise QuailRuntimeError when indexing fails.
+  Used by quail process warm and by score-time fallback when lexical warm is
+  missing or incomplete.
+
+load_entry_segment_counts(search, corpus, entry_ids):
+  Read existing FTS row counts for the given entry ids (GROUP BY entry_id).
+  Give back entry_id -> count for entries that already have rows.
+  Used by score paths to reuse process-warmed segments without rewrite.
 
 expand_prefixes(search, corpus, prefixes, max_prefix_terms default 4096):
   Range-scan the terms table for each prefix under the remaining budget.

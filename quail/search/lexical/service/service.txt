@@ -11,10 +11,17 @@ lexical_scores_for_entries(workspace_id, dataset_id, version_id, corpus_by_entry
   Resolve LiteralText / LiteralTextList query strings.
   Reject unresolved EntryGroup / EntryList (QueryEngine must resolve those first).
   Collect corpus segment texts per entry; empty corpora score 0.0.
-  Resolve or create the per-version FTS corpus, ensure those segments, then
-  score with Turso fts_match / fts_score.
+  Resolve or create the per-version FTS corpus.
+  When the warm receipt is lexical_ready and every scored entry already has FTS
+    rows, reuse those segment counts and score read-only (no DELETE/INSERT).
+  Otherwise ensure (index) the provided segments, then score with Turso
+    fts_match / fts_score.
   Aggregate input over segments and target over queries with total or avg.
   Give back entry_id -> float.
+
+_segment_counts_for_score:
+  Prefer load_entry_segment_counts when warm receipt.lexical_ready and all
+  entries are present; else ensure_entry_segments.
 
 _score_entries:
   Parse queries, expand prefixes, then use the simple or prefix scoring path.

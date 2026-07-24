@@ -14,9 +14,11 @@ from quail.search.lexical.corpus import (
     LexicalCorpus,
     ensure_entry_segments,
     expand_prefixes,
+    load_entry_segment_counts,
     resolve_corpus,
     validate_table_ident,
 )
+from quail.search.warm import get_warm_receipt
 from quail.search.lexical.query import (
     BooleanExpression,
     Expression,
@@ -72,7 +74,7 @@ class LexicalService:
         input_aggregation: str | None,
         target_aggregation: str | None,
     ) -> dict[str, float]:
-        """Score many entries with one ensure pass and Turso FTS queries."""
+        """Score many entries with Turso FTS; reuse warmed segments when ready."""
 
         queries = _target_queries(query_record)
         if not queries:
@@ -99,9 +101,12 @@ class LexicalService:
             dataset_id=dataset_id,
             version_id=version_id,
         )
-        segment_counts = ensure_entry_segments(
+        segment_counts = _segment_counts_for_score(
             self.search,
             corpus,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
             entry_segments=entry_segments,
         )
 
@@ -121,6 +126,35 @@ class LexicalService:
         for entry_id in corpus_by_entry:
             results.setdefault(entry_id, 0.0)
         return results
+
+
+def _segment_counts_for_score(
+    search: SearchDb,
+    corpus: LexicalCorpus,
+    *,
+    workspace_id: str,
+    dataset_id: str,
+    version_id: str,
+    entry_segments: dict[str, list[str]],
+) -> dict[str, int]:
+    """Reuse process-warmed FTS rows when ready; otherwise index then score."""
+
+    entry_ids = list(entry_segments.keys())
+    receipt = get_warm_receipt(
+        search,
+        workspace_id=workspace_id,
+        dataset_id=dataset_id,
+        version_id=version_id,
+    )
+    if receipt is not None and receipt.lexical_ready:
+        existing = load_entry_segment_counts(search, corpus, entry_ids=entry_ids)
+        if all(existing.get(entry_id, 0) > 0 for entry_id in entry_ids):
+            return {entry_id: existing[entry_id] for entry_id in entry_ids}
+    return ensure_entry_segments(
+        search,
+        corpus,
+        entry_segments=entry_segments,
+    )
 
 
 def _score_entries(
