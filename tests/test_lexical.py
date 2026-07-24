@@ -505,3 +505,77 @@ def test_lexical_empty_entry_targets_error(tmp_path: Path) -> None:
             lexical=lexical,
         )
     search.close()
+
+
+class _CountingLexical(LexicalService):
+    """LexicalService wrapper that counts batch score calls."""
+
+    batch_calls: int = 0
+
+    def lexical_scores_for_entries(
+        self,
+        *,
+        workspace_id: str,
+        dataset_id: str,
+        version_id: str,
+        corpus_by_entry: object,
+        query_record: dict[str, object],
+        input_aggregation: str | None,
+        target_aggregation: str | None,
+    ) -> dict[str, float]:
+        self.batch_calls += 1
+        return super().lexical_scores_for_entries(
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+            corpus_by_entry=corpus_by_entry,  # type: ignore[arg-type]
+            query_record=query_record,  # type: ignore[arg-type]
+            input_aggregation=input_aggregation,
+            target_aggregation=target_aggregation,
+        )
+
+
+def test_engine_lexical_where_batches_once_per_expression(tmp_path: Path) -> None:
+    rows = ["id,body"] + [f"e{i},note {i} hydrangea garden" for i in range(40)]
+    rows[2] = "e1,climate policy only"
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    db = open_core_db(tmp_path / "core.turso")
+    import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+    session = create_session(db, "ws")
+    search = open_search_db(tmp_path / "search.turso")
+    lexical = _CountingLexical(search)
+    with db:
+        score = Expression(Field("body"), Lexical("hydrangea"))
+        matching = G0.where(score > 0)
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            total = dispatch_call(engine, "count", (), {"group": matching})
+            assert total == 39
+            # One batch for the where predicate — not one call per entry.
+            assert lexical.batch_calls == 1
+
+            ranked = dispatch_call(
+                engine,
+                "retrieve",
+                (),
+                {
+                    "group": matching,
+                    "rank": Ranking(expression=score),
+                    "order": "top",
+                    "limit": 5,
+                },
+            )
+            assert len(ranked) == 5
+            # Same Expression object: where + rank share one batch inside retrieve.
+            assert lexical.batch_calls == 2
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            lexical=lexical,
+        )
+    search.close()

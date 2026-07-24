@@ -34,6 +34,7 @@ Helpers evaluate groups and predicates, run expression pipelines (Value, AsText,
 AsNumber, regex, Slice, Length, Lexical via LexicalService, Semantic via
 SimilarityService). Before Lexical/Semantic scoring, resolve query targets from
 LiteralText, LiteralTextList, EntryGroup, or EntryList using the expression root
-field; Lexical Entry* targets are term-quoted. Ranking precomputes
-Lexical/Semantic-terminal leaves in one batch score pass, then combines composed
-rankings in host memory.
+field; Lexical Entry* targets are term-quoted. Predicates and rankings that end in
+Lexical/Semantic share one per-retrieve/count score cache: each distinct search-
+terminal Expression is batch-scored once over its candidate entry ids, then
+predicate filters and ranking reads reuse those scores in host memory.

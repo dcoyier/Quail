@@ -71,7 +71,8 @@ class QueryEngine:
             fields = self._evaluate_field_group(plan.group)
             return self._apply_limit(fields, plan.limit, plan.order)
 
-        entry_ids = self._evaluate_entry_group(plan.group)
+        search_scores: dict[int, dict[str, float | None]] = {}
+        entry_ids = self._evaluate_entry_group(plan.group, search_scores=search_scores)
         if (
             isinstance(plan.unit, Unit)
             and plan.unit.scope == "entries"
@@ -83,11 +84,15 @@ class QueryEngine:
                 for entry_id in entry_ids
                 if self._read_field_value(field_name, entry_id) is not None
             ]
-        entry_ids = self._apply_ranking(entry_ids, plan.ranking)
+        entry_ids = self._apply_ranking(entry_ids, plan.ranking, search_scores=search_scores)
         entry_ids = self._apply_limit(entry_ids, plan.limit, plan.order)
 
         if isinstance(plan.unit, Expression):
-            return [self._eval_expression(plan.unit, entry_id) for entry_id in entry_ids]
+            self._ensure_search_expression_scores([plan.unit], entry_ids, search_scores)
+            return [
+                self._eval_expression(plan.unit, entry_id, search_scores=search_scores)
+                for entry_id in entry_ids
+            ]
 
         assert isinstance(plan.unit, Unit)
         if plan.unit.scope == "entries":
@@ -115,7 +120,8 @@ class QueryEngine:
     def count(self, plan: CountPlan) -> int:
         if isinstance(plan.unit, Unit) and plan.unit.scope == "fields":
             return len(self._evaluate_field_group(plan.group))
-        entry_ids = self._evaluate_entry_group(plan.group)
+        search_scores: dict[int, dict[str, float | None]] = {}
+        entry_ids = self._evaluate_entry_group(plan.group, search_scores=search_scores)
         if isinstance(plan.unit, Expression):
             return len(entry_ids)
         assert isinstance(plan.unit, Unit)
@@ -209,7 +215,7 @@ class QueryEngine:
     def _tag_entry_ids(self, group: GroupExpr | tuple[Entry, ...]) -> list[str]:
         if isinstance(group, tuple):
             return [entry.id for entry in group]
-        return self._evaluate_entry_group(group)
+        return self._evaluate_entry_group(group, search_scores={})
 
     def _require_analysis_field(self, name: str) -> None:
         for field in self._catalog():
@@ -230,7 +236,12 @@ class QueryEngine:
             )
         ]
 
-    def _evaluate_entry_group(self, group: GroupExpr) -> list[str]:
+    def _evaluate_entry_group(
+        self,
+        group: GroupExpr,
+        *,
+        search_scores: dict[int, dict[str, float | None]],
+    ) -> list[str]:
         if group.scope != "entries":
             raise QuailSyntaxError("Expected an entry-scoped group")
         if group.name == "G0":
@@ -238,33 +249,39 @@ class QueryEngine:
         if group.members is not None:
             return [member.id for member in group.members]
         if group.predicate is not None:
+            candidate_ids = self._all_entry_ids()
+            self._ensure_search_expression_scores(
+                _search_predicate_expressions(group.predicate),
+                candidate_ids,
+                search_scores,
+            )
             return [
                 entry_id
-                for entry_id in self._all_entry_ids()
-                if self._eval_predicate(group.predicate, entry_id)
+                for entry_id in candidate_ids
+                if self._eval_predicate(group.predicate, entry_id, search_scores=search_scores)
             ]
         if group.operator == "and":
             assert group.left is not None and group.right is not None
-            right_ids = set(self._evaluate_entry_group(group.right))
+            right_ids = set(self._evaluate_entry_group(group.right, search_scores=search_scores))
             return [
                 entry_id
-                for entry_id in self._evaluate_entry_group(group.left)
+                for entry_id in self._evaluate_entry_group(group.left, search_scores=search_scores)
                 if entry_id in right_ids
             ]
         if group.operator == "or":
             assert group.left is not None and group.right is not None
             seen: set[str] = set()
             result: list[str] = []
-            for entry_id in self._evaluate_entry_group(group.left) + self._evaluate_entry_group(
-                group.right
-            ):
+            for entry_id in self._evaluate_entry_group(
+                group.left, search_scores=search_scores
+            ) + self._evaluate_entry_group(group.right, search_scores=search_scores):
                 if entry_id not in seen:
                     seen.add(entry_id)
                     result.append(entry_id)
             return result
         if group.operator == "not":
             assert group.left is not None
-            excluded = set(self._evaluate_entry_group(group.left))
+            excluded = set(self._evaluate_entry_group(group.left, search_scores=search_scores))
             return [entry_id for entry_id in self._all_entry_ids() if entry_id not in excluded]
         raise QuailSyntaxError("Unsupported entry group form")
 
@@ -303,22 +320,28 @@ class QueryEngine:
             ]
         raise QuailSyntaxError("Unsupported field group form")
 
-    def _eval_predicate(self, predicate: Predicate, entry_id: str) -> bool:
+    def _eval_predicate(
+        self,
+        predicate: Predicate,
+        entry_id: str,
+        *,
+        search_scores: dict[int, dict[str, float | None]],
+    ) -> bool:
         if predicate.operator == "and":
-            return self._eval_predicate(predicate.left, entry_id) and self._eval_predicate(
-                predicate.right, entry_id
-            )
+            return self._eval_predicate(
+                predicate.left, entry_id, search_scores=search_scores
+            ) and self._eval_predicate(predicate.right, entry_id, search_scores=search_scores)
         if predicate.operator == "or":
-            return self._eval_predicate(predicate.left, entry_id) or self._eval_predicate(
-                predicate.right, entry_id
-            )
+            return self._eval_predicate(
+                predicate.left, entry_id, search_scores=search_scores
+            ) or self._eval_predicate(predicate.right, entry_id, search_scores=search_scores)
         if predicate.operator == "not":
-            return not self._eval_predicate(predicate.left, entry_id)
+            return not self._eval_predicate(predicate.left, entry_id, search_scores=search_scores)
 
-        left = self._eval_expression(predicate.left, entry_id)
+        left = self._eval_expression(predicate.left, entry_id, search_scores=search_scores)
         right = predicate.right
         if isinstance(right, Expression):
-            right = self._eval_expression(right, entry_id)
+            right = self._eval_expression(right, entry_id, search_scores=search_scores)
         else:
             right = literal_as_plain(right)
 
@@ -340,10 +363,28 @@ class QueryEngine:
             return left >= right
         raise QuailSyntaxError(f"Unsupported predicate operator: {predicate.operator}")
 
-    def _eval_expression(self, expression: Expression, entry_id: str) -> Any:
+    def _eval_expression(
+        self,
+        expression: Expression,
+        entry_id: str,
+        *,
+        search_scores: dict[int, dict[str, float | None]] | None = None,
+    ) -> Any:
+        if (
+            search_scores is not None
+            and expression.operations
+            and expression.operations[-1].kind in ("Lexical", "Semantic")
+            and id(expression) in search_scores
+        ):
+            return search_scores[id(expression)].get(entry_id)
         value: Any = self._read_field_value(expression.root.name, entry_id)
         for operation in expression.operations:
-            value = self._apply_operation(operation, value, root=expression.root)
+            value = self._apply_operation(
+                operation,
+                value,
+                root=expression.root,
+                search_scores=search_scores,
+            )
         return value
 
     def _apply_operation(
@@ -352,6 +393,7 @@ class QueryEngine:
         value: Any,
         *,
         root: Field | None = None,
+        search_scores: dict[int, dict[str, float | None]] | None = None,
     ) -> Any:
         kind = operation.kind
         if kind == "Value":
@@ -412,6 +454,7 @@ class QueryEngine:
                     dict(operation.params["query"]),
                     root=root,
                     operation_kind="Lexical",
+                    search_scores=search_scores,
                 ),
                 input_aggregation=operation.params.get("input_aggregation"),
                 target_aggregation=operation.params.get("target_aggregation"),
@@ -436,6 +479,7 @@ class QueryEngine:
                     dict(operation.params["query"]),
                     root=root,
                     operation_kind="Semantic",
+                    search_scores=search_scores,
                 ),
                 input_aggregation=operation.params.get("input_aggregation"),
                 target_aggregation=operation.params.get("target_aggregation"),
@@ -448,11 +492,13 @@ class QueryEngine:
         *,
         root: Field,
         operation_kind: str,
+        search_scores: dict[int, dict[str, float | None]] | None = None,
     ) -> dict[str, Any]:
         texts = self._resolve_search_targets(
             query_record,
             root=root,
             operation_kind=operation_kind,
+            search_scores=search_scores,
         )
         if len(texts) == 1:
             return {"kind": "LiteralText", "text": texts[0]}
@@ -464,9 +510,11 @@ class QueryEngine:
         *,
         root: Field,
         operation_kind: str,
+        search_scores: dict[int, dict[str, float | None]] | None = None,
     ) -> list[str]:
         """Expand Lexical/Semantic query records into ordered non-empty target strings."""
 
+        scores = search_scores if search_scores is not None else {}
         kind = query_record.get("kind")
         if kind == "LiteralText":
             targets = text_segments(query_record.get("text"), operation_kind=operation_kind)
@@ -483,7 +531,7 @@ class QueryEngine:
             group = group_expr_from_record(query_record.get("group"))
             if group.scope != "entries":
                 raise QuailRuntimeError(f"{operation_kind} target groups must be entry-scoped")
-            entry_ids = self._evaluate_entry_group(group)
+            entry_ids = self._evaluate_entry_group(group, search_scores=scores)
             targets = tuple(
                 segment
                 for entry_id in entry_ids
@@ -593,7 +641,13 @@ class QueryEngine:
                 return field.kind
         return None
 
-    def _apply_ranking(self, entry_ids: list[str], ranking: Ranking) -> list[str]:
+    def _apply_ranking(
+        self,
+        entry_ids: list[str],
+        ranking: Ranking,
+        *,
+        search_scores: dict[int, dict[str, float | None]],
+    ) -> list[str]:
         if (
             ranking.expression is None
             and ranking.left is None
@@ -601,7 +655,11 @@ class QueryEngine:
             and ranking.right is None
         ):
             return entry_ids
-        search_scores = self._precompute_search_ranking_scores(ranking, entry_ids)
+        self._ensure_search_expression_scores(
+            _search_ranking_expressions(ranking),
+            entry_ids,
+            search_scores,
+        )
         scored = [
             (self._score_ranking(ranking, entry_id, search_scores), entry_id)
             for entry_id in entry_ids
@@ -609,22 +667,21 @@ class QueryEngine:
         scored.sort(key=lambda item: (-item[0], entry_ids.index(item[1])))
         return [entry_id for _, entry_id in scored]
 
-    def _precompute_search_ranking_scores(
+    def _ensure_search_expression_scores(
         self,
-        ranking: Ranking,
+        expressions: list[Expression],
         entry_ids: list[str],
-    ) -> dict[int, dict[str, float | None]]:
-        """Batch-score every Lexical/Semantic-terminal ranking leaf once."""
+        search_scores: dict[int, dict[str, float | None]],
+    ) -> None:
+        """Batch-score Lexical/Semantic-terminal expressions not already cached."""
 
         if not entry_ids:
-            return {}
-        expressions = _search_ranking_expressions(ranking)
-        if not expressions:
-            return {}
-        cached: dict[int, dict[str, float | None]] = {}
+            return
         for expression in expressions:
+            if not _is_search_terminal_expression(expression):
+                continue
             key = id(expression)
-            if key in cached:
+            if key in search_scores:
                 continue
             operation = expression.operations[-1]
             prefix_ops = expression.operations[:-1]
@@ -632,7 +689,9 @@ class QueryEngine:
             for entry_id in entry_ids:
                 if prefix_ops:
                     corpus_by_entry[entry_id] = self._eval_expression(
-                        Expression(expression.root, *prefix_ops), entry_id
+                        Expression(expression.root, *prefix_ops),
+                        entry_id,
+                        search_scores=search_scores,
                     )
                 else:
                     corpus_by_entry[entry_id] = self._read_field_value(
@@ -647,7 +706,7 @@ class QueryEngine:
                             "re-run quail, then retry the whole exec."
                         ),
                     )
-                cached[key] = self._similarity.semantic_scores_for_entries(
+                search_scores[key] = self._similarity.semantic_scores_for_entries(
                     workspace_id=self._scope.workspace_id,
                     dataset_id=self._scope.dataset_id,
                     version_id=self._scope.dataset_version_id,
@@ -656,6 +715,7 @@ class QueryEngine:
                         dict(operation.params["query"]),
                         root=expression.root,
                         operation_kind="Semantic",
+                        search_scores=search_scores,
                     ),
                     input_aggregation=operation.params.get("input_aggregation"),
                     target_aggregation=operation.params.get("target_aggregation"),
@@ -668,7 +728,7 @@ class QueryEngine:
                             "Set core.search_database, re-run quail, then retry the whole exec."
                         ),
                     )
-                cached[key] = {
+                search_scores[key] = {
                     entry_id: score
                     for entry_id, score in self._lexical.lexical_scores_for_entries(
                         workspace_id=self._scope.workspace_id,
@@ -679,12 +739,12 @@ class QueryEngine:
                             dict(operation.params["query"]),
                             root=expression.root,
                             operation_kind="Lexical",
+                            search_scores=search_scores,
                         ),
                         input_aggregation=operation.params.get("input_aggregation"),
                         target_aggregation=operation.params.get("target_aggregation"),
                     ).items()
                 }
-        return cached
 
     def _score_ranking(
         self,
@@ -702,7 +762,7 @@ class QueryEngine:
             ):
                 value = search_scores[id(expression)].get(entry_id)
             else:
-                value = self._eval_expression(expression, entry_id)
+                value = self._eval_expression(expression, entry_id, search_scores=search_scores)
             if value is None:
                 return float("-inf")
             if not isinstance(value, int | float) or isinstance(value, bool):
@@ -738,6 +798,10 @@ class QueryEngine:
         return items[start : start + limit]
 
 
+def _is_search_terminal_expression(expression: Expression) -> bool:
+    return bool(expression.operations and expression.operations[-1].kind in ("Lexical", "Semantic"))
+
+
 def _search_ranking_expressions(ranking: Ranking) -> list[Expression]:
     found: list[Expression] = []
     _collect_search_ranking_expressions(ranking, found)
@@ -747,13 +811,30 @@ def _search_ranking_expressions(ranking: Ranking) -> list[Expression]:
 def _collect_search_ranking_expressions(ranking: Ranking, found: list[Expression]) -> None:
     if ranking.expression is not None:
         expression = ranking.expression
-        if expression.operations and expression.operations[-1].kind in (
-            "Lexical",
-            "Semantic",
-        ):
+        if _is_search_terminal_expression(expression):
             found.append(expression)
         return
     if ranking.left is not None:
         _collect_search_ranking_expressions(ranking.left, found)
     if isinstance(ranking.right, Ranking):
         _collect_search_ranking_expressions(ranking.right, found)
+
+
+def _search_predicate_expressions(predicate: Predicate) -> list[Expression]:
+    found: list[Expression] = []
+    _collect_search_predicate_expressions(predicate, found)
+    return found
+
+
+def _collect_search_predicate_expressions(predicate: Predicate, found: list[Expression]) -> None:
+    if predicate.operator in ("and", "or"):
+        _collect_search_predicate_expressions(predicate.left, found)
+        _collect_search_predicate_expressions(predicate.right, found)
+        return
+    if predicate.operator == "not":
+        _collect_search_predicate_expressions(predicate.left, found)
+        return
+    if isinstance(predicate.left, Expression) and _is_search_terminal_expression(predicate.left):
+        found.append(predicate.left)
+    if isinstance(predicate.right, Expression) and _is_search_terminal_expression(predicate.right):
+        found.append(predicate.right)
