@@ -26,8 +26,10 @@ exec_script(db, session_id, dataset_id, expected_revision, code,
   Resolve and ensure scope.
   Build a QueryEngine with optional SimilarityService and LexicalService.
   Resolve ExecLimits from limits or time_window.
+  Acquire one process-wide exec slot (fail busy if full).
   Load session bindings and spawn the worker with the code plus bindings.
   Answer api_call via dispatch_call.
   On worker success, commit_overlay with mutations, changed bindings, and
   binding deletes; give back ExecOutcome with worker printed_output.
+  Release the exec slot.
   If the worker fails, do not commit.

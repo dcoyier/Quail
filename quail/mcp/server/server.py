@@ -114,6 +114,9 @@ def create_mcp_server_from_config(
 ) -> FastMCP:
     """Build MCP from slim config (unrestricted or Clerk)."""
 
+    from quail.analysis.admission import configure_execution_slots
+
+    configure_execution_slots(config.max_concurrent_executions)
     services = search_services_from_config(config)
     similarity = None if services is None else services.similarity
     lexical = None if services is None else services.lexical
@@ -221,8 +224,9 @@ def _register_unrestricted_tools(server: FastMCP, context: McpContext) -> None:
     def quail_start_session() -> CallToolResult:
         """Create an active analysis session in this workspace.
 
-        Returns session_id to reuse on quail_exec calls. Bindings and
-        tags persist on this session across successful execs.
+        The session belongs to this workspace (workspace_id is returned).
+        Reuse session_id on quail_exec calls serially. Bindings and tags
+        persist on this session across successful execs.
         """
 
         try:
@@ -273,8 +277,10 @@ def _register_unrestricted_tools(server: FastMCP, context: McpContext) -> None:
 
         code must follow quail_get_api_docs. Success: printed_output only.
         Failure: diagnostic with execution_id null; no tags/bindings/prints
-        are kept. time_window is "standard" (30s wall / 15s CPU) or
-        "extended" (100s wall / 60s CPU); worker RSS is capped at 256 MiB.
+        are kept. Reuse one session_id serially; do not overlap quail_exec
+        calls on the same session_id. time_window is "standard" (30s wall /
+        15s CPU) or "extended" (100s wall / 60s CPU); worker RSS is capped
+        at 256 MiB.
         """
 
         try:
@@ -403,6 +409,8 @@ def _register_clerk_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
     ) -> CallToolResult:
         """Bind this MCP connection to one allowlisted workspace.
 
+        Sticky bind only: does not create a session. After switching, call
+        quail_start_session again; do not reuse a prior session_id.
         Fails when the user is TOML-locked or the workspace is not in their
         memberships. Success returns active_workspace_id.
         """
@@ -464,7 +472,12 @@ def _register_clerk_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
 
     @server.tool(title="Start Quail session")
     def quail_start_session(ctx: Context | None = None) -> CallToolResult:
-        """Create an analysis session in the active sticky workspace."""
+        """Create an analysis session in the active sticky workspace.
+
+        The session belongs to that workspace (workspace_id is returned).
+        After quail_switch_workspace, start a new session; do not reuse an
+        old session_id. Reuse this session_id serially on quail_exec.
+        """
 
         principal = _auth(ctx)
         if isinstance(principal, CallToolResult):
@@ -524,7 +537,11 @@ def _register_clerk_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
         time_window: str | None = "standard",
         ctx: Context | None = None,
     ) -> CallToolResult:
-        """Run bounded Quail Python for one session and dataset in the active workspace."""
+        """Run bounded Quail Python for one session and dataset in the active workspace.
+
+        Reuse one session_id serially; do not overlap quail_exec calls on the
+        same session_id. After switching workspace, start a new session first.
+        """
 
         principal = _auth(ctx)
         if isinstance(principal, CallToolResult):

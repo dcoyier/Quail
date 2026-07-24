@@ -16,7 +16,7 @@ Pass arguments by name.
 
 | Argument | Meaning |
 | --- | --- |
-| `session_id` | Durable analysis context. Bindings and tags stick to this session. |
+| `session_id` | Durable analysis context in one workspace. Bindings and tags stick to this session. MCP binds the workspace; after a workspace switch, start a new session. Run one quail_exec at a time per session_id. |
 | `dataset_id` | Exactly one dataset for this call (its active immutable version). |
 | `code` | Bounded Quail Python (no imports, no files, no network). |
 | `time_window` | `"standard"` (30s wall / 15s CPU) or `"extended"` (100s wall / 60s CPU). Both are finite; extended is just longer. Worker RSS is always capped at 256 MiB. |

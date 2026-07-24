@@ -1,9 +1,11 @@
 There are repair hint strings for unbound and locked workspace cases.
 There is a private locked-user instructions addendum.
+There is a private session-rules string (workspace-scoped sessions; one
+quail_exec in flight per session_id).
 
 unrestricted_instructions(workspace_id):
-  Give back fixed-workspace connect-time instructions.
+  Give back fixed-workspace connect-time instructions including session rules.
 
 clerk_instructions(locked default false):
-  Give back Clerk hierarchy/workflow instructions.
+  Give back Clerk bind-then-analyze instructions including session rules.
   When locked is true, append the locked-user addendum.

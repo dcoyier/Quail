@@ -18,8 +18,7 @@ _TIME_REPAIR_BODY = (
 )
 
 _TIME_REPAIR_STANDARD = (
-    'Potential routes for revision: Retry with time_window="extended", '
-    + _TIME_REPAIR_BODY
+    'Potential routes for revision: Retry with time_window="extended", ' + _TIME_REPAIR_BODY
 )
 
 _TIME_REPAIR_EXTENDED = "Potential routes for revision: " + _TIME_REPAIR_BODY

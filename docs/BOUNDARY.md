@@ -83,6 +83,10 @@ active version and current TOML embedding profile, then serves MCP
 (unrestricted loopback or Clerk allowlist on one URL). Edit TOML → process →
 run. The CLI never writes the TOML.
 
+`[hosting] max_concurrent_executions` (default `2`, range `1`–`100`) caps
+simultaneous `quail_exec` slots for the whole process. Independent of
+`[search.warm]` embed concurrency. Restart to apply.
+
 ## Preserve (invariants — improve shape, do not weaken)
 
 - Immutable imported dataset versions

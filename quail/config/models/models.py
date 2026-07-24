@@ -114,3 +114,4 @@ class QuailConfig:
     search_database: Path | None = None
     providers: ProvidersConfig = ProvidersConfig()
     search_warm: SearchWarmConfig = SearchWarmConfig()
+    max_concurrent_executions: int = 2

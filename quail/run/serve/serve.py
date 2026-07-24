@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from quail.analysis.admission import configure_execution_slots
 from quail.auth.clerk import TokenVerifier
 from quail.config.models import QuailConfig
 from quail.mcp import create_mcp_server_from_config
@@ -12,6 +13,7 @@ from quail.run.process import assert_search_warm
 def serve(config: QuailConfig, *, verifier: TokenVerifier | None = None) -> None:
     """Apply declared state, gate on search warm, then block on MCP."""
 
+    configure_execution_slots(config.max_concurrent_executions)
     db = apply_config(config)
     try:
         assert_search_warm(db, config)

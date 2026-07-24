@@ -54,3 +54,4 @@ QuailConfig remembers:
   search_database (optional; required when any dataset has embedding)
   providers
   search_warm
+  max_concurrent_executions

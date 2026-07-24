@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from quail.analysis.admission import acquire_execution_slot
 from quail.analysis.engine import QueryEngine
 from quail.analysis.limits import ExecLimits
 from quail.analysis.planner import (
@@ -118,20 +119,21 @@ def exec_script(
 
     initial_bindings = load_bindings(db, session_id)
     active_limits = limits if limits is not None else limits_for_time_window(time_window)
-    worker_result = run_worker_script(
-        code,
-        on_api_call=on_api_call,
-        bindings=initial_bindings,
-        limits=active_limits,
-    )
-    revision = commit_overlay(
-        db,
-        scope,
-        expected_revision=expected_revision,
-        mutations=engine.mutations,
-        bindings=worker_result.changed_bindings,
-        binding_deletes=worker_result.deleted_bindings,
-    )
+    with acquire_execution_slot():
+        worker_result = run_worker_script(
+            code,
+            on_api_call=on_api_call,
+            bindings=initial_bindings,
+            limits=active_limits,
+        )
+        revision = commit_overlay(
+            db,
+            scope,
+            expected_revision=expected_revision,
+            mutations=engine.mutations,
+            bindings=worker_result.changed_bindings,
+            binding_deletes=worker_result.deleted_bindings,
+        )
     return ExecOutcome(
         printed_output=worker_result.printed_output,
         state_revision=revision,

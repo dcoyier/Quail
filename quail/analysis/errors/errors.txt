@@ -12,3 +12,6 @@ Mostly raised later by the engine when resolving columns against real data.
 
 QuailRuntimeError means a data-dependent failure, unavailable search, timeout, or resource limit.
 It may remember an optional repair_hint for MCP diagnostics.
+
+QuailServerBusyError means the process is at its concurrent quail_exec slot limit.
+It is a QuailRuntimeError with stable_error_code server_busy.

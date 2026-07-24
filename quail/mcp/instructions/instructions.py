@@ -18,6 +18,13 @@ _LOCKED_ADDENDUM = (
     "quail_get_api_docs / quail_list_datasets / quail_start_session / quail_exec."
 )
 
+_SESSION_RULES = (
+    "Sessions are workspace-scoped: after quail_switch_workspace, call "
+    "quail_start_session again and do not reuse a prior session_id. "
+    "Run only one quail_exec in flight per session_id (serial chaining is fine; "
+    "parallel execs on the same session risk SessionConflictError)."
+)
+
 
 def unrestricted_instructions(workspace_id: str) -> str:
     return (
@@ -25,7 +32,10 @@ def unrestricted_instructions(workspace_id: str) -> str:
         "\n"
         "Workflow: quail_get_api_docs → quail_list_datasets → "
         "quail_start_session → quail_get_dataset_info(dataset_id) → "
-        "quail_exec(session_id, dataset_id, code). Reuse the same session_id.\n"
+        "quail_exec(session_id, dataset_id, code). Reuse the same session_id "
+        "serially within this workspace.\n"
+        "\n"
+        f"{_SESSION_RULES}\n"
         "\n"
         "quail_get_api_docs returns the analysis language for code inside "
         "quail_exec.\n"
@@ -50,6 +60,7 @@ def clerk_instructions(*, locked: bool = False) -> str:
         "quail_exec only see that workspace's data. If a workspace is already bound "
         "(including via default_workspace), keep it unless the user asks to change "
         "workspace or the task clearly requires another one.\n"
+        f"{_SESSION_RULES}\n"
         "Call quail_get_api_docs before writing quail_exec code. Use provide_feedback "
         "for friction or improvements."
     )

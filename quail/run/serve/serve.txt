@@ -1,4 +1,5 @@
 serve(config, verifier default None):
+  Configure process-wide exec slots from hosting.max_concurrent_executions.
   Apply the config (import CSVs and pins).
   Fail closed unless search warm receipts match TOML when search_database is set.
   Close the apply DB handle.

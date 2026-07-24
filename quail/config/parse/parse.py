@@ -28,7 +28,10 @@ _ALLOWED_ROOT_CLERK = frozenset(
 _ALLOWED_CORE = frozenset({"database", "feedback", "search_database"})
 _ALLOWED_AUTH_UNRESTRICTED = frozenset({"mode", "workspace"})
 _ALLOWED_AUTH_CLERK = frozenset({"mode", "clerk_domain"})
-_ALLOWED_HOSTING = frozenset({"bind", "port"})
+_ALLOWED_HOSTING = frozenset({"bind", "port", "max_concurrent_executions"})
+_DEFAULT_MAX_CONCURRENT_EXECUTIONS = 2
+_MIN_MAX_CONCURRENT_EXECUTIONS = 1
+_MAX_MAX_CONCURRENT_EXECUTIONS = 100
 _ALLOWED_DATASET = frozenset({"id", "source", "name", "embedding"})
 _ALLOWED_EMBEDDING = frozenset({"provider", "model", "dimensions", "revision"})
 _ALLOWED_WORKSPACE = frozenset({"id", "datasets"})
@@ -106,6 +109,7 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
     port = hosting.get("port")
     if not isinstance(port, int) or isinstance(port, bool) or not (1 <= port <= 65535):
         raise ConfigError("hosting.port must be an integer from 1 to 65535")
+    max_concurrent_executions = _parse_max_concurrent_executions(hosting)
 
     providers = _parse_providers(data.get("providers"))
     search_warm = _parse_search_warm(data.get("search"))
@@ -122,6 +126,7 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
             search_warm=search_warm,
             bind=bind,
             port=port,
+            max_concurrent_executions=max_concurrent_executions,
         )
     else:
         config = _parse_clerk(
@@ -135,6 +140,7 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
             search_warm=search_warm,
             bind=bind,
             port=port,
+            max_concurrent_executions=max_concurrent_executions,
         )
     _validate_embedding_wiring(config)
     return config
@@ -152,6 +158,7 @@ def _parse_unrestricted(
     search_warm: SearchWarmConfig,
     bind: str,
     port: int,
+    max_concurrent_executions: int,
 ) -> QuailConfig:
     _reject_unknown(data, _ALLOWED_ROOT_UNRESTRICTED, label="root")
     _reject_unknown(auth, _ALLOWED_AUTH_UNRESTRICTED, label="auth")
@@ -177,6 +184,7 @@ def _parse_unrestricted(
         search_database=search_database,
         providers=providers,
         search_warm=search_warm,
+        max_concurrent_executions=max_concurrent_executions,
     )
 
 
@@ -192,6 +200,7 @@ def _parse_clerk(
     search_warm: SearchWarmConfig,
     bind: str,
     port: int,
+    max_concurrent_executions: int,
 ) -> QuailConfig:
     _reject_unknown(data, _ALLOWED_ROOT_CLERK, label="root")
     _reject_unknown(auth, _ALLOWED_AUTH_CLERK, label="auth")
@@ -301,7 +310,24 @@ def _parse_clerk(
         search_database=search_database,
         providers=providers,
         search_warm=search_warm,
+        max_concurrent_executions=max_concurrent_executions,
     )
+
+
+def _parse_max_concurrent_executions(hosting: dict[str, Any]) -> int:
+    if "max_concurrent_executions" not in hosting:
+        return _DEFAULT_MAX_CONCURRENT_EXECUTIONS
+    value = hosting["max_concurrent_executions"]
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or not (_MIN_MAX_CONCURRENT_EXECUTIONS <= value <= _MAX_MAX_CONCURRENT_EXECUTIONS)
+    ):
+        raise ConfigError(
+            "hosting.max_concurrent_executions must be an integer from "
+            f"{_MIN_MAX_CONCURRENT_EXECUTIONS} to {_MAX_MAX_CONCURRENT_EXECUTIONS}"
+        )
+    return value
 
 
 def _parse_search_warm(raw: object) -> SearchWarmConfig:

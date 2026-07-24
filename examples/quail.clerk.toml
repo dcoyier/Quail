@@ -16,6 +16,7 @@ clerk_domain = "your-instance.clerk.accounts.dev"
 [hosting]
 bind = "127.0.0.1"
 port = 8000
+# max_concurrent_executions = 2
 
 [[workspaces]]
 id = "acme"

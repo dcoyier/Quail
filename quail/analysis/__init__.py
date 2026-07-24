@@ -6,6 +6,7 @@ from quail.analysis.errors import (
     QuailFieldError,
     QuailRuntimeError,
     QuailScopeError,
+    QuailServerBusyError,
     QuailSyntaxError,
 )
 from quail.analysis.expression import Expression
@@ -47,6 +48,7 @@ __all__ = [
     "QuailFieldError",
     "QuailRuntimeError",
     "QuailScopeError",
+    "QuailServerBusyError",
     "QuailSyntaxError",
     "RESERVED_NAMES",
     "Ranking",

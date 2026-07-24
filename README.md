@@ -41,3 +41,7 @@ uv run quail run --config /absolute/path/to/Quail/examples/quail.toml
 After changing `[datasets.embedding]` or `[search.warm]`, run `quail process`
 again. Use `quail process --clear` to wipe search artifacts for active versions
 and rebuild under the current TOML (core CSV versions stay untouched).
+
+`[hosting] max_concurrent_executions` (default `2`) caps simultaneous
+`quail_exec` work process-wide; it is independent of `[search.warm]` embed
+concurrency. Restart `quail run` after changing it.

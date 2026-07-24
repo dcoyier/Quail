@@ -25,3 +25,9 @@ class QuailRuntimeError(QuailError):
     def __init__(self, message: str, *, repair_hint: str | None = None) -> None:
         super().__init__(message)
         self.repair_hint = repair_hint
+
+
+class QuailServerBusyError(QuailRuntimeError):
+    """Process is at its concurrent quail_exec slot limit."""
+
+    stable_error_code = "server_busy"

@@ -2,16 +2,18 @@
 
 from .errors import (
     QuailError,
-    QuailSyntaxError,
-    QuailScopeError,
     QuailFieldError,
     QuailRuntimeError,
+    QuailScopeError,
+    QuailServerBusyError,
+    QuailSyntaxError,
 )
 
 __all__ = [
     "QuailError",
-    "QuailSyntaxError",
-    "QuailScopeError",
     "QuailFieldError",
     "QuailRuntimeError",
+    "QuailScopeError",
+    "QuailServerBusyError",
+    "QuailSyntaxError",
 ]
