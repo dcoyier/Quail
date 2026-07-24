@@ -1,0 +1,26 @@
+MCP_OAUTH_SCOPES is the openid/profile/email tuple advertised for Clerk MCP OAuth.
+
+normalize_public_base_url / default_public_base_url:
+  Re-exported from quail.config.hosting_url.
+
+public_base_url_for(config):
+  Give back config.public_base_url.
+
+mcp_resource_url(public_base_url):
+  Give back {origin}/mcp for streamable-http.
+
+clerk_issuer_url(clerk_domain):
+  Normalize the Clerk hostname to https://{domain}.
+
+build_clerk_auth_settings(clerk_domain, public_base_url):
+  Build MCP AuthSettings with Clerk as issuer_url and Quail /mcp as resource_server_url.
+  required_scopes is MCP_OAUTH_SCOPES.
+
+ClerkAccessTokenVerifier(verifier, scopes=MCP_OAUTH_SCOPES):
+  Adapt Quail's sync TokenVerifier to the MCP SDK async verify_token protocol.
+  On UnauthorizedError, give back None.
+  On success, give back AccessToken with subject and the advertised scopes.
+
+register_clerk_oauth_discovery(server, clerk_domain):
+  Register GET/OPTIONS /.well-known/oauth-authorization-server that proxies Clerk's
+  authorization-server metadata (for older MCP clients).

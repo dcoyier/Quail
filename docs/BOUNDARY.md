@@ -87,6 +87,12 @@ run. The CLI never writes the TOML.
 simultaneous `quail_exec` slots for the whole process. Independent of
 `[search.warm]` embed concurrency. Restart to apply.
 
+Clerk mode also serves MCP OAuth discovery so clients can sign in via Clerk:
+protected-resource metadata for `{public_base_url}/mcp` and a proxied
+`/.well-known/oauth-authorization-server`. Optional
+`hosting.public_base_url` defaults from `bind`/`port`. Operators allowlist users
+by pasting Clerk `user_…` ids into `[[users]]`.
+
 ## Preserve (invariants — improve shape, do not weaken)
 
 - Immutable imported dataset versions
@@ -134,9 +140,11 @@ simultaneous `quail_exec` slots for the whole process. Independent of
    separate from the core analysis DB).
 8. TOML + `quail run --config` — **first slice done:** slim native TOML, CSV
    reconcile on run, streamable-http loopback MCP.
-9. Clerk + TOML allowlist — **first slice done:** Clerk JWT, `[[users]]` /
-   `[[workspaces]]`, sticky `quail_list_workspaces` / `quail_switch_workspace`
-   on one deployment URL; optional `default_workspace` / `lock_workspace`.
+9. Clerk + TOML allowlist — **first slice done:** Clerk JWT / OAuth tokens,
+   `[[users]]` / `[[workspaces]]`, sticky `quail_list_workspaces` /
+   `quail_switch_workspace` on one deployment URL; optional `default_workspace` /
+   `lock_workspace`. MCP OAuth discovery (protected-resource metadata + AS
+   metadata proxy) and `hosting.public_base_url` for the resource origin.
    Invitations and generic OIDC still out.
 10. Connector SDK (later)
 

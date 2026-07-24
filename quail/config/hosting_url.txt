@@ -1,0 +1,6 @@
+normalize_public_base_url(value):
+  Require an absolute http(s) origin with no path, query, or fragment.
+  Strip a trailing slash / empty path.
+
+default_public_base_url(bind, port):
+  Build http://host:port, mapping 0.0.0.0 / :: to 127.0.0.1.

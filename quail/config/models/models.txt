@@ -46,6 +46,7 @@ QuailConfig remembers:
   auth_mode
   bind
   port
+  public_base_url (http(s) origin for MCP OAuth resource metadata; defaults from bind/port)
   workspace_id (unrestricted only; None for clerk)
   clerk_domain (clerk only; None for unrestricted)
   workspaces

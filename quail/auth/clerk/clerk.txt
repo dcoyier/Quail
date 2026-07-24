@@ -4,8 +4,9 @@ TokenVerifier.verify(token):
   Give back the Clerk user id (sub).
 
 ClerkJwtVerifier(clerk_domain):
-  Derive issuer and JWKS URL from the Clerk domain.
-  verify(token): decode RS256 JWT, require exp/iat/sub, give back sub.
+  Derive issuer, JWKS URL, and OAuth userinfo URL from the Clerk domain.
+  verify(token): try RS256 JWT (require exp/iat/sub); on failure, GET /oauth/userinfo
+  with the bearer and read sub/user_id.
   On failure, raise UnauthorizedError.
 
 StaticTokenVerifier(tokens):

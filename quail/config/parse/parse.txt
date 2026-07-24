@@ -13,8 +13,9 @@ parse_config(raw_text, manifest_path):
   Require [auth].mode unrestricted or clerk.
   Require [core] database and feedback; resolve paths.
   Optional core.search_database; must differ from core.database.
-  Require [hosting] bind, port 1..65535, and optional max_concurrent_executions
-  (default 2, range 1..100).
+  Require [hosting] bind, port 1..65535, optional max_concurrent_executions
+  (default 2, range 1..100), and optional public_base_url (http(s) origin; defaults
+  from bind/port, mapping 0.0.0.0/:: to 127.0.0.1).
   Optional [providers.ollama] / [providers.openrouter] (api_key must be env:NAME).
   If unrestricted: require auth.workspace and optional root [[datasets]]; reject clerk-only keys.
   If clerk: require auth.clerk_domain, [[workspaces]] with nested datasets, and [[users]];

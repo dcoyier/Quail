@@ -16,7 +16,18 @@ clerk_domain = "your-instance.clerk.accounts.dev"
 [hosting]
 bind = "127.0.0.1"
 port = 8000
+# Public origin clients use to reach this MCP (ngrok/HTTPS URL in production).
+# Defaults to http://{bind}:{port}. Resource metadata uses {public_base_url}/mcp.
+# public_base_url = "https://your-tunnel.example"
 # max_concurrent_executions = 2
+
+# Clerk operator notes:
+# 1. Create a Clerk application and enable Dynamic client registration
+#    (Dashboard → OAuth applications).
+# 2. Set default OAuth scopes to include openid, profile, email.
+# 3. Invite users in Clerk; copy each user_… id into [[users]] below.
+# 4. Point MCP clients at {public_base_url}/mcp (or http://127.0.0.1:8000/mcp locally).
+# 5. Restart quail run after TOML edits.
 
 [[workspaces]]
 id = "acme"

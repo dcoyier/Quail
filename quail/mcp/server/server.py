@@ -31,6 +31,11 @@ from quail.mcp.instructions import (
     clerk_instructions,
     unrestricted_instructions,
 )
+from quail.mcp.oauth import (
+    ClerkAccessTokenVerifier,
+    build_clerk_auth_settings,
+    register_clerk_oauth_discovery,
+)
 from quail.mcp.results import (
     error_result,
     success_printed_output,
@@ -172,12 +177,19 @@ def create_clerk_mcp_server(
     )
     # Base instructions; locked addendum applied when principal is known at tool-time
     # via repair hints / list behavior. Process-level instructions stay locking-agnostic.
+    assert config.clerk_domain is not None
     server = FastMCP(
         "quail",
         instructions=clerk_instructions(locked=False),
         host=config.bind,
         port=config.port,
+        auth=build_clerk_auth_settings(
+            clerk_domain=config.clerk_domain,
+            public_base_url=config.public_base_url,
+        ),
+        token_verifier=ClerkAccessTokenVerifier(verifier),
     )
+    register_clerk_oauth_discovery(server, clerk_domain=config.clerk_domain)
     # Keep a mutable slot so tools can expose locked addendum via a resource-less path:
     # FastMCP instructions are fixed at construction; locked guidance is in tool handlers.
     _register_clerk_tools(server, runtime)

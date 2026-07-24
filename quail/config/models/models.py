@@ -104,6 +104,7 @@ class QuailConfig:
     auth_mode: AuthMode
     bind: str
     port: int
+    public_base_url: str
     # Unrestricted: fixed workspace. Clerk: None.
     workspace_id: str | None
     clerk_domain: str | None

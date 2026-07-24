@@ -18,7 +18,9 @@ create_mcp_server_from_config(config, api_docs_path default None, verifier defau
 create_clerk_mcp_server(config, verifier, api_docs_path default None,
                         similarity/lexical default None):
   Remember ClerkMcpRuntime (build search services from config when both omitted).
-  Build FastMCP with locking-agnostic clerk instructions.
+  Build FastMCP with locking-agnostic clerk instructions, MCP AuthSettings
+  (Clerk issuer + public /mcp resource), and ClerkAccessTokenVerifier.
+  Register /.well-known/oauth-authorization-server proxy for older clients.
   Register list/switch plus gated analysis tools and give back the server.
 
 Unrestricted tools use the fixed workspace context.

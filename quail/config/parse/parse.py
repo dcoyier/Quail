@@ -28,7 +28,7 @@ _ALLOWED_ROOT_CLERK = frozenset(
 _ALLOWED_CORE = frozenset({"database", "feedback", "search_database"})
 _ALLOWED_AUTH_UNRESTRICTED = frozenset({"mode", "workspace"})
 _ALLOWED_AUTH_CLERK = frozenset({"mode", "clerk_domain"})
-_ALLOWED_HOSTING = frozenset({"bind", "port", "max_concurrent_executions"})
+_ALLOWED_HOSTING = frozenset({"bind", "port", "max_concurrent_executions", "public_base_url"})
 _DEFAULT_MAX_CONCURRENT_EXECUTIONS = 2
 _MIN_MAX_CONCURRENT_EXECUTIONS = 1
 _MAX_MAX_CONCURRENT_EXECUTIONS = 100
@@ -110,6 +110,7 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
     if not isinstance(port, int) or isinstance(port, bool) or not (1 <= port <= 65535):
         raise ConfigError("hosting.port must be an integer from 1 to 65535")
     max_concurrent_executions = _parse_max_concurrent_executions(hosting)
+    public_base_url = _parse_public_base_url(hosting, bind=bind, port=port)
 
     providers = _parse_providers(data.get("providers"))
     search_warm = _parse_search_warm(data.get("search"))
@@ -126,6 +127,7 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
             search_warm=search_warm,
             bind=bind,
             port=port,
+            public_base_url=public_base_url,
             max_concurrent_executions=max_concurrent_executions,
         )
     else:
@@ -140,6 +142,7 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
             search_warm=search_warm,
             bind=bind,
             port=port,
+            public_base_url=public_base_url,
             max_concurrent_executions=max_concurrent_executions,
         )
     _validate_embedding_wiring(config)
@@ -158,6 +161,7 @@ def _parse_unrestricted(
     search_warm: SearchWarmConfig,
     bind: str,
     port: int,
+    public_base_url: str,
     max_concurrent_executions: int,
 ) -> QuailConfig:
     _reject_unknown(data, _ALLOWED_ROOT_UNRESTRICTED, label="root")
@@ -176,6 +180,7 @@ def _parse_unrestricted(
         auth_mode="unrestricted",
         bind=bind,
         port=port,
+        public_base_url=public_base_url,
         workspace_id=workspace_id,
         clerk_domain=None,
         workspaces=(workspace,),
@@ -200,6 +205,7 @@ def _parse_clerk(
     search_warm: SearchWarmConfig,
     bind: str,
     port: int,
+    public_base_url: str,
     max_concurrent_executions: int,
 ) -> QuailConfig:
     _reject_unknown(data, _ALLOWED_ROOT_CLERK, label="root")
@@ -302,6 +308,7 @@ def _parse_clerk(
         auth_mode="clerk",
         bind=bind,
         port=port,
+        public_base_url=public_base_url,
         workspace_id=None,
         clerk_domain=clerk_domain,
         workspaces=tuple(workspaces),
@@ -312,6 +319,20 @@ def _parse_clerk(
         search_warm=search_warm,
         max_concurrent_executions=max_concurrent_executions,
     )
+
+
+def _parse_public_base_url(hosting: dict[str, Any], *, bind: str, port: int) -> str:
+    from quail.config.hosting_url import default_public_base_url, normalize_public_base_url
+
+    if "public_base_url" not in hosting:
+        return default_public_base_url(bind=bind, port=port)
+    value = hosting["public_base_url"]
+    if not isinstance(value, str):
+        raise ConfigError("hosting.public_base_url must be a string")
+    try:
+        return normalize_public_base_url(value)
+    except ValueError as error:
+        raise ConfigError(f"hosting.public_base_url: {error}") from error
 
 
 def _parse_max_concurrent_executions(hosting: dict[str, Any]) -> int:
