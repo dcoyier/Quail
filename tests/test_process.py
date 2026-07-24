@@ -44,6 +44,7 @@ def _write_manifest(
     revision: str = "test-v1",
     warm_knobs: str = "",
     extra_rows: str = "",
+    embedding_fields: str = "",
 ) -> Path:
     data = tmp_path / "data"
     data.mkdir(parents=True, exist_ok=True)
@@ -55,12 +56,13 @@ def _write_manifest(
     embedding_block = ""
     providers = ""
     if embedding:
+        fields_line = f"\nfields = {embedding_fields}\n" if embedding_fields else ""
         embedding_block = f"""
 [datasets.embedding]
 provider = "ollama"
 model = "embeddinggemma:latest"
 dimensions = 4
-revision = "{revision}"
+revision = "{revision}"{fields_line}
 """
         providers = """
 [providers.ollama]
@@ -337,3 +339,47 @@ def test_default_search_warm_config() -> None:
     warm = SearchWarmConfig()
     assert warm.embed_batch_size == 32
     assert warm.max_concurrent_embed_requests == 2
+
+
+def test_embedding_fields_limits_vectors_not_lexical(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, embedding_fields='["body"]')
+    config = load_config(manifest)
+    assert config.datasets[0].embedding is not None
+    assert config.datasets[0].embedding.fields == ("body",)
+    fake = RecordingEmbedder(dimensions=4)
+    outcome = process_config(config, embedder_factory=lambda _profile: fake)
+    result = outcome.results[0]
+    assert result.text_count == 4  # Lexical still sees title+body
+    assert result.unique_text_count == 2  # only body values embedded
+    embedded = {text for batch in fake.calls for text in batch}
+    assert embedded == {"hydrangea care", "climate notes"}
+    assert "Hello" not in embedded
+    db = open_core_db(config.database)
+    try:
+        assert_search_warm(db, config)
+    finally:
+        db.close()
+
+
+def test_embedding_fields_unknown_raises(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, embedding_fields='["missing"]')
+    config = load_config(manifest)
+    with pytest.raises(QuailRuntimeError, match="Embedding fields not present"):
+        process_config(config, embedder_factory=lambda _p: RecordingEmbedder())
+
+
+def test_embedding_fields_parse_rejects_empty(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="fields"):
+        load_config(_write_manifest(tmp_path, embedding_fields="[]"))
+
+
+def test_embedding_fields_change_profile_hash() -> None:
+    base = EmbeddingProfile(provider="ollama", model="m", dimensions=4, revision="r1")
+    limited = EmbeddingProfile(
+        provider="ollama",
+        model="m",
+        dimensions=4,
+        revision="r1",
+        fields=("content",),
+    )
+    assert base.profile_hash() != limited.profile_hash()

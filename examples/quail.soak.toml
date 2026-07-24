@@ -1,0 +1,35 @@
+# Unrestricted soak deploy: Garden Gate issues 170+171 (no semantic_text).
+# Agents should Lexical/Semantic on Field("content").
+#
+#   uv run quail process --config /absolute/path/to/examples/quail.soak.toml
+#   uv run quail run --config /absolute/path/to/examples/quail.soak.toml
+#
+# Requires a reachable Ollama with the embedding model below (or switch provider).
+
+[core]
+database = "data/soak-quail.turso"
+feedback = "data/soak-feedback.jsonl"
+search_database = "data/soak-quail-search.turso"
+
+[auth]
+mode = "unrestricted"
+workspace = "local"
+
+[hosting]
+bind = "127.0.0.1"
+port = 8000
+
+[providers.ollama]
+base_url = "http://127.0.0.1:11434"
+
+[[datasets]]
+id = "garden-gate"
+source = "data/garden-gate-170-171.csv"
+name = "Garden Gate 170-171"
+
+[datasets.embedding]
+provider = "ollama"
+model = "embeddinggemma:latest"
+dimensions = 768
+revision = "soak-embeddinggemma-v1"
+fields = ["content"]

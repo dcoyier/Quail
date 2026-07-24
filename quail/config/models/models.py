@@ -20,6 +20,8 @@ class EmbeddingProfile:
     model: str
     dimensions: int
     revision: str
+    # None = embed every non-empty source field (Lexical is always all fields).
+    fields: tuple[str, ...] | None = None
 
     def profile_hash(self) -> str:
         payload = {
@@ -27,6 +29,7 @@ class EmbeddingProfile:
             "model": self.model,
             "dimensions": self.dimensions,
             "revision": self.revision,
+            "fields": list(self.fields) if self.fields is not None else None,
         }
         return hashlib.sha256(
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")

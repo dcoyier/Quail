@@ -33,7 +33,7 @@ _DEFAULT_MAX_CONCURRENT_EXECUTIONS = 2
 _MIN_MAX_CONCURRENT_EXECUTIONS = 1
 _MAX_MAX_CONCURRENT_EXECUTIONS = 100
 _ALLOWED_DATASET = frozenset({"id", "source", "name", "embedding"})
-_ALLOWED_EMBEDDING = frozenset({"provider", "model", "dimensions", "revision"})
+_ALLOWED_EMBEDDING = frozenset({"provider", "model", "dimensions", "revision", "fields"})
 _ALLOWED_WORKSPACE = frozenset({"id", "datasets"})
 _ALLOWED_USER = frozenset(
     {"id", "clerk_user_id", "workspaces", "default_workspace", "lock_workspace"}
@@ -447,12 +447,32 @@ def _parse_embedding(raw: object, *, label: str) -> EmbeddingProfile:
     if not isinstance(dimensions, int) or isinstance(dimensions, bool) or dimensions <= 0:
         raise ConfigError(f"{label}.dimensions must be an integer greater than 0")
     revision = _require_string(raw, "revision", label=f"{label}.revision")
+    fields: tuple[str, ...] | None = None
+    if "fields" in raw:
+        fields = _parse_embedding_fields(raw["fields"], label=f"{label}.fields")
     return EmbeddingProfile(
         provider=provider,  # type: ignore[arg-type]
         model=model,
         dimensions=dimensions,
         revision=revision,
+        fields=fields,
     )
+
+
+def _parse_embedding_fields(raw: object, *, label: str) -> tuple[str, ...]:
+    if not isinstance(raw, list) or not raw:
+        raise ConfigError(f"{label} must be a non-empty array of field names")
+    names: list[str] = []
+    seen: set[str] = set()
+    for index, item in enumerate(raw):
+        if not isinstance(item, str) or not item.strip():
+            raise ConfigError(f"{label}[{index}] must be a non-empty string")
+        name = item.strip()
+        if name in seen:
+            raise ConfigError(f"{label} duplicates {name!r}")
+        seen.add(name)
+        names.append(name)
+    return tuple(names)
 
 
 def _parse_providers(raw: object) -> ProvidersConfig:

@@ -18,7 +18,7 @@ from quail.search.lexical.corpus import (
     resolve_corpus,
     validate_table_ident,
 )
-from quail.search.pin import get_embedding_pin
+from quail.search.pin import get_pinned_profile_hash
 from quail.search.vectors import text_hash, unit_vector
 
 
@@ -196,10 +196,28 @@ def collect_corpus_texts(
     workspace_id: str,
     dataset_id: str,
     version_id: str,
+    field_names: Sequence[str] | None = None,
 ) -> tuple[list[str], dict[str, list[str]]]:
-    """Return (all non-empty texts, entry_id -> non-empty text segments)."""
+    """Return (non-empty texts, entry_id -> segments).
+
+    When ``field_names`` is set, only those source fields are included.
+    """
 
     fields = source_fields(db, workspace_id, dataset_id, version_id)
+    if field_names is not None:
+        available = {field.name for field in fields}
+        missing = [name for name in field_names if name not in available]
+        if missing:
+            missing_list = ", ".join(repr(name) for name in missing)
+            raise QuailRuntimeError(
+                f"Embedding fields not present on dataset {dataset_id!r}: {missing_list}",
+                repair_hint=(
+                    "Fix datasets.embedding.fields to match CSV column names, "
+                    "then re-run quail process."
+                ),
+            )
+        wanted = set(field_names)
+        fields = [field for field in fields if field.name in wanted]
     entries = source_entries(db, workspace_id, dataset_id, version_id)
     entry_ids = [entry.id for entry in entries]
     all_texts: list[str] = []
@@ -278,10 +296,20 @@ def warm_dataset(
     )
     ensure_entry_segments(search, corpus, entry_segments=entry_segments)
 
-    unique_texts = _unique_texts(texts)
     embedded_batches = 0
     embedding_ready = False
     if profile is not None:
+        if profile.fields is None:
+            embed_texts = texts
+        else:
+            embed_texts, _ = collect_corpus_texts(
+                db,
+                workspace_id=workspace_id,
+                dataset_id=dataset_id,
+                version_id=version_id,
+                field_names=profile.fields,
+            )
+        unique_texts = _unique_texts(embed_texts)
         embedded_batches = _warm_embeddings(
             search,
             workspace_id=workspace_id,
@@ -293,6 +321,8 @@ def warm_dataset(
             client=embedder_factory(profile),
         )
         embedding_ready = True
+    else:
+        unique_texts = _unique_texts(texts)
 
     put_warm_receipt(
         search,
@@ -356,13 +386,13 @@ def require_warm_ready(
                 f"Dataset {dataset_id!r} embedding warm is incomplete",
                 repair_hint=hint,
             )
-        pin = get_embedding_pin(
+        pin_hash = get_pinned_profile_hash(
             search,
             workspace_id=workspace_id,
             dataset_id=dataset_id,
             version_id=version_id,
         )
-        if pin is None or pin.profile_hash() != desired_hash:
+        if pin_hash is None or pin_hash != desired_hash:
             raise QuailRuntimeError(
                 f"Dataset {dataset_id!r} embedding pin does not match quail.toml",
                 repair_hint=hint,

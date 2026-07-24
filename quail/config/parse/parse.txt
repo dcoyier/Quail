@@ -20,7 +20,9 @@ parse_config(raw_text, manifest_path):
   If unrestricted: require auth.workspace and optional root [[datasets]]; reject clerk-only keys.
   If clerk: require auth.clerk_domain, [[workspaces]] with nested datasets, and [[users]];
   reject auth.workspace and root [[datasets]].
-  For datasets: optional [datasets.embedding] with provider, model, dimensions > 0, revision.
+  For datasets: optional [datasets.embedding] with provider, model, dimensions > 0, revision,
+  and optional fields (non-empty string array of CSV columns to embed; omit = all fields).
+  Lexical warm always uses every source field; fields only limits embedding warm.
   For users: validate memberships, optional default_workspace, optional lock_workspace (requires default).
   When any dataset has embedding: require search_database and the matching provider blocks.
   Give back a QuailConfig.

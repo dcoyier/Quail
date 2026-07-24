@@ -1,5 +1,11 @@
 pin_embedding_profile(db, workspace_id, dataset_id, version_id, profile):
   Upsert the embedding profile pin for one immutable dataset version.
+  Stores profile_hash from profile.profile_hash() (includes optional fields).
 
 get_embedding_pin(db, workspace_id, dataset_id, version_id):
   Give back the pinned EmbeddingProfile or None.
+  Does not restore optional embed field lists (not needed for Semantic scoring).
+
+get_pinned_profile_hash(db, workspace_id, dataset_id, version_id):
+  Give back the stored pin profile_hash, or None.
+  Use this for TOML gate comparisons when fields are part of the hash.

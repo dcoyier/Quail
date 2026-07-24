@@ -7,8 +7,9 @@ EmbeddingProfile remembers:
   model
   dimensions
   revision
+  fields (optional tuple of source field names to embed; None = all fields)
 profile_hash:
-  SHA-256 of the canonical JSON of those four fields.
+  SHA-256 of the canonical JSON of those fields (fields null when unrestricted).
 
 OllamaProvider remembers base_url.
 OpenRouterProvider remembers base_url and api_key (env:NAME ref string).

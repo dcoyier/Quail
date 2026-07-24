@@ -14,15 +14,17 @@ delete_vectors_for_profile:
   Delete cached vectors for one profile_hash on a version.
 
 collect_corpus_texts:
-  Read every source field for every entry.
+  Read source fields for every entry (all fields, or field_names when set).
   Keep non-empty text cells.
   Give back the flat text list and per-entry segment lists.
+  Unknown field_names raise QuailRuntimeError.
 
 warm_dataset:
   Optionally clear the version.
   If an existing receipt has a different profile_hash, delete those vectors.
-  Collect texts, build Lexical corpus segments for all entries.
-  When a profile is set, embed unique missing texts in batches with at most
+  Collect all-field texts, build Lexical corpus segments for all entries.
+  When a profile is set, embed unique missing texts from profile.fields only
+  (or all fields when fields is omitted), in batches with at most
   max_concurrent_embed_requests in flight (provider calls only; cache writes
   stay on the main thread).
   Write a ready warm receipt.
@@ -30,4 +32,5 @@ warm_dataset:
 
 require_warm_ready:
   Fail closed when the receipt is missing, Lexical is not ready, profile_hash
-  does not match TOML, embedding readiness disagrees, or the pin mismatches.
+  does not match TOML, embedding readiness disagrees, or the stored pin hash
+  mismatches.

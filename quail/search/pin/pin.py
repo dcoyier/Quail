@@ -74,3 +74,29 @@ def get_embedding_pin(
         dimensions=int(row[2]),
         revision=str(row[3]),
     )
+
+
+def get_pinned_profile_hash(
+    db: SearchDb,
+    *,
+    workspace_id: str,
+    dataset_id: str,
+    version_id: str,
+) -> str | None:
+    """Return the stored pin profile_hash, if any.
+
+    Compare this stored hash to TOML ``profile.profile_hash()`` rather than
+    recomputing from pin columns (pins do not persist optional embed field lists).
+    """
+
+    row = db.connection.execute(
+        """
+        SELECT profile_hash
+        FROM quail_embedding_pins
+        WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+        """,
+        (workspace_id, dataset_id, version_id),
+    ).fetchone()
+    if row is None:
+        return None
+    return str(row[0])
