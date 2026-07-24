@@ -5,6 +5,14 @@ from __future__ import annotations
 import sys
 from typing import Any, TextIO
 
+from quail.analysis.bindings import (
+    RESERVED_NAMES,
+    BindingEncodingError,
+    bindings_from_payload,
+    bindings_to_payload,
+    decode_namespace,
+    encode_binding_value,
+)
 from quail.analysis.errors import QuailError, QuailRuntimeError, QuailSyntaxError
 from quail.analysis.worker.protocol import dumps_message, loads_message
 from quail.analysis.worker.runtime import (
@@ -48,6 +56,14 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
             {"type": "result", "ok": False, "message": "execute.code must be a string"},
         )
         return
+    try:
+        initial_bindings = bindings_from_payload(message.get("bindings") or {})
+    except Exception as error:  # noqa: BLE001 - protocol boundary
+        _write(
+            output_stream,
+            {"type": "result", "ok": False, "message": f"invalid bindings: {error}"},
+        )
+        return
 
     pending: dict[str, Any] | None = None
 
@@ -61,7 +77,6 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
             response = loads_message(response_line)
             if response.get("type") == "api_result":
                 return response
-            # Ignore unexpected types except hard failure.
             if response.get("type") == "result":
                 pending = response
                 raise QuailRuntimeError("Host ended the exec during an api_call")
@@ -70,16 +85,42 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
     endpoint = HostEndpoint(send_and_wait)
     token = set_host_call(host_call_from_endpoint(endpoint))
     try:
-        tree = validate_quail_code(code)
+        program = validate_quail_code(code)
         namespace = build_namespace(endpoint, prints)
-        compiled = compile(tree, "<quail_exec>", "exec")
+        namespace.update(decode_namespace(initial_bindings))
+        compiled = compile(program.tree, "<quail_exec>", "exec")
         exec(compiled, namespace, namespace)  # noqa: S102 - intentional worker sandbox
+
+        changed: dict[str, Any] = {}
+        for name in sorted(program.assigned_names):
+            if name not in namespace or name in RESERVED_NAMES:
+                continue
+            binding = encode_binding_value(namespace[name])
+            if initial_bindings.get(name) != binding:
+                changed[name] = binding
+        deleted = sorted(
+            name
+            for name in program.deleted_names
+            if name in initial_bindings and name not in namespace
+        )
         _write(
             output_stream,
             {
                 "type": "result",
                 "ok": True,
                 "printed_output": prints.text,
+                "changed_bindings": bindings_to_payload(changed),
+                "deleted_bindings": deleted,
+            },
+        )
+    except BindingEncodingError as error:
+        _write(
+            output_stream,
+            {
+                "type": "result",
+                "ok": False,
+                "message": str(error),
+                "printed_output": "",
             },
         )
     except (QuailError, QuailSyntaxError, QuailRuntimeError) as error:

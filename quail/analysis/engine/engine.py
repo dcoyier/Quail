@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import re
 from collections.abc import Sequence
 from typing import Any
 
@@ -23,6 +22,7 @@ from quail.analysis.planner import (
 )
 from quail.analysis.predicate import Predicate
 from quail.analysis.ranking import Ranking
+from quail.analysis.regex_engine import compile_regex
 from quail.analysis.search_text import (
     entry_from_record,
     group_expr_from_record,
@@ -72,6 +72,17 @@ class QueryEngine:
             return self._apply_limit(fields, plan.limit, plan.order)
 
         entry_ids = self._evaluate_entry_group(plan.group)
+        if (
+            isinstance(plan.unit, Unit)
+            and plan.unit.scope == "entries"
+            and plan.unit.field is not None
+        ):
+            field_name = plan.unit.field.name
+            entry_ids = [
+                entry_id
+                for entry_id in entry_ids
+                if self._read_field_value(field_name, entry_id) is not None
+            ]
         entry_ids = self._apply_ranking(entry_ids, plan.ranking)
         entry_ids = self._apply_limit(entry_ids, plan.limit, plan.order)
 
@@ -521,27 +532,27 @@ class QueryEngine:
     def _apply_regex(self, operation: Operation, value: Any) -> Any:
         pattern = str(operation.params["pattern"])
         flags = int(operation.params.get("flags", 0))
-        compiled = re.compile(pattern, flags)
+        compiled = compile_regex(pattern, flags)
         if operation.kind == "RegexSearch":
             if value is None:
                 return None
             text = value if isinstance(value, str) else str(value)
-            match = compiled.search(text)
-            return None if match is None else match.group(0)
+            return compiled.search(text)
         if operation.kind == "RegexFindAll":
             if value is None:
                 return []
             text = value if isinstance(value, str) else str(value)
-            return compiled.findall(text)
-        # RegexSub
+            return compiled.find_all(text)
+        # RegexSub — literal replacement only (no backrefs).
         replacement = str(operation.params["replacement"])
         if value is None:
             return None
         if isinstance(value, str):
-            return compiled.sub(replacement, value)
+            return compiled.sub_literal(value, replacement)
         if isinstance(value, list):
             return [
-                compiled.sub(replacement, item) if isinstance(item, str) else item for item in value
+                compiled.sub_literal(item, replacement) if isinstance(item, str) else item
+                for item in value
             ]
         raise QuailRuntimeError("RegexSub requires text or list[text]")
 

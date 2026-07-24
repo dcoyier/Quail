@@ -11,15 +11,7 @@ from quail.analysis.errors import (
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
 from quail.analysis.group import G0, G1, GroupExpr
-from quail.analysis.namespace import (
-    api_namespace,
-    count,
-    create_field,
-    quail_print,
-    retrieve,
-    tag,
-    untag,
-)
+from quail.analysis.namespace import RESERVED_NAMES, api_namespace
 from quail.analysis.operations import (
     AsNumber,
     AsText,
@@ -56,6 +48,7 @@ __all__ = [
     "QuailRuntimeError",
     "QuailScopeError",
     "QuailSyntaxError",
+    "RESERVED_NAMES",
     "Ranking",
     "ReFacade",
     "RegexFindAll",
@@ -66,13 +59,7 @@ __all__ = [
     "Unit",
     "Value",
     "api_namespace",
-    "count",
-    "create_field",
     "entries",
     "fields",
     "make_entry",
-    "quail_print",
-    "retrieve",
-    "tag",
-    "untag",
 ]

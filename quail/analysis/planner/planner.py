@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -12,6 +13,50 @@ from quail.analysis.field import Field
 from quail.analysis.group import GroupExpr
 from quail.analysis.ranking import Ranking
 from quail.analysis.unit import Unit, entries
+
+
+def require_tag_value(value: Any, *, label: str = "Tag value") -> Any:
+    """Reject nested None and non-JSON-like tag payloads."""
+
+    return _require_tag_value(value, label=label, stack=set())
+
+
+def _require_tag_value(value: Any, *, label: str, stack: set[int]) -> Any:
+    if value is None:
+        raise QuailSyntaxError(f"{label} cannot contain None")
+    if isinstance(value, bool | str):
+        return value
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise QuailSyntaxError(f"{label} cannot contain non-finite floats")
+        return value
+    if isinstance(value, list):
+        identity = id(value)
+        if identity in stack:
+            raise QuailSyntaxError(f"{label} cannot contain cycles")
+        stack.add(identity)
+        try:
+            for item in value:
+                _require_tag_value(item, label=label, stack=stack)
+        finally:
+            stack.remove(identity)
+        return value
+    if isinstance(value, dict):
+        identity = id(value)
+        if identity in stack:
+            raise QuailSyntaxError(f"{label} cannot contain cycles")
+        stack.add(identity)
+        try:
+            for key, item in value.items():
+                if not isinstance(key, str):
+                    raise QuailSyntaxError(f"{label} object keys must be strings")
+                _require_tag_value(item, label=label, stack=stack)
+        finally:
+            stack.remove(identity)
+        return value
+    raise QuailSyntaxError(f"{label} does not support {type(value).__name__}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +155,7 @@ def plan_tag(
         raise QuailSyntaxError("tag field must be a Field")
     if value is None:
         raise QuailSyntaxError("tag value cannot be None")
+    require_tag_value(value)
     return TagPlan(group=_require_tag_group(group), field=field, value=value)
 
 
@@ -120,6 +166,8 @@ def plan_untag(
 ) -> UntagPlan:
     if not isinstance(field, Field):
         raise QuailSyntaxError("untag field must be a Field")
+    if value is not None:
+        require_tag_value(value, label="Untag value")
     return UntagPlan(group=_require_tag_group(group), field=field, value=value)
 
 

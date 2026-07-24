@@ -26,11 +26,15 @@ commit_overlay(db, scope, expected_revision, mutations, bindings, binding_delete
   Ensure the scope row exists.
   Apply FieldCreate, ValueWrite, and ValueDelete in order.
   Reject analysis names that collide with source fields.
-  Upsert and delete bindings when provided.
+  Upsert EncodedBinding rows and delete bindings when provided.
   If anything changed, bump state_revision.
   Always refresh last_used_at.
   Commit and give back the new revision.
   On failure, roll back.
 
+load_bindings(db, session_id):
+  Give back every session binding as EncodedBinding, ordered by name.
+
 Helpers encode values with canonical_json, hash them, bump field and scope
 value revisions, and validate entry and field ids.
+Binding upserts store value_kind and allow JSON null literal bodies.

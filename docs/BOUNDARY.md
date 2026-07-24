@@ -100,8 +100,8 @@ never writes the TOML.
   (Ollama/OpenRouter), a rebuildable Turso vector cache, and **exact** batch
   cosine via `-vector_distance_dot`. Lexical uses Turso **native FTS** in the
   same rebuildable search DB (in-process). Both accept `str`, `list[str]`, entry
-  `GroupExpr`, and `list[Entry]` query targets. ANN and lexical workers/artifact
-  roots are deferred.
+  `GroupExpr`, and `list[Entry]` query targets. Session bindings persist across
+  successful execs. ANN and lexical workers/artifact roots are deferred.
 - Hosting flourishes (ngrok, etc.)
 
 ## Build order (stop if you cannot explain the step)
@@ -114,8 +114,8 @@ never writes the TOML.
    with optimistic revision (no MCP/worker yet)
 5. Planner + engine — first slice: host `plan_*` + QueryEngine + `run_analysis`
    (Lexical/Semantic and worker sandbox still deferred)
-6. Worker + print-only + RPC — first slice: subprocess `exec_script` + NDJSON
-   ApiCalls into `dispatch_call` (bindings persist and Lexical still deferred)
+6. Worker + print-only + RPC — **done:** subprocess `exec_script` + NDJSON
+   ApiCalls into `dispatch_call`, with session bindings persist/restore/`del`.
 7. Thin MCP adapter — **first slice done:** unrestricted loopback FastMCP with
    `quail_get_api_docs`, `quail_list_datasets`, `quail_start_session`,
    `quail_get_dataset_info`, `quail_exec`, and `provide_feedback` (JSONL store
@@ -132,8 +132,8 @@ Semantic scoring is **Turso exact batch cosine** (per-dataset embedding profile,
 Ollama/OpenRouter HTTP, rebuildable vector cache, `-vector_distance_dot`).
 Lexical scoring is **Turso native FTS** in the shared search DB (in-process).
 Both accept the full api.md query shapes including entry groups and Entry lists.
-ANN remains deferred. Lexical/Semantic remain part of the public contract in
-`api.md`.
+Session bindings persist across successful execs. ANN remains deferred.
+Lexical/Semantic remain part of the public contract in `api.md`.
 
 ## Working agreement
 

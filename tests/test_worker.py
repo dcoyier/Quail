@@ -52,7 +52,8 @@ for field in sample.fields():
         assert "title source" in outcome.printed_output
         assert "body source" in outcome.printed_output
         assert "title 'Hello'" in outcome.printed_output
-        assert outcome.state_revision == 0
+        # Loop/locals (field, samples, sample) persist as session bindings.
+        assert outcome.state_revision == 1
 
 
 def test_worker_regex_filter(tmp_path: Path) -> None:

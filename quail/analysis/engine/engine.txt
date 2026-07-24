@@ -8,7 +8,9 @@ mutations:
 
 retrieve(plan):
   For fields units, evaluate the field group and apply limit/order.
-  Otherwise evaluate entry ids, apply ranking, apply limit/order.
+  Otherwise evaluate entry ids.
+  For Unit("entries", field), keep only entries where the field is present.
+  Then apply ranking and limit/order.
   Materialize Expression values, Entry handles, present field values, or distinct values.
 
 count(plan):

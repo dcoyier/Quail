@@ -1,7 +1,11 @@
 serve(stdin, stdout):
-  Read one NDJSON execute message with a code string.
+  Read one NDJSON execute message with a code string and bindings map.
+  Decode initial bindings into the namespace.
   Build a HostEndpoint that writes api_call lines and waits for api_result.
-  Validate the code, build the injected namespace, and exec it.
-  On success write result ok with printed_output.
-  On failure write result not ok with an empty printed_output.
+  Validate the code (including assigned/deleted names), build the injected
+  namespace, restore bindings, and exec it.
+  On success encode assigned survivors as changed_bindings and deleted names
+  as deleted_bindings, then write result ok with printed_output.
+  On BindingEncodingError or other failure write result not ok with an empty
+  printed_output and no binding commit on the host.
   Always clear the Entry host-call context var.

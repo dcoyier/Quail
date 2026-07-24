@@ -305,7 +305,7 @@ def test_exec_script_lexical_path(tmp_path: Path) -> None:
                 "rows = retrieve(group=G0.where(score > 0), limit=10)\n"
                 "ids = []\n"
                 "for entry in rows:\n"
-                "    ids.append(entry.id)\n"
+                "    ids = ids + [entry.id]\n"
                 "print(ids)\n"
             ),
             lexical=lexical,

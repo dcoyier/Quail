@@ -40,7 +40,7 @@ Only `print(...)` leaves the sandbox. Return values of expressions do not.
 | **Group** | Symbolic set of entries or fields — not a Python list until you retrieve. |
 | **Unit** | What `retrieve`/`count` should return (entries, fields, values, …). |
 | **Ranking** | How to score and order entries. |
-| **Binding** | Top-level name that survives a successful exec in this session+dataset. |
+| **Binding** | Top-level name that survives a successful exec in this session. |
 | **Mutation** | `create_field` / `tag` / `untag` — session overlay only. |
 
 **Symbolic vs materialized:** building `Expression(...)` or `G0.where(...)`
@@ -289,9 +289,10 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
 ## Bindings and print
 
 After a **successful** exec, supported top-level names you assigned are
-restored next time in the same session + dataset version. Delete with `del name`
+restored next time in the **same session**. Delete with `del name`
 if it should not persist. Prefer JSON-like values and Quail symbolic objects;
-tuples/sets/callables and similar cannot persist.
+tuples/sets/callables and similar cannot persist. Analysis tags remain scoped
+to the session + dataset version; bindings are session-scoped.
 
 ```python
 print(*values, sep=" ", end="\n")

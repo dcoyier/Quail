@@ -1,7 +1,8 @@
 """Public exports for ``quail.analysis.worker.sandbox``."""
 
-from .sandbox import validate_quail_code
+from .sandbox import ValidatedQuailProgram, validate_quail_code
 
 __all__ = [
+    "ValidatedQuailProgram",
     "validate_quail_code",
 ]

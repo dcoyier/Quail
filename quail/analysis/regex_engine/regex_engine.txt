@@ -1,0 +1,20 @@
+RegexProgram remembers a compiled RE2 pattern.
+
+search(text):
+  Give back the first match text, or None.
+
+find_all(text):
+  Give back every match text via group(0).
+
+sub_literal(text, replacement):
+  Replace every match with the literal replacement string (no backrefs).
+
+compile_regex(pattern, flags default 0):
+  Require pattern text and approved flags.
+  Compile with RE2 under a memory cap.
+  Raise QuailSyntaxError with a public message for lookaround, backrefs,
+  or other RE2 failures.
+
+public_regex_error(pattern, native_message default ""):
+  Prefer lookaround and backreference wording when the pattern shows them.
+  Otherwise include the native message or a generic unsupported notice.

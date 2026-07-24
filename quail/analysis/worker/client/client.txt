@@ -1,9 +1,13 @@
-WorkerResult remembers printed_output from a successful worker run.
+WorkerResult remembers:
+  printed_output
+  changed_bindings
+  deleted_bindings
 
-run_worker_script(code, on_api_call):
-  Spawn a cleared-env python -I -S -B -u subprocess with the repo on sys.path.
-  Send an execute message with the code.
+run_worker_script(code, on_api_call, bindings default None):
+  Spawn a cleared-env python -I -S -B -u subprocess.
+  Put site-packages (for re2) and the repo root on sys.path.
+  Send an execute message with the code and bindings payload.
   For each api_call, invoke on_api_call and reply with api_result.
-  When result arrives ok, give back WorkerResult.
+  When result arrives ok, give back WorkerResult with binding deltas.
   On worker failure or protocol errors, raise.
   Always kill the subprocess when finished.

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from quail.analysis.bindings import EncodedBinding
 from quail.datasets.catalog import source_entries, source_fields
 from quail.datasets.db import CoreDb
 from quail.datasets.db.db import _require_scope_id
@@ -234,7 +235,7 @@ def commit_overlay(
     *,
     expected_revision: int,
     mutations: Sequence[Mutation] = (),
-    bindings: Mapping[str, Any] | None = None,
+    bindings: Mapping[str, EncodedBinding] | None = None,
     binding_deletes: Sequence[str] | None = None,
 ) -> int:
     """Persist staged overlay mutations if session revision matches."""
@@ -277,8 +278,8 @@ def commit_overlay(
                 raise SessionSyntaxError("Unsupported overlay mutation")
 
         if bindings:
-            for name, value in bindings.items():
-                _upsert_binding(connection, scope.session_id, name, value)
+            for name, binding in bindings.items():
+                _upsert_binding(connection, scope.session_id, name, binding)
                 changed = True
         if binding_deletes:
             for name in binding_deletes:
@@ -547,21 +548,47 @@ def _bump_value_revisions(connection: Any, scope: Scope, field: str) -> None:
     )
 
 
-def _upsert_binding(connection: Any, session_id: str, name: str, value: Any) -> None:
+def load_bindings(db: CoreDb, session_id: str) -> dict[str, EncodedBinding]:
+    """Load all session bindings as EncodedBinding values."""
+
+    if not isinstance(session_id, str) or not session_id:
+        raise SessionSyntaxError("session_id must be a non-empty string")
+    rows = db.connection.execute(
+        """
+        SELECT name, value_kind, value_json
+        FROM quail_session_bindings
+        WHERE session_id = ?
+        ORDER BY name
+        """,
+        (session_id,),
+    ).fetchall()
+    loaded: dict[str, EncodedBinding] = {}
+    for row in rows:
+        name = str(row[0])
+        value_kind = str(row[1])
+        value = decode_json(str(row[2]))
+        loaded[name] = EncodedBinding(value_kind, value)  # type: ignore[arg-type]
+    return loaded
+
+
+def _upsert_binding(connection: Any, session_id: str, name: str, binding: EncodedBinding) -> None:
     if not isinstance(name, str) or not name.strip():
         raise SessionSyntaxError("Binding name must be a non-empty string")
-    if value is None:
-        raise SessionSyntaxError("Binding values cannot be None")
-    encoded = canonical_json(value)
+    if not isinstance(binding, EncodedBinding):
+        raise SessionSyntaxError("Binding values must be EncodedBinding objects")
+    encoded = canonical_json(binding.value)
     connection.execute(
         """
-        INSERT INTO quail_session_bindings(session_id, name, value_json, updated_at)
-        VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        INSERT INTO quail_session_bindings(
+          session_id, name, value_kind, value_json, updated_at
+        )
+        VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         ON CONFLICT(session_id, name) DO UPDATE SET
+          value_kind = excluded.value_kind,
           value_json = excluded.value_json,
           updated_at = excluded.updated_at
         """,
-        (session_id, name.strip(), encoded),
+        (session_id, name.strip(), binding.value_kind, encoded),
     )
 
 

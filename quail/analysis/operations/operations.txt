@@ -79,8 +79,9 @@ Semantic(query, input_aggregation default None, target_aggregation default None)
 _regex_operation(kind, pattern, flags default 0, extra params):
   Require pattern is valid regex text.
   Validate flags.
+  For RegexSub, require a string replacement.
+  Compile with RE2 now so lookaround and backrefs fail at construction.
   Give back Operation with pattern, flags, and extra params.
-  Full RE2 compile checks come later with the regex engine.
 
 _similarity_operation(kind, query, input_aggregation, target_aggregation):
   For each aggregation argument, require it is None, "total", or "avg".

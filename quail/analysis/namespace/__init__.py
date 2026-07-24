@@ -1,21 +1,10 @@
 """Public exports for ``quail.analysis.namespace``."""
 
-from .namespace import (
-    retrieve,
-    count,
-    create_field,
-    tag,
-    untag,
-    quail_print,
-    api_namespace,
-)
+from quail.analysis.bindings import RESERVED_NAMES
+
+from .namespace import api_namespace
 
 __all__ = [
-    "retrieve",
-    "count",
-    "create_field",
-    "tag",
-    "untag",
-    "quail_print",
+    "RESERVED_NAMES",
     "api_namespace",
 ]

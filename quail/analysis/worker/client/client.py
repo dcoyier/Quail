@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from quail.analysis.bindings import (
+    EncodedBinding,
+    bindings_from_payload,
+    bindings_to_payload,
+)
 from quail.analysis.errors import QuailRuntimeError, QuailSyntaxError
 from quail.analysis.worker.protocol import (
     ApiCall,
@@ -24,20 +29,25 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 @dataclass(frozen=True, slots=True)
 class WorkerResult:
     printed_output: str
+    changed_bindings: dict[str, EncodedBinding] = field(default_factory=dict)
+    deleted_bindings: tuple[str, ...] = ()
 
 
 def run_worker_script(
     code: str,
     *,
     on_api_call: Callable[[ApiCall], Any],
+    bindings: Mapping[str, EncodedBinding] | None = None,
 ) -> WorkerResult:
     """Spawn the worker, feed execute, handle api_call, return printed_output."""
 
     if not isinstance(code, str):
         raise QuailSyntaxError("code must be a string")
 
+    site_packages = _site_packages_path()
     bootstrap = (
         "import sys;"
+        f"sys.path.insert(0, {site_packages.as_posix()!r});"
         f"sys.path.insert(0, {_REPO_ROOT.as_posix()!r});"
         "from quail.analysis.worker.main.main import serve;"
         "serve()"
@@ -64,7 +74,12 @@ def run_worker_script(
     assert process.stderr is not None
 
     try:
-        process.stdin.write(dumps_message({"type": "execute", "code": code}) + "\n")
+        execute = {
+            "type": "execute",
+            "code": code,
+            "bindings": bindings_to_payload(bindings or {}),
+        }
+        process.stdin.write(dumps_message(execute) + "\n")
         process.stdin.flush()
 
         while True:
@@ -103,7 +118,16 @@ def run_worker_script(
                 printed = message.get("printed_output", "")
                 if not isinstance(printed, str):
                     raise QuailRuntimeError("worker printed_output must be a string")
-                return WorkerResult(printed_output=printed)
+                changed = bindings_from_payload(message.get("changed_bindings") or {})
+                deleted_raw = message.get("deleted_bindings") or []
+                if not isinstance(deleted_raw, list):
+                    raise QuailRuntimeError("worker deleted_bindings must be a list")
+                deleted = tuple(str(name) for name in deleted_raw)
+                return WorkerResult(
+                    printed_output=printed,
+                    changed_bindings=changed,
+                    deleted_bindings=deleted,
+                )
             raise QuailRuntimeError(f"Unexpected worker message type: {message_type!r}")
     finally:
         try:
@@ -118,3 +142,23 @@ def run_worker_script(
             process.wait(timeout=2)
         except Exception:  # noqa: BLE001
             pass
+
+
+def _site_packages_path() -> Path:
+    """Locate the host interpreter's site-packages so -S workers can import re2."""
+
+    try:
+        import re2
+
+        return Path(re2.__file__).resolve().parents[1]
+    except Exception:  # noqa: BLE001 - fall back before google-re2 is installed
+        for entry in sys.path:
+            candidate = Path(entry)
+            if candidate.name == "site-packages" and candidate.is_dir():
+                return candidate
+        return (
+            Path(sys.prefix)
+            / "lib"
+            / f"python{sys.version_info.major}.{sys.version_info.minor}"
+            / "site-packages"
+        )

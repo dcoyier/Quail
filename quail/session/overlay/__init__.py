@@ -6,6 +6,7 @@ from .overlay import (
     catalog_fields,
     commit_overlay,
     ensure_scope,
+    load_bindings,
     resolve_scope,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "catalog_fields",
     "commit_overlay",
     "ensure_scope",
+    "load_bindings",
     "resolve_scope",
 ]

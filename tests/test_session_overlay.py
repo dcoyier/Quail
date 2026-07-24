@@ -109,25 +109,29 @@ def test_skipping_commit_leaves_no_overlay(tmp_path: Path) -> None:
 
 
 def test_bindings_round_trip(tmp_path: Path) -> None:
+    from quail.analysis.bindings import encode_binding_value
+
     db, session, scope, _ref = _seed(tmp_path)
     with db:
+        binding = encode_binding_value(["e1"])
         revision = commit_overlay(
             db,
             scope,
             expected_revision=0,
             mutations=[FieldCreate("topic")],
-            bindings={"selected": ["e1"]},
+            bindings={"selected": binding},
         )
         assert revision == 1
         row = db.connection.execute(
             """
-            SELECT value_json FROM quail_session_bindings
+            SELECT value_kind, value_json FROM quail_session_bindings
             WHERE session_id = ? AND name = ?
             """,
             (session.id, "selected"),
         ).fetchone()
         assert row is not None
-        assert '"e1"' in str(row[0])
+        assert row[0] == binding.value_kind
+        assert '"e1"' in str(row[1])
 
         revision = commit_overlay(
             db,

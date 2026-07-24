@@ -18,7 +18,7 @@ from quail.analysis.worker.client import run_worker_script
 from quail.analysis.worker.protocol import ApiCall
 from quail.datasets.db import CoreDb
 from quail.search import LexicalService, SimilarityService
-from quail.session.overlay import commit_overlay, ensure_scope, resolve_scope
+from quail.session.overlay import commit_overlay, ensure_scope, load_bindings, resolve_scope
 
 
 @dataclass(slots=True)
@@ -111,12 +111,19 @@ def exec_script(
     def on_api_call(call: ApiCall) -> Any:
         return dispatch_call(engine, call.method, call.args, call.kwargs)
 
-    worker_result = run_worker_script(code, on_api_call=on_api_call)
+    initial_bindings = load_bindings(db, session_id)
+    worker_result = run_worker_script(
+        code,
+        on_api_call=on_api_call,
+        bindings=initial_bindings,
+    )
     revision = commit_overlay(
         db,
         scope,
         expected_revision=expected_revision,
         mutations=engine.mutations,
+        bindings=worker_result.changed_bindings,
+        binding_deletes=worker_result.deleted_bindings,
     )
     return ExecOutcome(
         printed_output=worker_result.printed_output,

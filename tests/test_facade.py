@@ -24,11 +24,9 @@ from quail.analysis import (
     Unit,
     Value,
     api_namespace,
-    count,
     entries,
     fields,
     make_entry,
-    retrieve,
 )
 
 
@@ -96,16 +94,13 @@ def test_search_query_rejects_field_scoped_group() -> None:
         Semantic(G1)
 
 
-def test_semantic_query_and_namespace_stubs() -> None:
+def test_semantic_query_and_namespace_inventory() -> None:
     op = Semantic("hello", input_aggregation="avg")
     assert op.kind == "Semantic"
     assert op.input_aggregation == "avg"
     ns = api_namespace()
-    assert "retrieve" in ns and "G0" in ns and "re" in ns
-    with pytest.raises(QuailRuntimeError, match="not wired"):
-        retrieve(limit=1)
-    with pytest.raises(QuailRuntimeError, match="not wired"):
-        count()
+    assert "G0" in ns and "re" in ns and "Lexical" in ns
+    assert "retrieve" not in ns
 
 
 def test_entry_handle_and_field_compare_rejected() -> None:

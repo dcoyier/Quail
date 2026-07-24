@@ -27,9 +27,16 @@ plan_create_field(field):
 
 plan_tag(group, field, value):
   Require Field and non-None value.
+  Reject nested None inside the value.
   Require entry-scoped GroupExpr or list of Entry.
   Give back a TagPlan.
 
 plan_untag(group, field, value default None):
   Same group and field rules as tag.
+  When value is provided, reject nested None inside it.
   Give back an UntagPlan.
+
+require_tag_value(value, label default "Tag value"):
+  Walk lists and dicts.
+  Raise QuailSyntaxError on None, cycles, non-string keys, non-finite floats,
+  or unsupported types.

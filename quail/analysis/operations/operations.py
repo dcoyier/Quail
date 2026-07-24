@@ -11,6 +11,7 @@ from quail.analysis.errors import QuailScopeError, QuailSyntaxError
 from quail.analysis.literals import literal_as_plain, seal_mapping
 
 from quail.analysis.re_helper import require_regex_text, validate_regex_flags
+from quail.analysis.regex_engine import compile_regex
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,7 +151,12 @@ def Semantic(
 def _regex_operation(kind: str, pattern: str, *, flags: int = 0, **params: Any) -> Operation:
     require_regex_text(pattern, "Regex pattern")
     validate_regex_flags(flags)
-    # Full RE2 compile validation lands with the regex engine; shape is checked now.
+    if kind == "RegexSub":
+        replacement = params.get("replacement")
+        if not isinstance(replacement, str):
+            raise QuailSyntaxError("RegexSub replacement must be a string")
+        require_regex_text(replacement, "RegexSub replacement")
+    compile_regex(pattern, flags)
     return Operation(kind, {"pattern": pattern, "flags": flags, **params})
 
 
