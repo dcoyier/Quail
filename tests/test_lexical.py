@@ -188,10 +188,10 @@ def test_lexical_aggregations(tmp_path: Path) -> None:
     search.close()
 
 
-def test_lexical_rejects_entry_group_query(tmp_path: Path) -> None:
+def test_lexical_service_rejects_unresolved_entry_group(tmp_path: Path) -> None:
     search = open_search_db(tmp_path / "search.turso")
     service = LexicalService(search=search)
-    with pytest.raises(QuailRuntimeError, match="entry-group"):
+    with pytest.raises(QuailRuntimeError, match="must be resolved by QueryEngine"):
         service.lexical_score(
             workspace_id="ws",
             dataset_id="notes",
@@ -312,4 +312,127 @@ def test_exec_script_lexical_path(tmp_path: Path) -> None:
         )
         assert "e1" in outcome.printed_output
         assert "e2" not in outcome.printed_output
+    search.close()
+
+
+def test_lexical_entry_group_and_entry_list_targets(tmp_path: Path) -> None:
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text(
+        "id,body\ne1,hydrangea care tips\ne2,climate policy notes\ne3,garden hydrangea bloom\n",
+        encoding="utf-8",
+    )
+    db = open_core_db(tmp_path / "core.turso")
+    import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+    session = create_session(db, "ws")
+    search = open_search_db(tmp_path / "search.turso")
+    lexical = LexicalService(search=search)
+    with db:
+        targets = G0.where(Expression(Field("body"), Lexical("climate")) > 0)
+        score = Expression(Field("body"), Lexical(targets))
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            # Query targets are climate entries; corpus is body. e2 should match itself.
+            rows = dispatch_call(
+                engine,
+                "retrieve",
+                (),
+                {"group": G0.where(score > 0), "limit": 10},
+            )
+            assert [entry.id for entry in rows] == ["e2"]
+
+            entries = dispatch_call(engine, "retrieve", (), {"group": G0, "limit": 10})
+            by_id = {entry.id: entry for entry in entries}
+            list_score = Expression(Field("body"), Lexical([by_id["e1"], by_id["e3"]]))
+            ranked = dispatch_call(
+                engine,
+                "retrieve",
+                (),
+                {
+                    "group": G0,
+                    "rank": Ranking(expression=list_score),
+                    "order": "top",
+                    "limit": 2,
+                },
+            )
+            assert {entry.id for entry in ranked} == {"e1", "e3"}
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            lexical=lexical,
+        )
+    search.close()
+
+
+def test_lexical_entry_target_quotes_and_operator_text(tmp_path: Path) -> None:
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text(
+        "id,body\ne1,rose AND soil\ne2,rose garden\ne3,tulip bed\n",
+        encoding="utf-8",
+    )
+    db = open_core_db(tmp_path / "core.turso")
+    import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+    session = create_session(db, "ws")
+    search = open_search_db(tmp_path / "search.turso")
+    lexical = LexicalService(search=search)
+    with db:
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            entries = dispatch_call(engine, "retrieve", (), {"group": G0, "limit": 10})
+            by_id = {entry.id: entry for entry in entries}
+            # Entry-derived target must not treat AND as FTS syntax.
+            score = Expression(Field("body"), Lexical([by_id["e1"]]))
+            rows = dispatch_call(
+                engine,
+                "retrieve",
+                (),
+                {"group": G0.where(score > 0), "limit": 10},
+            )
+            ids = {entry.id for entry in rows}
+            assert "e1" in ids
+            assert "e2" in ids
+            assert "e3" not in ids
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            lexical=lexical,
+        )
+    search.close()
+
+
+def test_lexical_empty_entry_targets_error(tmp_path: Path) -> None:
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text("id,body\ne1,\ne2,\n", encoding="utf-8")
+    db = open_core_db(tmp_path / "core.turso")
+    import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+    session = create_session(db, "ws")
+    search = open_search_db(tmp_path / "search.turso")
+    lexical = LexicalService(search=search)
+    with db:
+        score = Expression(Field("body"), Lexical(G0))
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            with pytest.raises(QuailRuntimeError, match="no non-empty target text"):
+                dispatch_call(
+                    engine,
+                    "retrieve",
+                    (),
+                    {"group": G0.where(score > 0), "limit": 10},
+                )
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            lexical=lexical,
+        )
     search.close()

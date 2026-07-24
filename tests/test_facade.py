@@ -15,6 +15,7 @@ from quail.analysis import (
     Lexical,
     Predicate,
     QuailRuntimeError,
+    QuailScopeError,
     QuailSyntaxError,
     Ranking,
     RegexFindAll,
@@ -86,6 +87,13 @@ def test_pipeline_and_units() -> None:
 def test_lexical_must_end_pipeline() -> None:
     with pytest.raises(QuailSyntaxError, match="must end"):
         Expression(Field("content"), Lexical("a"), AsText())
+
+
+def test_search_query_rejects_field_scoped_group() -> None:
+    with pytest.raises(QuailScopeError, match="entry-scoped"):
+        Lexical(G1)
+    with pytest.raises(QuailScopeError, match="entry-scoped"):
+        Semantic(G1)
 
 
 def test_semantic_query_and_namespace_stubs() -> None:

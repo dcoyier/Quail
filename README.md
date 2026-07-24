@@ -21,8 +21,9 @@ manifest, imports declared CSV datasets, and serves MCP.
 Feedback stays in a separate JSONL file. Semantic similarity uses a per-dataset
 embedding profile (`[datasets.embedding]` plus `[providers.*]` and
 `core.search_database`) with Turso exact batch cosine (not ANN). Lexical FTS
-uses Turso native FTS in the same rebuildable search database (in-process;
-text/`list[str]` queries). Invitations remain deferred.
+uses Turso native FTS in the same rebuildable search database (in-process).
+Both accept `str`, `list[str]`, entry groups, and Entry lists as query targets.
+Invitations remain deferred.
 
 ## Operator path
 

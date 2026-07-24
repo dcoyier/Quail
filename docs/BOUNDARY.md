@@ -99,8 +99,9 @@ never writes the TOML.
 - Search **infrastructure**: Semantic uses per-dataset embedding profiles
   (Ollama/OpenRouter), a rebuildable Turso vector cache, and **exact** batch
   cosine via `-vector_distance_dot`. Lexical uses Turso **native FTS** in the
-  same rebuildable search DB (in-process; text/`list[str]` query targets). ANN,
-  lexical workers/artifact roots, and EntryGroup Lexical targets are deferred.
+  same rebuildable search DB (in-process). Both accept `str`, `list[str]`, entry
+  `GroupExpr`, and `list[Entry]` query targets. ANN and lexical workers/artifact
+  roots are deferred.
 - Hosting flourishes (ngrok, etc.)
 
 ## Build order (stop if you cannot explain the step)
@@ -130,8 +131,9 @@ never writes the TOML.
 Semantic scoring is **Turso exact batch cosine** (per-dataset embedding profile,
 Ollama/OpenRouter HTTP, rebuildable vector cache, `-vector_distance_dot`).
 Lexical scoring is **Turso native FTS** in the shared search DB (in-process).
-ANN and EntryGroup/Entry-list search targets remain deferred. Lexical/Semantic
-remain part of the public contract in `api.md`.
+Both accept the full api.md query shapes including entry groups and Entry lists.
+ANN remains deferred. Lexical/Semantic remain part of the public contract in
+`api.md`.
 
 ## Working agreement
 

@@ -620,3 +620,136 @@ def test_batch_scores_match_single_path(tmp_path: Path) -> None:
         assert batch_score is not None and single_score is not None
         assert abs(batch_score - single_score) < 1e-5
     search.close()
+
+
+def test_semantic_entry_group_and_entry_list_targets(tmp_path: Path) -> None:
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text(
+        "id,body\ne1,hydrangea garden bloom\ne2,climate policy notes\ne3,flower petals water\n",
+        encoding="utf-8",
+    )
+    db = open_core_db(tmp_path / "core.turso")
+    search = open_search_db(tmp_path / "search.turso")
+    try:
+        ref = import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+        profile = EmbeddingProfile(provider="ollama", model="fake", dimensions=4, revision="r1")
+        pin_embedding_profile(
+            search,
+            workspace_id="ws",
+            dataset_id="notes",
+            version_id=ref.version_id,
+            profile=profile,
+        )
+        fake = KeywordEmbedder(dimensions=4)
+        similarity = SimilarityService(
+            search=search,
+            providers=ProvidersConfig(),
+            embedder_factory=lambda _profile: fake,
+        )
+        session = create_session(db, "ws")
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            climate_group = G0.where(Expression(Field("body"), Semantic("climate policy")) > 0.5)
+            score = Expression(Field("body"), Semantic(climate_group))
+            rows = dispatch_call(
+                engine,
+                "retrieve",
+                (),
+                {
+                    "group": G0,
+                    "rank": Ranking(expression=score),
+                    "order": "top",
+                    "limit": 1,
+                },
+            )
+            assert rows[0].id == "e2"
+
+            entries = dispatch_call(engine, "retrieve", (), {"group": G0, "limit": 10})
+            by_id = {entry.id: entry for entry in entries}
+            list_score = Expression(
+                Field("body"),
+                Semantic([by_id["e1"], by_id["e3"]], target_aggregation="avg"),
+            )
+            ranked = dispatch_call(
+                engine,
+                "retrieve",
+                (),
+                {
+                    "group": G0,
+                    "rank": Ranking(expression=list_score),
+                    "order": "top",
+                    "limit": 2,
+                },
+            )
+            assert ranked[0].id in {"e1", "e3"}
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            similarity=similarity,
+        )
+    finally:
+        search.close()
+        db.close()
+
+
+def test_semantic_duplicate_entry_list_avg_weights(tmp_path: Path) -> None:
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text(
+        "id,body\ne1,hydrangea garden\ne2,climate policy\n",
+        encoding="utf-8",
+    )
+    db = open_core_db(tmp_path / "core.turso")
+    search = open_search_db(tmp_path / "search.turso")
+    try:
+        ref = import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+        profile = EmbeddingProfile(provider="ollama", model="fake", dimensions=4, revision="r1")
+        pin_embedding_profile(
+            search,
+            workspace_id="ws",
+            dataset_id="notes",
+            version_id=ref.version_id,
+            profile=profile,
+        )
+        fake = KeywordEmbedder(dimensions=4)
+        similarity = SimilarityService(
+            search=search,
+            providers=ProvidersConfig(),
+            embedder_factory=lambda _profile: fake,
+        )
+        session = create_session(db, "ws")
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            entries = dispatch_call(engine, "retrieve", (), {"group": G0, "limit": 10})
+            by_id = {entry.id: entry for entry in entries}
+            score = Expression(
+                Field("body"),
+                Semantic(
+                    [by_id["e1"], by_id["e2"], by_id["e1"]],
+                    target_aggregation="avg",
+                ),
+            )
+            scored = dispatch_call(
+                engine,
+                "retrieve",
+                (),
+                {"unit": score, "group": G0, "limit": 10},
+            )
+            ids = [entry.id for entry in entries]
+            score_by_id = {ids[index]: scored[index] for index in range(len(ids))}
+            assert score_by_id["e1"] > score_by_id["e2"]
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            similarity=similarity,
+        )
+    finally:
+        search.close()
+        db.close()

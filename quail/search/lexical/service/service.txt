@@ -8,8 +8,8 @@ lexical_score(...):
 
 lexical_scores_for_entries(workspace_id, dataset_id, version_id, corpus_by_entry,
                            query_record, input_aggregation, target_aggregation):
-  Resolve LiteralText / LiteralTextList query strings; reject EntryGroup /
-  EntryList in this slice.
+  Resolve LiteralText / LiteralTextList query strings.
+  Reject unresolved EntryGroup / EntryList (QueryEngine must resolve those first).
   Collect corpus segment texts per entry; empty corpora score 0.0.
   Resolve or create the per-version FTS corpus, ensure those segments, then
   score with Turso fts_match / fts_score.
@@ -41,7 +41,7 @@ _corpus_texts(corpus):
 
 _target_queries(query_record):
   Give back LiteralText / LiteralTextList strings.
-  Raise for EntryGroup / EntryList and empty targets.
+  Raise for unresolved EntryGroup / EntryList and empty targets.
 
 _finite_nonneg(value):
   Require a finite non-negative number or raise.

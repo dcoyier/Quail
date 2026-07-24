@@ -1,0 +1,10 @@
+text_segments(value, operation_kind):
+  If value is None, give back an empty tuple.
+  If value is non-empty text, give back that one segment.
+  If value is a list of text, give back the non-empty items.
+  Otherwise raise QuailRuntimeError that operation_kind requires text, list[text],
+  or None.
+
+lexical_document_query(text):
+  Find Unicode word tokens and give back them as space-joined quoted FTS terms.
+  Corpus prose must never be treated as executable Lexical query syntax.

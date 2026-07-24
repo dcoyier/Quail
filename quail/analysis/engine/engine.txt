@@ -30,5 +30,8 @@ entry_value / entry_fields:
 
 Helpers evaluate groups and predicates, run expression pipelines (Value, AsText,
 AsNumber, regex, Slice, Length, Lexical via LexicalService, Semantic via
-SimilarityService). Ranking precomputes Lexical/Semantic-terminal leaves in one
-batch score pass, then combines composed rankings in host memory.
+SimilarityService). Before Lexical/Semantic scoring, resolve query targets from
+LiteralText, LiteralTextList, EntryGroup, or EntryList using the expression root
+field; Lexical Entry* targets are term-quoted. Ranking precomputes
+Lexical/Semantic-terminal leaves in one batch score pass, then combines composed
+rankings in host memory.

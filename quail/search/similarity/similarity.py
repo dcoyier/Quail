@@ -358,8 +358,8 @@ def _target_texts(query_record: dict[str, Any]) -> list[str]:
             raise QuailRuntimeError("Semantic query must contain at least one non-empty text")
         return out
     raise QuailRuntimeError(
-        "Semantic entry-group and Entry-list queries are not supported in this slice; "
-        "use text or list[str] queries"
+        "Semantic EntryGroup/EntryList queries must be resolved by QueryEngine; "
+        "use text or list[str] query records here"
     )
 
 

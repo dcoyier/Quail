@@ -275,10 +275,12 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
 
 - **Lexical:** `score > 0` means “matched”; string queries support simple
   query syntax (phrases, `AND` / `NOT`, `term*`). Scores are corpus-relative
-  (Turso native FTS). Text and `list[str]` queries work in this slice;
-  entry-group / Entry-list targets are deferred.
+  (Turso native FTS). `str`, `list[str]`, entry `GroupExpr`, and `list[Entry]`
+  queries all work. Entry-derived targets read the expression root field and are
+  quoted as FTS terms (field prose is not parsed as query syntax).
 - **Semantic:** exact cosine similarity under the dataset embedding profile
-  (configured outside this API; scored in Turso, not approximate ANN). If search
+  (configured outside this API; scored in Turso, not approximate ANN). The same
+  four query shapes work; entry targets read the expression root field. If search
   isn’t available, you get a repairable runtime diagnostic — fix config and
   rerun the whole exec.
 

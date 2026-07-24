@@ -486,8 +486,8 @@ def _target_queries(query_record: dict[str, Any]) -> list[str]:
             raise QuailRuntimeError("Lexical query must contain at least one non-empty text")
         return out
     raise QuailRuntimeError(
-        "Lexical entry-group and Entry-list queries are not supported in this slice; "
-        "use text or list[str] queries"
+        "Lexical EntryGroup/EntryList queries must be resolved by QueryEngine; "
+        "use text or list[str] query records here"
     )
 
 

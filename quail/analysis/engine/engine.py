@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Sequence
 from typing import Any
 
 from quail.analysis.entry import Entry, make_entry
@@ -22,6 +23,12 @@ from quail.analysis.planner import (
 )
 from quail.analysis.predicate import Predicate
 from quail.analysis.ranking import Ranking
+from quail.analysis.search_text import (
+    entry_from_record,
+    group_expr_from_record,
+    lexical_document_query,
+    text_segments,
+)
 from quail.analysis.unit import Unit
 from quail.datasets.catalog import source_entries, source_values
 from quail.datasets.db import CoreDb
@@ -325,10 +332,16 @@ class QueryEngine:
     def _eval_expression(self, expression: Expression, entry_id: str) -> Any:
         value: Any = self._read_field_value(expression.root.name, entry_id)
         for operation in expression.operations:
-            value = self._apply_operation(operation, value)
+            value = self._apply_operation(operation, value, root=expression.root)
         return value
 
-    def _apply_operation(self, operation: Operation, value: Any) -> Any:
+    def _apply_operation(
+        self,
+        operation: Operation,
+        value: Any,
+        *,
+        root: Field | None = None,
+    ) -> Any:
         kind = operation.kind
         if kind == "Value":
             return value
@@ -377,12 +390,18 @@ class QueryEngine:
                         "Set core.search_database, re-run quail, then retry the whole exec."
                     ),
                 )
+            if root is None:
+                raise QuailRuntimeError("Lexical requires an expression root field")
             return self._lexical.lexical_score(
                 workspace_id=self._scope.workspace_id,
                 dataset_id=self._scope.dataset_id,
                 version_id=self._scope.dataset_version_id,
                 corpus=value,
-                query_record=operation.params["query"],
+                query_record=self._resolved_search_query(
+                    dict(operation.params["query"]),
+                    root=root,
+                    operation_kind="Lexical",
+                ),
                 input_aggregation=operation.params.get("input_aggregation"),
                 target_aggregation=operation.params.get("target_aggregation"),
             )
@@ -395,16 +414,109 @@ class QueryEngine:
                         "re-run quail, then retry the whole exec."
                     ),
                 )
+            if root is None:
+                raise QuailRuntimeError("Semantic requires an expression root field")
             return self._similarity.semantic_score(
                 workspace_id=self._scope.workspace_id,
                 dataset_id=self._scope.dataset_id,
                 version_id=self._scope.dataset_version_id,
                 corpus=value,
-                query_record=operation.params["query"],
+                query_record=self._resolved_search_query(
+                    dict(operation.params["query"]),
+                    root=root,
+                    operation_kind="Semantic",
+                ),
                 input_aggregation=operation.params.get("input_aggregation"),
                 target_aggregation=operation.params.get("target_aggregation"),
             )
         raise QuailSyntaxError(f"Unsupported operation: {kind}")
+
+    def _resolved_search_query(
+        self,
+        query_record: dict[str, Any],
+        *,
+        root: Field,
+        operation_kind: str,
+    ) -> dict[str, Any]:
+        texts = self._resolve_search_targets(
+            query_record,
+            root=root,
+            operation_kind=operation_kind,
+        )
+        if len(texts) == 1:
+            return {"kind": "LiteralText", "text": texts[0]}
+        return {"kind": "LiteralTextList", "texts": texts}
+
+    def _resolve_search_targets(
+        self,
+        query_record: dict[str, Any],
+        *,
+        root: Field,
+        operation_kind: str,
+    ) -> list[str]:
+        """Expand Lexical/Semantic query records into ordered non-empty target strings."""
+
+        kind = query_record.get("kind")
+        if kind == "LiteralText":
+            targets = text_segments(query_record.get("text"), operation_kind=operation_kind)
+        elif kind == "LiteralTextList":
+            texts = query_record.get("texts")
+            if not isinstance(texts, Sequence) or isinstance(texts, str | bytes):
+                raise QuailRuntimeError(f"{operation_kind} LiteralTextList query is malformed")
+            targets = tuple(
+                segment
+                for value in texts
+                for segment in text_segments(value, operation_kind=operation_kind)
+            )
+        elif kind == "EntryGroup":
+            group = group_expr_from_record(query_record.get("group"))
+            if group.scope != "entries":
+                raise QuailRuntimeError(f"{operation_kind} target groups must be entry-scoped")
+            entry_ids = self._evaluate_entry_group(group)
+            targets = tuple(
+                segment
+                for entry_id in entry_ids
+                for segment in text_segments(
+                    self._read_field_value(root.name, entry_id),
+                    operation_kind=operation_kind,
+                )
+            )
+        elif kind == "EntryList":
+            entries_record = query_record.get("entries")
+            if not isinstance(entries_record, Sequence) or isinstance(entries_record, str | bytes):
+                raise QuailRuntimeError(f"{operation_kind} EntryList query is malformed")
+            listed_ids: list[str] = []
+            for item in entries_record:
+                entry = entry_from_record(item)
+                self._validate_search_entry(entry, operation_kind=operation_kind)
+                listed_ids.append(entry.id)
+            targets = tuple(
+                segment
+                for entry_id in listed_ids
+                for segment in text_segments(
+                    self._read_field_value(root.name, entry_id),
+                    operation_kind=operation_kind,
+                )
+            )
+        else:
+            raise QuailRuntimeError(f"Unsupported {operation_kind} query")
+
+        if operation_kind == "Lexical" and kind in {"EntryGroup", "EntryList"}:
+            targets = tuple(lexical_document_query(target) for target in targets)
+        targets = tuple(target for target in targets if target)
+        if not targets:
+            raise QuailRuntimeError(f"{operation_kind} query has no non-empty target text")
+        return list(targets)
+
+    def _validate_search_entry(self, entry: Entry, *, operation_kind: str) -> None:
+        if entry.dataset_id and entry.dataset_id != self._scope.dataset_id:
+            raise QuailRuntimeError(
+                f"{operation_kind} Entry target does not belong to this dataset"
+            )
+        if entry.dataset_version_id and entry.dataset_version_id != self._scope.dataset_version_id:
+            raise QuailRuntimeError(
+                f"{operation_kind} Entry target does not belong to this dataset version"
+            )
 
     def _apply_regex(self, operation: Operation, value: Any) -> Any:
         pattern = str(operation.params["pattern"])
@@ -529,7 +641,11 @@ class QueryEngine:
                     dataset_id=self._scope.dataset_id,
                     version_id=self._scope.dataset_version_id,
                     corpus_by_entry=corpus_by_entry,
-                    query_record=dict(operation.params["query"]),
+                    query_record=self._resolved_search_query(
+                        dict(operation.params["query"]),
+                        root=expression.root,
+                        operation_kind="Semantic",
+                    ),
                     input_aggregation=operation.params.get("input_aggregation"),
                     target_aggregation=operation.params.get("target_aggregation"),
                 )
@@ -548,7 +664,11 @@ class QueryEngine:
                         dataset_id=self._scope.dataset_id,
                         version_id=self._scope.dataset_version_id,
                         corpus_by_entry=corpus_by_entry,
-                        query_record=dict(operation.params["query"]),
+                        query_record=self._resolved_search_query(
+                            dict(operation.params["query"]),
+                            root=expression.root,
+                            operation_kind="Lexical",
+                        ),
                         input_aggregation=operation.params.get("input_aggregation"),
                         target_aggregation=operation.params.get("target_aggregation"),
                     ).items()

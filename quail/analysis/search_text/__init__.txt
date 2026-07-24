@@ -1,0 +1,2 @@
+This package re-exports text_segments, lexical_document_query,
+group_expr_from_record, and entry_from_record.
