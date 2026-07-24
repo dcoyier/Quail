@@ -11,7 +11,6 @@ from quail.analysis.errors import QuailSyntaxError
 from quail.analysis.literals import literal_as_plain, seal_literal
 
 
-
 @dataclass(frozen=True, slots=True)
 class Predicate:
     left: Any
@@ -31,9 +30,7 @@ class Predicate:
             stored_right = None
         elif operator in ("<", "<=", ">", ">=", "==", "!="):
             if not isinstance(left, Expression):
-                raise QuailSyntaxError(
-                    "Predicate comparisons require an Expression left operand"
-                )
+                raise QuailSyntaxError("Predicate comparisons require an Expression left operand")
             stored_right = _comparison_right(operator, right)
         else:
             raise QuailSyntaxError("Unsupported Predicate operator")

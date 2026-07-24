@@ -1,6 +1,8 @@
 [core]
 database = "data/quail.turso"
 feedback = "data/feedback.jsonl"
+# Optional Semantic search DB (must differ from database):
+# search_database = "data/quail-search.turso"
 
 [auth]
 mode = "unrestricted"
@@ -10,7 +12,22 @@ workspace = "local"
 bind = "127.0.0.1"
 port = 8000
 
+# Optional embedding providers when any dataset declares [datasets.embedding]:
+# [providers.ollama]
+# base_url = "http://127.0.0.1:11434"
+#
+# [providers.openrouter]
+# base_url = "https://openrouter.ai/api/v1"
+# api_key = "env:QUAIL_OPENROUTER_API_KEY"
+
 [[datasets]]
 id = "notes"
 source = "data/notes.csv"
 name = "Notes"
+
+# Optional per-dataset embedding profile (pins on apply for Semantic()):
+# [datasets.embedding]
+# provider = "ollama"
+# model = "embeddinggemma:latest"
+# dimensions = 768
+# revision = "embeddinggemma-local-v1"

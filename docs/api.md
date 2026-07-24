@@ -275,9 +275,10 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
 
 - **Lexical:** `score > 0` means “matched”; string queries support simple
   query syntax (phrases, `AND` / `NOT`, `term*`). Scores are corpus-relative.
-- **Semantic:** cosine similarity under the workspace embedding profile
-  (configured outside this API). If search isn’t available, you get a
-  repairable runtime diagnostic — fix config and rerun the whole exec.
+- **Semantic:** exact cosine similarity under the dataset embedding profile
+  (configured outside this API; scored in Turso, not approximate ANN). If search
+  isn’t available, you get a repairable runtime diagnostic — fix config and
+  rerun the whole exec.
 
 ---
 

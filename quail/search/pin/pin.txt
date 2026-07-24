@@ -1,0 +1,5 @@
+pin_embedding_profile(db, workspace_id, dataset_id, version_id, profile):
+  Upsert the embedding profile pin for one immutable dataset version.
+
+get_embedding_pin(db, workspace_id, dataset_id, version_id):
+  Give back the pinned EmbeddingProfile or None.

@@ -6,3 +6,4 @@ McpContext remembers:
   workspace_id
   feedback_path
   api_docs_path
+  similarity (optional SimilarityService)

@@ -1,2 +1,3 @@
-This package re-exports AuthMode, ConfigError, DatasetSpec, QuailConfig, UserSpec,
-WorkspaceSpec, load_config, and parse_config.
+This package re-exports AuthMode, ConfigError, DatasetSpec, EmbeddingProfile,
+EmbeddingProviderName, OllamaProvider, OpenRouterProvider, ProvidersConfig,
+QuailConfig, UserSpec, WorkspaceSpec, load_config, and parse_config.

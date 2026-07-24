@@ -1,0 +1,5 @@
+OllamaEmbedder POSTs to {base_url}/api/embed with model, input texts, and dimensions.
+
+embed_texts(texts):
+  Give back one float vector per input text.
+  Raise ProviderError on HTTP/JSON/shape/dimension mismatches.

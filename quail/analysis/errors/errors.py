@@ -21,3 +21,7 @@ class QuailFieldError(QuailError):
 
 class QuailRuntimeError(QuailError):
     """Data-dependent failure, unavailable search, timeout, or resource limit."""
+
+    def __init__(self, message: str, *, repair_hint: str | None = None) -> None:
+        super().__init__(message)
+        self.repair_hint = repair_hint

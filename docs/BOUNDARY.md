@@ -96,7 +96,9 @@ never writes the TOML.
 - validate/doctor/plan/apply ceremony
 - Invitations / identity linking / live admin user APIs
 - Connector author SDK
-- Search **infrastructure** (indexes/embeddings) may land after the API/AST surface; Lexical/Semantic stay in `api.md`
+- Search **infrastructure**: Semantic uses per-dataset embedding profiles
+  (Ollama/OpenRouter), a rebuildable Turso vector cache, and **exact** batch
+  cosine via `-vector_distance_dot`. ANN is deferred. Lexical FTS still deferred.
 - Hosting flourishes (ngrok, etc.)
 
 ## Build order (stop if you cannot explain the step)
@@ -123,7 +125,10 @@ never writes the TOML.
    Invitations and generic OIDC still out.
 10. Connector SDK (later)
 
-Search **infrastructure** may follow the AST/API surface; Lexical/Semantic remain part of the public contract in `api.md`.
+Semantic scoring is **Turso exact batch cosine** (per-dataset embedding profile,
+Ollama/OpenRouter HTTP, rebuildable vector cache, `-vector_distance_dot`). ANN
+and Lexical FTS remain deferred. Lexical/Semantic remain part of the public
+contract in `api.md`.
 
 ## Working agreement
 

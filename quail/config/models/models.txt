@@ -1,4 +1,18 @@
 AuthMode is unrestricted or clerk.
+EmbeddingProviderName is ollama or openrouter.
+
+EmbeddingProfile is the per-dataset Semantic cache identity.
+EmbeddingProfile remembers:
+  provider
+  model
+  dimensions
+  revision
+profile_hash:
+  SHA-256 of the canonical JSON of those four fields.
+
+OllamaProvider remembers base_url.
+OpenRouterProvider remembers base_url and api_key (env:NAME ref string).
+ProvidersConfig remembers optional ollama and openrouter blocks.
 
 DatasetSpec is one CSV dataset declared in the manifest.
 DatasetSpec remembers:
@@ -6,6 +20,7 @@ DatasetSpec remembers:
   dataset_id
   source
   name (optional)
+  embedding (optional EmbeddingProfile)
 
 WorkspaceSpec is one workspace and its declared datasets.
 WorkspaceSpec remembers:
@@ -33,3 +48,5 @@ QuailConfig remembers:
   workspaces
   users
   datasets (flattened for apply)
+  search_database (optional; required when any dataset has embedding)
+  providers

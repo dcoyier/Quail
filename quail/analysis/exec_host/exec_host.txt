@@ -10,17 +10,17 @@ dispatch_call(engine, method, args, kwargs):
   Supports retrieve, count, create_field, tag, untag, entry_value, entry_fields.
   This shape is what the worker RPC calls.
 
-run_analysis(db, session_id, dataset_id, expected_revision, driver):
+run_analysis(db, session_id, dataset_id, expected_revision, driver, similarity default None):
   Resolve and ensure scope.
-  Build a QueryEngine and PrintBuffer.
+  Build a QueryEngine (with optional SimilarityService) and PrintBuffer.
   Run the driver.
   On success, commit_overlay with staged mutations.
   Give back ExecOutcome.
   If the driver raises, do not commit.
 
-exec_script(db, session_id, dataset_id, expected_revision, code):
+exec_script(db, session_id, dataset_id, expected_revision, code, similarity default None):
   Resolve and ensure scope.
-  Build a QueryEngine.
+  Build a QueryEngine with optional SimilarityService.
   Spawn the worker with the code and answer api_call via dispatch_call.
   On worker success, commit_overlay and give back ExecOutcome with worker printed_output.
   If the worker fails, do not commit.

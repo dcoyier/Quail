@@ -37,6 +37,7 @@ from quail.mcp.results import (
     validate_time_window,
 )
 from quail.mcp.sticky import StickyWorkspaceStore
+from quail.search import SimilarityService, similarity_from_config
 from quail.session import create_session, get_session
 from quail.session.sessions import require_active_session
 
@@ -62,6 +63,7 @@ class ClerkMcpRuntime:
     sticky: StickyWorkspaceStore
     host: str
     port: int
+    similarity: SimilarityService | None = None
 
 
 def create_mcp_server(
@@ -72,6 +74,7 @@ def create_mcp_server(
     api_docs_path: str | Path | None = None,
     host: str = "127.0.0.1",
     port: int = 8000,
+    similarity: SimilarityService | None = None,
 ) -> FastMCP:
     """Build an unrestricted loopback FastMCP app with the six core tools."""
 
@@ -82,6 +85,7 @@ def create_mcp_server(
         workspace_id=workspace_id,
         feedback_path=Path(feedback_path),
         api_docs_path=docs_path,
+        similarity=similarity,
     )
     server = FastMCP(
         "quail",
@@ -101,6 +105,7 @@ def create_mcp_server_from_config(
 ) -> FastMCP:
     """Build MCP from slim config (unrestricted or Clerk)."""
 
+    similarity = similarity_from_config(config)
     if config.auth_mode == "unrestricted":
         assert config.workspace_id is not None
         return create_mcp_server(
@@ -110,12 +115,14 @@ def create_mcp_server_from_config(
             api_docs_path=api_docs_path,
             host=config.bind,
             port=config.port,
+            similarity=similarity,
         )
     assert config.clerk_domain is not None
     return create_clerk_mcp_server(
         config,
         api_docs_path=api_docs_path,
         verifier=verifier or ClerkJwtVerifier(config.clerk_domain),
+        similarity=similarity,
     )
 
 
@@ -124,6 +131,7 @@ def create_clerk_mcp_server(
     *,
     verifier: TokenVerifier,
     api_docs_path: str | Path | None = None,
+    similarity: SimilarityService | None = None,
 ) -> FastMCP:
     """Build Clerk-authenticated MCP with list/switch workspace tools."""
 
@@ -137,6 +145,7 @@ def create_clerk_mcp_server(
         sticky=StickyWorkspaceStore(),
         host=config.bind,
         port=config.port,
+        similarity=similarity if similarity is not None else similarity_from_config(config),
     )
     # Base instructions; locked addendum applied when principal is known at tool-time
     # via repair hints / list behavior. Process-level instructions stay locking-agnostic.
@@ -258,6 +267,7 @@ def _register_unrestricted_tools(server: FastMCP, context: McpContext) -> None:
                 dataset_id=dataset_id,
                 expected_revision=session.state_revision,
                 code=code,
+                similarity=context.similarity,
             )
         except Exception as error:
             return error_result(
@@ -514,6 +524,7 @@ def _register_clerk_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
                     dataset_id=dataset_id,
                     expected_revision=session.state_revision,
                     code=code,
+                    similarity=runtime.similarity,
                 )
         except Exception as error:
             return error_result(

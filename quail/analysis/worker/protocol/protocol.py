@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -217,8 +218,8 @@ def decode_api_call(message: dict[str, Any]) -> ApiCall:
 def _encode_plain(value: Any) -> Any:
     if value is None or isinstance(value, bool | int | float | str):
         return value
-    if isinstance(value, list):
+    if isinstance(value, list | tuple):
         return [_encode_plain(item) for item in value]
-    if isinstance(value, dict):
+    if isinstance(value, Mapping):
         return {str(key): _encode_plain(item) for key, item in value.items()}
     raise QuailSyntaxError(f"Cannot encode operation param {type(value).__name__}")

@@ -1,4 +1,5 @@
-There are private allowed-key sets for unrestricted and clerk roots, auth, core, hosting, workspace, dataset, and user tables.
+There are private allowed-key sets for unrestricted and clerk roots, auth, core,
+hosting, workspace, dataset, embedding, providers, and user tables.
 
 load_config(config_path):
   Require an absolute path.
@@ -11,8 +12,13 @@ parse_config(raw_text, manifest_path):
   Parse TOML.
   Require [auth].mode unrestricted or clerk.
   Require [core] database and feedback; resolve paths.
+  Optional core.search_database; must differ from core.database.
   Require [hosting] bind and port 1..65535.
+  Optional [providers.ollama] / [providers.openrouter] (api_key must be env:NAME).
   If unrestricted: require auth.workspace and optional root [[datasets]]; reject clerk-only keys.
-  If clerk: require auth.clerk_domain, [[workspaces]] with nested datasets, and [[users]]; reject auth.workspace and root [[datasets]].
+  If clerk: require auth.clerk_domain, [[workspaces]] with nested datasets, and [[users]];
+  reject auth.workspace and root [[datasets]].
+  For datasets: optional [datasets.embedding] with provider, model, dimensions > 0, revision.
   For users: validate memberships, optional default_workspace, optional lock_workspace (requires default).
+  When any dataset has embedding: require search_database and the matching provider blocks.
   Give back a QuailConfig.

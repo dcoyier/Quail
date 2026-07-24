@@ -1,0 +1,8 @@
+text_hash(text):
+  SHA-256 of UTF-8 text for cache keys.
+
+unit_vector(values):
+  L2-normalize before caching; zero vectors stay zero.
+
+pack_unit_vector(values):
+  Little-endian float32 blob for Turso -vector_distance_dot.

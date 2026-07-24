@@ -9,5 +9,5 @@ encode_value / decode_value:
 dumps_message / loads_message:
   NDJSON objects with version and sorted compact JSON.
 
-encode_api_call / decode_api_call:
-  Wrap an ApiCall as a protocol api_call message and rebuild it.
+_encode_plain:
+  Recursively encode sealed operation params (including MappingProxyType nests).

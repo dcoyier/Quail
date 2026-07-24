@@ -1,24 +1,28 @@
 There is a private repo-root path to docs/api.md.
 There is a short dataset info stub string.
 
-ClerkMcpRuntime remembers clerk-mode MCP dependencies (db path, feedback, users, verifier, sticky store, host, port).
+ClerkMcpRuntime remembers clerk-mode MCP dependencies (db path, feedback, users,
+verifier, sticky store, host, port, optional SimilarityService).
 
-create_mcp_server(db_path, feedback_path, workspace_id default local, api_docs_path default None, host default 127.0.0.1, port default 8000):
+create_mcp_server(db_path, feedback_path, workspace_id default local, api_docs_path default None,
+                  host default 127.0.0.1, port default 8000, similarity default None):
   Open the core DB.
-  Remember unrestricted McpContext.
+  Remember unrestricted McpContext (including optional SimilarityService).
   Build FastMCP with unrestricted instructions.
   Register the six unrestricted tools and give back the server.
 
 create_mcp_server_from_config(config, api_docs_path default None, verifier default None):
+  Build SimilarityService from config when search_database is set.
   If unrestricted, build create_mcp_server from config paths.
   If clerk, build create_clerk_mcp_server with ClerkJwtVerifier or the given verifier.
 
-create_clerk_mcp_server(config, verifier, api_docs_path default None):
-  Remember ClerkMcpRuntime.
+create_clerk_mcp_server(config, verifier, api_docs_path default None, similarity default None):
+  Remember ClerkMcpRuntime (build similarity from config when omitted).
   Build FastMCP with locking-agnostic clerk instructions.
   Register list/switch plus gated analysis tools and give back the server.
 
 Unrestricted tools use the fixed workspace context.
+quail_exec passes context.similarity into exec_script.
 
 Clerk tools:
   Authenticate Bearer via override or request headers.
@@ -26,3 +30,4 @@ Clerk tools:
   quail_list_workspaces returns memberships (or only default when locked) and active_workspace_id.
   quail_switch_workspace binds an allowlisted workspace or errors when locked.
   Dataset/session/exec/feedback require an active workspace; unbound gets UNBOUND_REPAIR_HINT.
+  quail_exec passes runtime.similarity into exec_script.

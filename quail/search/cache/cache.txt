@@ -1,0 +1,6 @@
+get_cached_vector_blob(...):
+  Look up a unit-vector blob by workspace, dataset, version, profile_hash, and text_hash.
+  Give back None on miss or dimension mismatch.
+
+put_cached_vector(...):
+  Upsert a unit vector into the rebuildable search cache.

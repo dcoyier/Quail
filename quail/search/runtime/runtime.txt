@@ -1,0 +1,3 @@
+similarity_from_config(config):
+  When search_database is unset, give back None.
+  Otherwise open the search database and build SimilarityService with config providers.

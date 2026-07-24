@@ -18,8 +18,10 @@ manifest, imports declared CSV datasets, and serves MCP.
   sticky workspace via `quail_list_workspaces` / `quail_switch_workspace`
   ([`examples/quail.clerk.toml`](examples/quail.clerk.toml)).
 
-Feedback stays in a separate JSONL file. Lexical/Semantic and invitations are
-still deferred.
+Feedback stays in a separate JSONL file. Semantic similarity uses a per-dataset
+embedding profile (`[datasets.embedding]` plus `[providers.*]` and
+`core.search_database`) with Turso exact batch cosine (not ANN). Lexical FTS
+and invitations are still deferred.
 
 ## Operator path
 

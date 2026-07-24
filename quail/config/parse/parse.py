@@ -7,19 +7,32 @@ from pathlib import Path
 from typing import Any
 
 from quail.config.errors import ConfigError
-from quail.config.models import DatasetSpec, QuailConfig, UserSpec, WorkspaceSpec
+from quail.config.models import (
+    DatasetSpec,
+    EmbeddingProfile,
+    OllamaProvider,
+    OpenRouterProvider,
+    ProvidersConfig,
+    QuailConfig,
+    UserSpec,
+    WorkspaceSpec,
+)
 
-_ALLOWED_ROOT_UNRESTRICTED = frozenset({"core", "auth", "hosting", "datasets"})
-_ALLOWED_ROOT_CLERK = frozenset({"core", "auth", "hosting", "workspaces", "users"})
-_ALLOWED_CORE = frozenset({"database", "feedback"})
+_ALLOWED_ROOT_UNRESTRICTED = frozenset({"core", "auth", "hosting", "datasets", "providers"})
+_ALLOWED_ROOT_CLERK = frozenset({"core", "auth", "hosting", "workspaces", "users", "providers"})
+_ALLOWED_CORE = frozenset({"database", "feedback", "search_database"})
 _ALLOWED_AUTH_UNRESTRICTED = frozenset({"mode", "workspace"})
 _ALLOWED_AUTH_CLERK = frozenset({"mode", "clerk_domain"})
 _ALLOWED_HOSTING = frozenset({"bind", "port"})
-_ALLOWED_DATASET = frozenset({"id", "source", "name"})
+_ALLOWED_DATASET = frozenset({"id", "source", "name", "embedding"})
+_ALLOWED_EMBEDDING = frozenset({"provider", "model", "dimensions", "revision"})
 _ALLOWED_WORKSPACE = frozenset({"id", "datasets"})
 _ALLOWED_USER = frozenset(
     {"id", "clerk_user_id", "workspaces", "default_workspace", "lock_workspace"}
 )
+_ALLOWED_PROVIDERS = frozenset({"ollama", "openrouter"})
+_ALLOWED_OLLAMA = frozenset({"base_url"})
+_ALLOWED_OPENROUTER = frozenset({"base_url", "api_key"})
 
 
 def load_config(config_path: str | Path) -> QuailConfig:
@@ -65,6 +78,14 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
         _require_string(core, "feedback", label="core.feedback"),
         base=manifest_path.parent,
     )
+    search_database: Path | None = None
+    if "search_database" in core:
+        search_database = _resolve_path(
+            _require_string(core, "search_database", label="core.search_database"),
+            base=manifest_path.parent,
+        )
+        if search_database == database:
+            raise ConfigError("core.search_database must be distinct from core.database")
 
     hosting = _require_table(data, "hosting")
     _reject_unknown(hosting, _ALLOWED_HOSTING, label="hosting")
@@ -73,25 +94,34 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
     if not isinstance(port, int) or isinstance(port, bool) or not (1 <= port <= 65535):
         raise ConfigError("hosting.port must be an integer from 1 to 65535")
 
+    providers = _parse_providers(data.get("providers"))
+
     if mode == "unrestricted":
-        return _parse_unrestricted(
+        config = _parse_unrestricted(
             data,
             auth=auth,
             manifest_path=manifest_path,
             database=database,
             feedback=feedback,
+            search_database=search_database,
+            providers=providers,
             bind=bind,
             port=port,
         )
-    return _parse_clerk(
-        data,
-        auth=auth,
-        manifest_path=manifest_path,
-        database=database,
-        feedback=feedback,
-        bind=bind,
-        port=port,
-    )
+    else:
+        config = _parse_clerk(
+            data,
+            auth=auth,
+            manifest_path=manifest_path,
+            database=database,
+            feedback=feedback,
+            search_database=search_database,
+            providers=providers,
+            bind=bind,
+            port=port,
+        )
+    _validate_embedding_wiring(config)
+    return config
 
 
 def _parse_unrestricted(
@@ -101,6 +131,8 @@ def _parse_unrestricted(
     manifest_path: Path,
     database: Path,
     feedback: Path,
+    search_database: Path | None,
+    providers: ProvidersConfig,
     bind: str,
     port: int,
 ) -> QuailConfig:
@@ -125,6 +157,8 @@ def _parse_unrestricted(
         workspaces=(workspace,),
         users=(),
         datasets=datasets,
+        search_database=search_database,
+        providers=providers,
     )
 
 
@@ -135,6 +169,8 @@ def _parse_clerk(
     manifest_path: Path,
     database: Path,
     feedback: Path,
+    search_database: Path | None,
+    providers: ProvidersConfig,
     bind: str,
     port: int,
 ) -> QuailConfig:
@@ -168,8 +204,6 @@ def _parse_clerk(
             base=manifest_path.parent,
             label_prefix=f"{label}.datasets",
         )
-        # Dataset ids unique within a workspace (enforced above); also unique
-        # across deployment for simpler ops in this slice.
         for spec in datasets:
             if any(existing.dataset_id == spec.dataset_id for existing in flat_datasets):
                 raise ConfigError(f"Duplicate dataset id: {spec.dataset_id}")
@@ -245,6 +279,8 @@ def _parse_clerk(
         workspaces=tuple(workspaces),
         users=tuple(users),
         datasets=tuple(flat_datasets),
+        search_database=search_database,
+        providers=providers,
     )
 
 
@@ -275,15 +311,96 @@ def _parse_flat_datasets(
         name: str | None = None
         if "name" in entry:
             name = _require_string(entry, "name", label=f"{label}.name")
+        embedding: EmbeddingProfile | None = None
+        if "embedding" in entry:
+            embedding = _parse_embedding(entry["embedding"], label=f"{label}.embedding")
         datasets.append(
             DatasetSpec(
                 workspace_id=workspace_id,
                 dataset_id=dataset_id,
                 source=source,
                 name=name,
+                embedding=embedding,
             )
         )
     return tuple(datasets)
+
+
+def _parse_embedding(raw: object, *, label: str) -> EmbeddingProfile:
+    if not isinstance(raw, dict):
+        raise ConfigError(f"{label} must be a table")
+    _reject_unknown(raw, _ALLOWED_EMBEDDING, label=label)
+    provider = _require_string(raw, "provider", label=f"{label}.provider")
+    if provider not in {"ollama", "openrouter"}:
+        raise ConfigError(f'{label}.provider must be "ollama" or "openrouter"')
+    model = _require_string(raw, "model", label=f"{label}.model")
+    dimensions = raw.get("dimensions")
+    if not isinstance(dimensions, int) or isinstance(dimensions, bool) or dimensions <= 0:
+        raise ConfigError(f"{label}.dimensions must be an integer greater than 0")
+    revision = _require_string(raw, "revision", label=f"{label}.revision")
+    return EmbeddingProfile(
+        provider=provider,  # type: ignore[arg-type]
+        model=model,
+        dimensions=dimensions,
+        revision=revision,
+    )
+
+
+def _parse_providers(raw: object) -> ProvidersConfig:
+    if raw is None:
+        return ProvidersConfig()
+    if not isinstance(raw, dict):
+        raise ConfigError("[providers] must be a table")
+    _reject_unknown(raw, _ALLOWED_PROVIDERS, label="providers")
+    ollama: OllamaProvider | None = None
+    openrouter: OpenRouterProvider | None = None
+    if "ollama" in raw:
+        block = raw["ollama"]
+        if not isinstance(block, dict):
+            raise ConfigError("[providers.ollama] must be a table")
+        _reject_unknown(block, _ALLOWED_OLLAMA, label="providers.ollama")
+        base_url = _require_string(block, "base_url", label="providers.ollama.base_url")
+        ollama = OllamaProvider(base_url=_normalize_base_url(base_url))
+    if "openrouter" in raw:
+        block = raw["openrouter"]
+        if not isinstance(block, dict):
+            raise ConfigError("[providers.openrouter] must be a table")
+        _reject_unknown(block, _ALLOWED_OPENROUTER, label="providers.openrouter")
+        base_url = _require_string(block, "base_url", label="providers.openrouter.base_url")
+        api_key = _require_string(block, "api_key", label="providers.openrouter.api_key")
+        if not api_key.startswith("env:"):
+            raise ConfigError(
+                "providers.openrouter.api_key must be an env:NAME reference (not a raw secret)"
+            )
+        openrouter = OpenRouterProvider(
+            base_url=_normalize_base_url(base_url),
+            api_key=api_key,
+        )
+    return ProvidersConfig(ollama=ollama, openrouter=openrouter)
+
+
+def _validate_embedding_wiring(config: QuailConfig) -> None:
+    needed_providers: set[str] = set()
+    for spec in config.datasets:
+        if spec.embedding is None:
+            continue
+        needed_providers.add(spec.embedding.provider)
+    if not needed_providers:
+        return
+    if config.search_database is None:
+        raise ConfigError(
+            "core.search_database is required when any dataset declares [datasets.embedding]"
+        )
+    if "ollama" in needed_providers and config.providers.ollama is None:
+        raise ConfigError("[providers.ollama] is required for datasets using provider ollama")
+    if "openrouter" in needed_providers and config.providers.openrouter is None:
+        raise ConfigError(
+            "[providers.openrouter] is required for datasets using provider openrouter"
+        )
+
+
+def _normalize_base_url(value: str) -> str:
+    return value.rstrip("/")
 
 
 def _require_table(data: dict[str, Any], key: str) -> dict[str, Any]:

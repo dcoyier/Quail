@@ -6,9 +6,7 @@ import re as python_re
 
 from quail.analysis.errors import QuailSyntaxError
 
-ALLOWED_REGEX_FLAGS = int(
-    python_re.I | python_re.M | python_re.S | python_re.A | python_re.U
-)
+ALLOWED_REGEX_FLAGS = int(python_re.I | python_re.M | python_re.S | python_re.A | python_re.U)
 MAX_REGEX_PATTERN_BYTES = 16 * 1024
 
 
@@ -40,7 +38,5 @@ def require_regex_text(value: str, label: str) -> bytes:
         raise QuailSyntaxError(f"{label} must be a string")
     encoded = value.encode("utf-8")
     if len(encoded) > MAX_REGEX_PATTERN_BYTES:
-        raise QuailSyntaxError(
-            f"{label} cannot exceed {MAX_REGEX_PATTERN_BYTES} UTF-8 bytes"
-        )
+        raise QuailSyntaxError(f"{label} cannot exceed {MAX_REGEX_PATTERN_BYTES} UTF-8 bytes")
     return encoded

@@ -1,0 +1,7 @@
+EmbeddingClient is a protocol: embed_texts(texts) -> list[list[float]].
+
+build_embedding_client(profile, providers):
+  For ollama, require [providers.ollama] and build OllamaEmbedder.
+  For openrouter, require [providers.openrouter], resolve api_key env ref,
+  and build OpenRouterEmbedder.
+  Raise ProviderError when connectivity is missing.

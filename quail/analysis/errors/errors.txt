@@ -11,4 +11,5 @@ QuailFieldError means unknown field, kind mismatch, or attempted source-field mu
 Mostly raised later by the engine when resolving columns against real data.
 
 QuailRuntimeError means a data-dependent failure, unavailable search, timeout, or resource limit.
-Also used today for stubs that are not wired yet, such as retrieve or entry.value.
+It may remember an optional repair_hint for MCP diagnostics.
+Also used today for stubs that are not wired yet, such as Lexical.

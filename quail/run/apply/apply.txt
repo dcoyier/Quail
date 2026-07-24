@@ -1,7 +1,10 @@
 apply_config(config):
-  For each declared dataset, require the source CSV file exists.
+  Require each dataset source file exists.
   Open the core database.
-  Ensure every declared workspace exists.
-  Import each CSV into its workspace with activate true (idempotent on same content).
-  On failure, close the DB and raise.
+  When search_database is set, open the search database.
+  Ensure each workspace exists.
+  Import each declared CSV and activate it.
+  When a dataset declares embedding, pin that profile to the imported version_id.
+  Close the search database.
+  On failure, close the core database and raise.
   Give back the open CoreDb.

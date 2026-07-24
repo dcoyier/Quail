@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from quail.datasets.db import CoreDb
+from quail.search import SimilarityService
 
 
 DEFAULT_WORKSPACE_ID = "local"
@@ -19,3 +20,4 @@ class McpContext:
     workspace_id: str
     feedback_path: Path
     api_docs_path: Path
+    similarity: SimilarityService | None = None

@@ -1,0 +1,2 @@
+SearchError means a search database or Semantic scoring infrastructure failure.
+It may remember an optional repair_hint.

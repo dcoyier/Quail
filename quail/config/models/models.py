@@ -2,11 +2,58 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 AuthMode = Literal["unrestricted", "clerk"]
+EmbeddingProviderName = Literal["ollama", "openrouter"]
+
+
+@dataclass(frozen=True, slots=True)
+class EmbeddingProfile:
+    """Per-dataset embedding identity used for Semantic cache keys."""
+
+    provider: EmbeddingProviderName
+    model: str
+    dimensions: int
+    revision: str
+
+    def profile_hash(self) -> str:
+        payload = {
+            "provider": self.provider,
+            "model": self.model,
+            "dimensions": self.dimensions,
+            "revision": self.revision,
+        }
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class OllamaProvider:
+    """Deployment-wide Ollama connectivity."""
+
+    base_url: str
+
+
+@dataclass(frozen=True, slots=True)
+class OpenRouterProvider:
+    """Deployment-wide OpenRouter connectivity (api_key is an env: ref)."""
+
+    base_url: str
+    api_key: str
+
+
+@dataclass(frozen=True, slots=True)
+class ProvidersConfig:
+    """Optional embedding provider connectivity blocks."""
+
+    ollama: OllamaProvider | None = None
+    openrouter: OpenRouterProvider | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +64,7 @@ class DatasetSpec:
     dataset_id: str
     source: Path
     name: str | None
+    embedding: EmbeddingProfile | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,3 +103,5 @@ class QuailConfig:
     users: tuple[UserSpec, ...]
     # Flattened datasets for apply (every mode).
     datasets: tuple[DatasetSpec, ...]
+    search_database: Path | None = None
+    providers: ProvidersConfig = ProvidersConfig()

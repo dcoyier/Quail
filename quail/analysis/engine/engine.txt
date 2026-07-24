@@ -1,6 +1,7 @@
 QueryEngine evaluates plans for one Scope against catalog data and an in-memory overlay.
 
-It remembers db, scope, staged mutations, created fields, and value overlay.
+It remembers db, scope, optional SimilarityService, staged mutations, created fields,
+and value overlay.
 
 mutations:
   Give back the staged FieldCreate, ValueWrite, and ValueDelete tuple.
@@ -28,4 +29,6 @@ entry_value / entry_fields:
   Read through overlay then durable source or analysis values.
 
 Helpers evaluate groups and predicates, run expression pipelines (Value, AsText,
-AsNumber, regex, Slice, Length), and reject Lexical/Semantic as not wired yet.
+AsNumber, regex, Slice, Length, Semantic via SimilarityService), and reject Lexical
+as not wired yet. Ranking precomputes Semantic-terminal leaves in one Turso batch
+score pass, then combines composed rankings in host memory.

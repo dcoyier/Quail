@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from quail.analysis.engine import QueryEngine
+from quail.analysis.errors import QuailRuntimeError
 from quail.analysis.exec_host import dispatch_call, run_analysis
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
@@ -142,7 +143,7 @@ def test_lexical_not_wired(tmp_path: Path) -> None:
         matching = G0.where(score > 0)
 
         def driver(engine: QueryEngine, _prints) -> None:
-            with pytest.raises(Exception, match="not wired"):
+            with pytest.raises(QuailRuntimeError, match="Lexical is not wired"):
                 dispatch_call(engine, "count", (), {"group": matching})
 
         run_analysis(

@@ -90,8 +90,11 @@ def diagnostic_from_exception(
         "stable_error_code": stable_error_code,
         "message": message,
     }
-    if repair_hint is not None:
-        diagnostic["repair_hint"] = repair_hint
+    hint = repair_hint
+    if hint is None and isinstance(error, QuailRuntimeError):
+        hint = error.repair_hint
+    if hint is not None:
+        diagnostic["repair_hint"] = hint
     return diagnostic
 
 

@@ -1,0 +1,2 @@
+This package re-exports EmbeddingClient, OllamaEmbedder, OpenRouterEmbedder,
+ProviderError, build_embedding_client, and resolve_env_ref.

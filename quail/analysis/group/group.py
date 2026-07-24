@@ -46,9 +46,7 @@ class GroupExpr:
         composed = operator is not None or left is not None or right is not None
         form_count = sum([named, filtered, membered, composed])
         if form_count == 0:
-            raise QuailSyntaxError(
-                "GroupExpr requires name=, predicate=, members=, or composition"
-            )
+            raise QuailSyntaxError("GroupExpr requires name=, predicate=, members=, or composition")
         if form_count > 1:
             raise QuailSyntaxError("GroupExpr accepts exactly one population form")
 
@@ -72,9 +70,7 @@ class GroupExpr:
                     raise QuailSyntaxError("Group inversion accepts only a left GroupExpr")
             elif operator in ("and", "or"):
                 if not isinstance(right, GroupExpr) or right.scope != scope:
-                    raise QuailScopeError(
-                        "Group composition requires a compatible right GroupExpr"
-                    )
+                    raise QuailScopeError("Group composition requires a compatible right GroupExpr")
             else:
                 raise QuailSyntaxError("GroupExpr composition requires and, or, or not")
 
