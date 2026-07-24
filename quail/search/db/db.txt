@@ -6,6 +6,7 @@ close / context manager:
 
 open_search_db(path):
   Resolve path, require a file name, create parent directories.
-  Connect with turso, enable foreign keys, WAL, and full synchronous.
+  Connect with turso (experimental_features=index_method for native FTS),
+  enable foreign keys, WAL, and full synchronous.
   Apply search migrations.
   Give back a SearchDb.

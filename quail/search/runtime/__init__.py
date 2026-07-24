@@ -1,5 +1,13 @@
-"""Public exports for ``quail.search.runtime``."""
+from quail.search.runtime.runtime import (
+    SearchServices,
+    lexical_from_config,
+    search_services_from_config,
+    similarity_from_config,
+)
 
-from .runtime import similarity_from_config
-
-__all__ = ["similarity_from_config"]
+__all__ = [
+    "SearchServices",
+    "lexical_from_config",
+    "search_services_from_config",
+    "similarity_from_config",
+]

@@ -25,7 +25,7 @@ from quail.analysis.ranking import Ranking
 from quail.analysis.unit import Unit
 from quail.datasets.catalog import source_entries, source_values
 from quail.datasets.db import CoreDb
-from quail.search import SimilarityService
+from quail.search import LexicalService, SimilarityService
 from quail.session.models import FieldCreate, Scope, ValueDelete, ValueWrite
 from quail.session.overlay import analysis_fields, analysis_values, catalog_fields
 
@@ -39,10 +39,12 @@ class QueryEngine:
         scope: Scope,
         *,
         similarity: SimilarityService | None = None,
+        lexical: LexicalService | None = None,
     ) -> None:
         self._db = db
         self._scope = scope
         self._similarity = similarity
+        self._lexical = lexical
         self._mutations: list[FieldCreate | ValueWrite | ValueDelete] = []
         self._created_fields: dict[str, Field] = {}
         # (field_name, entry_id) -> value | _ABSENT sentinel for deletes in overlay
@@ -368,9 +370,21 @@ class QueryEngine:
                 return len(value)
             raise QuailRuntimeError("Length requires text, list, or None")
         if kind == "Lexical":
-            raise QuailRuntimeError(
-                "Lexical is not wired yet",
-                repair_hint="Lexical FTS lands in a later slice; use Semantic or filters for now.",
+            if self._lexical is None:
+                raise QuailRuntimeError(
+                    "Lexical search is not configured",
+                    repair_hint=(
+                        "Set core.search_database, re-run quail, then retry the whole exec."
+                    ),
+                )
+            return self._lexical.lexical_score(
+                workspace_id=self._scope.workspace_id,
+                dataset_id=self._scope.dataset_id,
+                version_id=self._scope.dataset_version_id,
+                corpus=value,
+                query_record=operation.params["query"],
+                input_aggregation=operation.params.get("input_aggregation"),
+                target_aggregation=operation.params.get("target_aggregation"),
             )
         if kind == "Semantic":
             if self._similarity is None:
@@ -464,24 +478,24 @@ class QueryEngine:
             and ranking.right is None
         ):
             return entry_ids
-        semantic_scores = self._precompute_semantic_ranking_scores(ranking, entry_ids)
+        search_scores = self._precompute_search_ranking_scores(ranking, entry_ids)
         scored = [
-            (self._score_ranking(ranking, entry_id, semantic_scores), entry_id)
+            (self._score_ranking(ranking, entry_id, search_scores), entry_id)
             for entry_id in entry_ids
         ]
         scored.sort(key=lambda item: (-item[0], entry_ids.index(item[1])))
         return [entry_id for _, entry_id in scored]
 
-    def _precompute_semantic_ranking_scores(
+    def _precompute_search_ranking_scores(
         self,
         ranking: Ranking,
         entry_ids: list[str],
     ) -> dict[int, dict[str, float | None]]:
-        """Batch-score every Semantic-terminal ranking leaf once."""
+        """Batch-score every Lexical/Semantic-terminal ranking leaf once."""
 
-        if self._similarity is None or not entry_ids:
+        if not entry_ids:
             return {}
-        expressions = _semantic_ranking_expressions(ranking)
+        expressions = _search_ranking_expressions(ranking)
         if not expressions:
             return {}
         cached: dict[int, dict[str, float | None]] = {}
@@ -501,32 +515,61 @@ class QueryEngine:
                     corpus_by_entry[entry_id] = self._read_field_value(
                         expression.root.name, entry_id
                     )
-            cached[key] = self._similarity.semantic_scores_for_entries(
-                workspace_id=self._scope.workspace_id,
-                dataset_id=self._scope.dataset_id,
-                version_id=self._scope.dataset_version_id,
-                corpus_by_entry=corpus_by_entry,
-                query_record=dict(operation.params["query"]),
-                input_aggregation=operation.params.get("input_aggregation"),
-                target_aggregation=operation.params.get("target_aggregation"),
-            )
+            if operation.kind == "Semantic":
+                if self._similarity is None:
+                    raise QuailRuntimeError(
+                        "Semantic search is not configured",
+                        repair_hint=(
+                            "Set core.search_database, [providers.*], and [datasets.embedding], "
+                            "re-run quail, then retry the whole exec."
+                        ),
+                    )
+                cached[key] = self._similarity.semantic_scores_for_entries(
+                    workspace_id=self._scope.workspace_id,
+                    dataset_id=self._scope.dataset_id,
+                    version_id=self._scope.dataset_version_id,
+                    corpus_by_entry=corpus_by_entry,
+                    query_record=dict(operation.params["query"]),
+                    input_aggregation=operation.params.get("input_aggregation"),
+                    target_aggregation=operation.params.get("target_aggregation"),
+                )
+            else:
+                if self._lexical is None:
+                    raise QuailRuntimeError(
+                        "Lexical search is not configured",
+                        repair_hint=(
+                            "Set core.search_database, re-run quail, then retry the whole exec."
+                        ),
+                    )
+                cached[key] = {
+                    entry_id: score
+                    for entry_id, score in self._lexical.lexical_scores_for_entries(
+                        workspace_id=self._scope.workspace_id,
+                        dataset_id=self._scope.dataset_id,
+                        version_id=self._scope.dataset_version_id,
+                        corpus_by_entry=corpus_by_entry,
+                        query_record=dict(operation.params["query"]),
+                        input_aggregation=operation.params.get("input_aggregation"),
+                        target_aggregation=operation.params.get("target_aggregation"),
+                    ).items()
+                }
         return cached
 
     def _score_ranking(
         self,
         ranking: Ranking,
         entry_id: str,
-        semantic_scores: dict[int, dict[str, float | None]] | None = None,
+        search_scores: dict[int, dict[str, float | None]] | None = None,
     ) -> float:
         if ranking.expression is not None:
             expression = ranking.expression
             if (
-                semantic_scores is not None
+                search_scores is not None
                 and expression.operations
-                and expression.operations[-1].kind == "Semantic"
-                and id(expression) in semantic_scores
+                and expression.operations[-1].kind in ("Lexical", "Semantic")
+                and id(expression) in search_scores
             ):
-                value = semantic_scores[id(expression)].get(entry_id)
+                value = search_scores[id(expression)].get(entry_id)
             else:
                 value = self._eval_expression(expression, entry_id)
             if value is None:
@@ -542,12 +585,12 @@ class QueryEngine:
             and ranking.left is not None
             and isinstance(ranking.right, Ranking)
         ):
-            return self._score_ranking(
-                ranking.left, entry_id, semantic_scores
-            ) + self._score_ranking(ranking.right, entry_id, semantic_scores)
+            return self._score_ranking(ranking.left, entry_id, search_scores) + self._score_ranking(
+                ranking.right, entry_id, search_scores
+            )
         if ranking.operator == "*" and ranking.left is not None:
             weight = float(ranking.right)
-            return self._score_ranking(ranking.left, entry_id, semantic_scores) * weight
+            return self._score_ranking(ranking.left, entry_id, search_scores) * weight
         raise QuailSyntaxError("Unsupported ranking form")
 
     def _apply_limit(self, items: list[Any], limit: int, order: str) -> list[Any]:
@@ -564,19 +607,22 @@ class QueryEngine:
         return items[start : start + limit]
 
 
-def _semantic_ranking_expressions(ranking: Ranking) -> list[Expression]:
+def _search_ranking_expressions(ranking: Ranking) -> list[Expression]:
     found: list[Expression] = []
-    _collect_semantic_ranking_expressions(ranking, found)
+    _collect_search_ranking_expressions(ranking, found)
     return found
 
 
-def _collect_semantic_ranking_expressions(ranking: Ranking, found: list[Expression]) -> None:
+def _collect_search_ranking_expressions(ranking: Ranking, found: list[Expression]) -> None:
     if ranking.expression is not None:
         expression = ranking.expression
-        if expression.operations and expression.operations[-1].kind == "Semantic":
+        if expression.operations and expression.operations[-1].kind in (
+            "Lexical",
+            "Semantic",
+        ):
             found.append(expression)
         return
     if ranking.left is not None:
-        _collect_semantic_ranking_expressions(ranking.left, found)
+        _collect_search_ranking_expressions(ranking.left, found)
     if isinstance(ranking.right, Ranking):
-        _collect_semantic_ranking_expressions(ranking.right, found)
+        _collect_search_ranking_expressions(ranking.right, found)

@@ -414,7 +414,7 @@ def test_semantic_without_pin(tmp_path: Path) -> None:
     search.close()
 
 
-def test_lexical_still_not_wired(tmp_path: Path) -> None:
+def test_lexical_requires_search_database(tmp_path: Path) -> None:
     csv_path = tmp_path / "notes.csv"
     csv_path.write_text("id,body\ne1,hello\n", encoding="utf-8")
     db = open_core_db(tmp_path / "core.turso")
@@ -430,7 +430,7 @@ def test_lexical_still_not_wired(tmp_path: Path) -> None:
                 {"unit": Expression(Field("body"), Lexical("hello")), "group": G0},
             )
 
-        with pytest.raises(QuailRuntimeError, match="Lexical is not wired"):
+        with pytest.raises(QuailRuntimeError, match="Lexical search is not configured"):
             run_analysis(
                 db,
                 session_id=session.id,

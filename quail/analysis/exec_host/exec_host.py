@@ -17,7 +17,7 @@ from quail.analysis.planner import (
 from quail.analysis.worker.client import run_worker_script
 from quail.analysis.worker.protocol import ApiCall
 from quail.datasets.db import CoreDb
-from quail.search import SimilarityService
+from quail.search import LexicalService, SimilarityService
 from quail.session.overlay import commit_overlay, ensure_scope, resolve_scope
 
 
@@ -74,12 +74,13 @@ def run_analysis(
     expected_revision: int,
     driver: Callable[[QueryEngine, PrintBuffer], None],
     similarity: SimilarityService | None = None,
+    lexical: LexicalService | None = None,
 ) -> ExecOutcome:
     """Run a host driver against a QueryEngine; commit overlay only on success."""
 
     scope = resolve_scope(db, session_id, dataset_id)
     ensure_scope(db, scope)
-    engine = QueryEngine(db, scope, similarity=similarity)
+    engine = QueryEngine(db, scope, similarity=similarity, lexical=lexical)
     prints = PrintBuffer()
     driver(engine, prints)
     revision = commit_overlay(
@@ -99,12 +100,13 @@ def exec_script(
     expected_revision: int,
     code: str,
     similarity: SimilarityService | None = None,
+    lexical: LexicalService | None = None,
 ) -> ExecOutcome:
     """Run quail_exec code in a worker subprocess; commit overlay on success."""
 
     scope = resolve_scope(db, session_id, dataset_id)
     ensure_scope(db, scope)
-    engine = QueryEngine(db, scope, similarity=similarity)
+    engine = QueryEngine(db, scope, similarity=similarity, lexical=lexical)
 
     def on_api_call(call: ApiCall) -> Any:
         return dispatch_call(engine, call.method, call.args, call.kwargs)

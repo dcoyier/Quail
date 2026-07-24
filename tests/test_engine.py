@@ -136,14 +136,14 @@ def test_failed_driver_does_not_commit(tmp_path: Path) -> None:
         assert all(field.kind == "source" for field in catalog_fields(db, scope))
 
 
-def test_lexical_not_wired(tmp_path: Path) -> None:
+def test_lexical_requires_search_database(tmp_path: Path) -> None:
     db, session = _seed(tmp_path)
     with db:
         score = Expression(Field("body"), Lexical("hydrangea care"))
         matching = G0.where(score > 0)
 
         def driver(engine: QueryEngine, _prints) -> None:
-            with pytest.raises(QuailRuntimeError, match="Lexical is not wired"):
+            with pytest.raises(QuailRuntimeError, match="Lexical search is not configured"):
                 dispatch_call(engine, "count", (), {"group": matching})
 
         run_analysis(

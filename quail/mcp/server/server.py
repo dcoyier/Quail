@@ -37,7 +37,7 @@ from quail.mcp.results import (
     validate_time_window,
 )
 from quail.mcp.sticky import StickyWorkspaceStore
-from quail.search import SimilarityService, similarity_from_config
+from quail.search import LexicalService, SimilarityService, search_services_from_config
 from quail.session import create_session, get_session
 from quail.session.sessions import require_active_session
 
@@ -64,6 +64,7 @@ class ClerkMcpRuntime:
     host: str
     port: int
     similarity: SimilarityService | None = None
+    lexical: LexicalService | None = None
 
 
 def create_mcp_server(
@@ -75,6 +76,7 @@ def create_mcp_server(
     host: str = "127.0.0.1",
     port: int = 8000,
     similarity: SimilarityService | None = None,
+    lexical: LexicalService | None = None,
 ) -> FastMCP:
     """Build an unrestricted loopback FastMCP app with the six core tools."""
 
@@ -86,6 +88,7 @@ def create_mcp_server(
         feedback_path=Path(feedback_path),
         api_docs_path=docs_path,
         similarity=similarity,
+        lexical=lexical,
     )
     server = FastMCP(
         "quail",
@@ -105,7 +108,9 @@ def create_mcp_server_from_config(
 ) -> FastMCP:
     """Build MCP from slim config (unrestricted or Clerk)."""
 
-    similarity = similarity_from_config(config)
+    services = search_services_from_config(config)
+    similarity = None if services is None else services.similarity
+    lexical = None if services is None else services.lexical
     if config.auth_mode == "unrestricted":
         assert config.workspace_id is not None
         return create_mcp_server(
@@ -116,6 +121,7 @@ def create_mcp_server_from_config(
             host=config.bind,
             port=config.port,
             similarity=similarity,
+            lexical=lexical,
         )
     assert config.clerk_domain is not None
     return create_clerk_mcp_server(
@@ -123,6 +129,7 @@ def create_mcp_server_from_config(
         api_docs_path=api_docs_path,
         verifier=verifier or ClerkJwtVerifier(config.clerk_domain),
         similarity=similarity,
+        lexical=lexical,
     )
 
 
@@ -132,10 +139,16 @@ def create_clerk_mcp_server(
     verifier: TokenVerifier,
     api_docs_path: str | Path | None = None,
     similarity: SimilarityService | None = None,
+    lexical: LexicalService | None = None,
 ) -> FastMCP:
     """Build Clerk-authenticated MCP with list/switch workspace tools."""
 
     docs_path = Path(api_docs_path) if api_docs_path is not None else _DEFAULT_API_DOCS
+    if similarity is None and lexical is None:
+        services = search_services_from_config(config)
+        if services is not None:
+            similarity = services.similarity
+            lexical = services.lexical
     runtime = ClerkMcpRuntime(
         db_path=config.database,
         feedback_path=config.feedback,
@@ -145,7 +158,8 @@ def create_clerk_mcp_server(
         sticky=StickyWorkspaceStore(),
         host=config.bind,
         port=config.port,
-        similarity=similarity if similarity is not None else similarity_from_config(config),
+        similarity=similarity,
+        lexical=lexical,
     )
     # Base instructions; locked addendum applied when principal is known at tool-time
     # via repair hints / list behavior. Process-level instructions stay locking-agnostic.
@@ -268,6 +282,7 @@ def _register_unrestricted_tools(server: FastMCP, context: McpContext) -> None:
                 expected_revision=session.state_revision,
                 code=code,
                 similarity=context.similarity,
+                lexical=context.lexical,
             )
         except Exception as error:
             return error_result(
@@ -525,6 +540,7 @@ def _register_clerk_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
                     expected_revision=session.state_revision,
                     code=code,
                     similarity=runtime.similarity,
+                    lexical=runtime.lexical,
                 )
         except Exception as error:
             return error_result(

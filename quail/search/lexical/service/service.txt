@@ -1,0 +1,47 @@
+There is a match-work budget of 5_000_000 documents.
+
+LexicalService remembers a SearchDb.
+
+lexical_score(...):
+  Delegate to lexical_scores_for_entries for a single synthetic entry and give
+  back that score (default 0.0).
+
+lexical_scores_for_entries(workspace_id, dataset_id, version_id, corpus_by_entry,
+                           query_record, input_aggregation, target_aggregation):
+  Resolve LiteralText / LiteralTextList query strings; reject EntryGroup /
+  EntryList in this slice.
+  Collect corpus segment texts per entry; empty corpora score 0.0.
+  Resolve or create the per-version FTS corpus, ensure those segments, then
+  score with Turso fts_match / fts_score.
+  Aggregate input over segments and target over queries with total or avg.
+  Give back entry_id -> float.
+
+_score_entries:
+  Parse queries, expand prefixes, then use the simple or prefix scoring path.
+  When target_aggregation is avg, divide by the query count.
+
+_score_simple:
+  For each compiled query, select matching candidate documents with named
+  :query parameters and accumulate fts_score totals.
+  Apply input_aggregation total or avg using segment counts.
+
+_score_with_prefixes:
+  Match with a predicate that may use prefix_text, then score positive leaves
+  through _expression_scores / _positive_scores.
+  NOT filters candidates only; it does not subtract score.
+
+_expression_scores / _positive_scores / _matching_document_ids /
+_document_scores / _merge_scores / _match_predicate / _positive_queries:
+  Port the Turso prefix-path scoring helpers: match predicates, positive leaf
+  score merges on text and prefix_text, and document-id filters.
+
+_corpus_texts(corpus):
+  Give back list[str] segments, None for empty/null, or raise when a list has
+  non-text values.
+
+_target_queries(query_record):
+  Give back LiteralText / LiteralTextList strings.
+  Raise for EntryGroup / EntryList and empty targets.
+
+_finite_nonneg(value):
+  Require a finite non-negative number or raise.

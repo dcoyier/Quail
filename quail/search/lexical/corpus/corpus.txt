@@ -1,0 +1,29 @@
+There is a safe table-name pattern quail_lex_[dt]_<32 hex> and a default
+prefix-term budget of 4096.
+
+LexicalCorpus remembers doc_table and terms_table for one version.
+
+resolve_corpus(search, workspace_id, dataset_id, version_id):
+  Look up quail_lexical_corpus.
+  If present, require safe table names and give back LexicalCorpus.
+  Otherwise hash the scope to table names, create the document and terms
+  tables, create dual whitespace FTS indexes on text and prefix_text, create
+  the entry index, register the corpus row, and give back LexicalCorpus.
+  Raise QuailRuntimeError with a rebuild hint when creation fails.
+
+ensure_entry_segments(search, corpus, entry_segments):
+  For each entry, delete existing document rows, prepare text and prefix text,
+  insert segments, and insert-or-ignore prefix dictionary terms.
+  Give back entry_id -> segment count.
+  Raise QuailRuntimeError when indexing fails.
+
+expand_prefixes(search, corpus, prefixes, max_prefix_terms default 4096):
+  Range-scan the terms table for each prefix under the remaining budget.
+  Raise when expansion would exceed the request-wide term limit.
+  Give back prefix -> indexed_term tuple.
+
+_require_safe_table(name):
+  Raise when the name does not match the safe pattern.
+
+validate_table_ident(name):
+  Require a safe table name and give it back for SQL interpolation.

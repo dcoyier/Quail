@@ -21,7 +21,7 @@ _STAGE_TABLE = "quail_semantic_score_stage"
 
 @dataclass(slots=True)
 class SimilarityService:
-    """Embed + cache + Turso exact cosine for Semantic(); Lexical stays elsewhere."""
+    """Embed + cache + Turso exact cosine for Semantic()."""
 
     search: SearchDb
     providers: ProvidersConfig

@@ -1,0 +1,51 @@
+There is a max term byte budget of 40, a max query byte budget of 64 KiB,
+a max leaf budget of 1024, and a max phrase token budget of 4096.
+There is a hashed-term prefix called !sha256: and a no-match sentinel called
+!quail:no-match!.
+
+LeafKind is term, phrase, or prefix.
+Leaf remembers kind and terms.
+BooleanExpression remembers required leaves and excluded leaves.
+OrExpression remembers child expressions.
+Expression is a Leaf, BooleanExpression, or OrExpression.
+
+prepare_text(text):
+  Split on alnum/combining runs, NFC-normalize and lower each term, hash long
+  terms, and give back the whitespace-joined indexed text plus term pairs.
+
+prepare_prefix_text(terms):
+  Truncate each normalized term under the byte budget and give back the joined
+  prefix text plus dictionary pairs.
+
+tokenize(text):
+  Prepare the text and give back the whitespace-split indexed tokens.
+
+normalize_term(source):
+  Stream-safe NFC, lower, then NFC again.
+
+parse_queries(queries):
+  Require leaf and byte budgets.
+  Parse each query string and give back Expression values.
+  Raise QuailRuntimeError on budget or syntax failures.
+
+compile_query(expression, prefixes):
+  Compile a Leaf, BooleanExpression, or OrExpression into a Turso FTS query
+  string. Expand PREFIX leaves from the prefixes map; empty expansion becomes
+  the no-match sentinel.
+
+collect_prefixes(expressions):
+  Give back sorted PREFIX leaf strings.
+
+quote_term(value):
+  Quote a term for FTS. Raise when quotes or backslashes appear.
+
+_parse / _lex / _lex_phrase / _lex_word:
+  Lex terms, phrases, AND, and NOT.
+  Reject NUL, bare wildcards, explicit OR, wildcards inside phrases, and
+  pure-negative queries.
+  Charge leaf and phrase budgets.
+
+_Parser:
+  parse_or builds implicit OrExpression from adjacent leaves.
+  parse_explicit builds BooleanExpression from AND / NOT.
+  parse_operand requires a leaf.

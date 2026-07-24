@@ -7,3 +7,4 @@ McpContext remembers:
   feedback_path
   api_docs_path
   similarity (optional SimilarityService)
+  lexical (optional LexicalService)

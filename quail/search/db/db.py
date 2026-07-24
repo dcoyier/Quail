@@ -51,7 +51,11 @@ def open_search_db(path: str | Path) -> SearchDb:
     if db_path.suffix == "":
         raise SearchError("Search database path must include a file name")
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = turso.connect(str(db_path), isolation_level=None)
+    connection = turso.connect(
+        str(db_path),
+        isolation_level=None,
+        experimental_features="index_method",
+    )
     try:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA journal_mode = WAL")

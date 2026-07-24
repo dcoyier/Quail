@@ -274,7 +274,9 @@ Semantic(query, input_aggregation=None, target_aggregation=None)
 Aggregations: `"total"`, `"avg"`, or `None` (= total).
 
 - **Lexical:** `score > 0` means “matched”; string queries support simple
-  query syntax (phrases, `AND` / `NOT`, `term*`). Scores are corpus-relative.
+  query syntax (phrases, `AND` / `NOT`, `term*`). Scores are corpus-relative
+  (Turso native FTS). Text and `list[str]` queries work in this slice;
+  entry-group / Entry-list targets are deferred.
 - **Semantic:** exact cosine similarity under the dataset embedding profile
   (configured outside this API; scored in Turso, not approximate ANN). If search
   isn’t available, you get a repairable runtime diagnostic — fix config and

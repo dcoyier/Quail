@@ -1,3 +1,8 @@
-similarity_from_config(config):
-  When search_database is unset, give back None.
-  Otherwise open the search database and build SimilarityService with config providers.
+SearchServices holds one SearchDb plus SimilarityService and LexicalService.
+
+search_services_from_config(config):
+  If core.search_database is unset, give back None.
+  Otherwise open the search database once and build both services.
+
+similarity_from_config / lexical_from_config:
+  Convenience wrappers that return one service (or None).

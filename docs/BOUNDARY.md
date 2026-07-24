@@ -98,7 +98,9 @@ never writes the TOML.
 - Connector author SDK
 - Search **infrastructure**: Semantic uses per-dataset embedding profiles
   (Ollama/OpenRouter), a rebuildable Turso vector cache, and **exact** batch
-  cosine via `-vector_distance_dot`. ANN is deferred. Lexical FTS still deferred.
+  cosine via `-vector_distance_dot`. Lexical uses Turso **native FTS** in the
+  same rebuildable search DB (in-process; text/`list[str]` query targets). ANN,
+  lexical workers/artifact roots, and EntryGroup Lexical targets are deferred.
 - Hosting flourishes (ngrok, etc.)
 
 ## Build order (stop if you cannot explain the step)
@@ -126,9 +128,10 @@ never writes the TOML.
 10. Connector SDK (later)
 
 Semantic scoring is **Turso exact batch cosine** (per-dataset embedding profile,
-Ollama/OpenRouter HTTP, rebuildable vector cache, `-vector_distance_dot`). ANN
-and Lexical FTS remain deferred. Lexical/Semantic remain part of the public
-contract in `api.md`.
+Ollama/OpenRouter HTTP, rebuildable vector cache, `-vector_distance_dot`).
+Lexical scoring is **Turso native FTS** in the shared search DB (in-process).
+ANN and EntryGroup/Entry-list search targets remain deferred. Lexical/Semantic
+remain part of the public contract in `api.md`.
 
 ## Working agreement
 
