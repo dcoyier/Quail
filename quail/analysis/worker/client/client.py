@@ -50,6 +50,7 @@ def run_worker_script(
     bindings: Mapping[str, EncodedBinding] | None = None,
     limits: ExecLimits | None = None,
     rss_sampler: Callable[[int], int | None] | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> WorkerResult:
     """Spawn the worker, feed execute, handle api_call, return printed_output."""
 
@@ -57,6 +58,7 @@ def run_worker_script(
         raise QuailSyntaxError("code must be a string")
     active = limits if limits is not None else STANDARD_LIMITS
     sample_rss = rss_sampler or _rss_bytes
+    host_cancel = cancel_event
 
     site_packages = _site_packages_path()
     bootstrap = (
@@ -91,10 +93,15 @@ def run_worker_script(
     wall_exceeded = threading.Event()
     memory_exceeded = threading.Event()
 
+    def _signal_cancel() -> None:
+        if host_cancel is not None:
+            host_cancel.set()
+
     def _watch_wall() -> None:
         if done.wait(active.wall_seconds):
             return
         wall_exceeded.set()
+        _signal_cancel()
         _kill_process_group(process)
 
     def _watch_memory() -> None:
@@ -104,6 +111,7 @@ def run_worker_script(
             rss = sample_rss(process.pid)
             if rss is not None and rss > active.max_memory_bytes:
                 memory_exceeded.set()
+                _signal_cancel()
                 _kill_process_group(process)
                 return
 
@@ -161,6 +169,13 @@ def run_worker_script(
                         "result": encode_value(result),
                     }
                 except Exception as error:  # noqa: BLE001 - RPC boundary
+                    _raise_if_resource_exceeded(
+                        wall_exceeded=wall_exceeded,
+                        memory_exceeded=memory_exceeded,
+                        limits=active,
+                    )
+                    if host_cancel is not None and host_cancel.is_set():
+                        raise
                     response = {
                         "type": "api_result",
                         "id": call.id,

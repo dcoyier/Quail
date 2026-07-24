@@ -60,6 +60,7 @@ def open_search_db(path: str | Path) -> SearchDb:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA journal_mode = WAL")
         connection.execute("PRAGMA synchronous = FULL")
+        connection.execute("PRAGMA busy_timeout = 5000")
         _apply_migrations(connection)
     except Exception:
         connection.close()

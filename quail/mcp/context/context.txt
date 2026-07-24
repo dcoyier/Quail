@@ -2,9 +2,9 @@ There is a default workspace id called local.
 
 McpContext is the process-fixed unrestricted MCP context.
 McpContext remembers:
-  db
+  db_path
   workspace_id
   feedback_path
   api_docs_path
-  similarity (optional SimilarityService)
-  lexical (optional LexicalService)
+  search_runtime (optional SearchRuntime with pooled SearchDb)
+Tools open CoreDb per call from db_path; exec checks out SearchDb from the pool.

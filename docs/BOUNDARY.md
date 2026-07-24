@@ -87,6 +87,21 @@ run. The CLI never writes the TOML.
 simultaneous `quail_exec` slots for the whole process. Independent of
 `[search.warm]` embed concurrency. Restart to apply.
 
+### MCP concurrency (host)
+
+- Blocking MCP tool bodies run via `anyio.to_thread` so the asyncio loop stays
+  responsive while Turso/file/network work runs.
+- Each tool invocation opens its own **CoreDb** connection (no process-wide
+  shared core handle on unrestricted).
+- Each in-flight `quail_exec` checks out its own **SearchDb** from a pool sized
+  to `max_concurrent_executions` (Lexical + Semantic for that exec share only
+  that handle).
+- `time_window` wall/memory limits set a cancel event, kill the analysis worker,
+  and best-effort `connection.interrupt()` on that exec’s core/search
+  connections. Mid-query interrupt is not hard real-time.
+- Overlapping `quail_exec` on the same `session_id` fails fast with
+  `session_busy` (enforced in-process lock).
+
 Clerk mode also serves MCP OAuth discovery so clients can sign in via Clerk:
 protected-resource metadata for `{public_base_url}/mcp` and a proxied
 `/.well-known/oauth-authorization-server`. Optional

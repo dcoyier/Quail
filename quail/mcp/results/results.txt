@@ -22,4 +22,5 @@ diagnostic_from_exception(error, repair_hint default None):
 classify_exception(error):
   Map Quail, Auth, Session, Dataset, and ValueError types to stable codes.
   QuailServerBusyError becomes QuailRuntimeError / server_busy.
+  QuailSessionBusyError becomes QuailRuntimeError / session_busy.
   Unknown errors become InternalError / internal_error.

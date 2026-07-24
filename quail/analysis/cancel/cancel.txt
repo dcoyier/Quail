@@ -1,0 +1,11 @@
+raise_if_cancelled(cancel_event, limits, wall_exceeded):
+  No-op when cancel_event is unset.
+  Prefer wall_timeout_error when wall_exceeded is set and limits are known.
+  Otherwise raise QuailRuntimeError for a generic host cancel.
+
+interrupt_connections_on_cancel(connections, cancel_event):
+  Context manager. When cancel_event is None, just yield.
+  Otherwise start a daemon watcher that waits for cancel_event, then calls
+  connection.interrupt() on each target (best-effort; suppress failures).
+  On exit, mark completed and join the watcher. Do not set cancel_event on
+  success (caller owns that Event).

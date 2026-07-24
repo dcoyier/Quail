@@ -22,7 +22,7 @@ _SESSION_RULES = (
     "Sessions are workspace-scoped: after quail_switch_workspace, call "
     "quail_start_session again and do not reuse a prior session_id. "
     "Run only one quail_exec in flight per session_id (serial chaining is fine; "
-    "parallel execs on the same session risk SessionConflictError)."
+    "parallel execs on the same session fail with session_busy)."
 )
 
 

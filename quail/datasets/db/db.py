@@ -55,6 +55,7 @@ def open_core_db(path: str | Path) -> CoreDb:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA journal_mode = WAL")
         connection.execute("PRAGMA synchronous = FULL")
+        connection.execute("PRAGMA busy_timeout = 5000")
         enabled = int(connection.execute("PRAGMA foreign_keys").fetchone()[0])
         if enabled != 1:
             raise DatasetError("Turso did not enable foreign-key enforcement")

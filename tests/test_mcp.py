@@ -54,6 +54,7 @@ def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
     assert "quail_get_dataset_info" in server.instructions
     assert "quail_get_api_docs" in server.instructions
     assert "provide_feedback" in server.instructions
+    assert "session_id" in (server.instructions or "")
 
     async def run() -> None:
         tools = {tool.name: tool for tool in await server.list_tools()}

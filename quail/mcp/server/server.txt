@@ -1,30 +1,32 @@
 ClerkMcpRuntime remembers clerk-mode MCP dependencies (db path, feedback, users,
-verifier, sticky store, host, port, optional SimilarityService and LexicalService).
+verifier, sticky store, host, port, optional SearchRuntime).
 
 create_mcp_server(db_path, feedback_path, workspace_id default local, api_docs_path default None,
                   host default 127.0.0.1, port default 8000,
-                  similarity/lexical default None):
-  Open the core DB.
-  Remember unrestricted McpContext (including optional search services).
+                  search_runtime default None):
+  Remember unrestricted McpContext with db_path (not a live CoreDb) and optional
+  SearchRuntime.
   Build FastMCP with unrestricted instructions.
-  Register the six unrestricted tools and give back the server.
+  Register the six unrestricted async tools (bodies via run_blocking) and give
+  back the server.
 
 create_mcp_server_from_config(config, api_docs_path default None, verifier default None):
   Configure process-wide exec slots from config.max_concurrent_executions.
-  Build SearchServices from config when search_database is set.
+  Build SearchRuntime from config when search_database is set.
   If unrestricted, build create_mcp_server from config paths.
   If clerk, build create_clerk_mcp_server with ClerkJwtVerifier or the given verifier.
 
 create_clerk_mcp_server(config, verifier, api_docs_path default None,
-                        similarity/lexical default None):
-  Remember ClerkMcpRuntime (build search services from config when both omitted).
+                        search_runtime default None):
+  Remember ClerkMcpRuntime (build search runtime from config when omitted).
   Build FastMCP with locking-agnostic clerk instructions, MCP AuthSettings
   (Clerk issuer + public /mcp resource), and ClerkAccessTokenVerifier.
   Register /.well-known/oauth-authorization-server proxy for older clients.
   Register list/switch plus gated analysis tools and give back the server.
 
-Unrestricted tools use the fixed workspace context.
-quail_exec passes context.similarity and context.lexical into exec_script.
+All tools are async and offload blocking work with run_blocking.
+Unrestricted tools open CoreDb per call from context.db_path.
+quail_exec passes context.search_runtime into exec_script (pool checkout per exec).
 
 Clerk tools:
   Authenticate Bearer via override or request headers.
@@ -32,4 +34,4 @@ Clerk tools:
   quail_list_workspaces returns memberships (or only default when locked) and active_workspace_id.
   quail_switch_workspace binds an allowlisted workspace or errors when locked.
   Dataset/session/exec/feedback require an active workspace; unbound gets UNBOUND_REPAIR_HINT.
-  quail_exec passes runtime.similarity and runtime.lexical into exec_script.
+  quail_exec passes runtime.search_runtime into exec_script.

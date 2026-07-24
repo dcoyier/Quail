@@ -1,0 +1,4 @@
+run_blocking(fn):
+  Await fn() via anyio.to_thread.run_sync with abandon_on_cancel=False.
+  Used by async MCP tool handlers so Turso/file/network work does not block
+  the asyncio event loop.

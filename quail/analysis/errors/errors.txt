@@ -15,3 +15,6 @@ It may remember an optional repair_hint for MCP diagnostics.
 
 QuailServerBusyError means the process is at its concurrent quail_exec slot limit.
 It is a QuailRuntimeError with stable_error_code server_busy.
+
+QuailSessionBusyError means another quail_exec already holds this session_id.
+It is a QuailRuntimeError with stable_error_code session_busy.

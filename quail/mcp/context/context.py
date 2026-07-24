@@ -5,8 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from quail.datasets.db import CoreDb
-from quail.search import LexicalService, SimilarityService
+from quail.search.runtime import SearchRuntime
 
 
 DEFAULT_WORKSPACE_ID = "local"
@@ -14,11 +13,10 @@ DEFAULT_WORKSPACE_ID = "local"
 
 @dataclass(slots=True)
 class McpContext:
-    """Process-fixed workspace plus open core DB and feedback path."""
+    """Process-fixed workspace, core DB path, feedback path, optional search runtime."""
 
-    db: CoreDb
+    db_path: Path
     workspace_id: str
     feedback_path: Path
     api_docs_path: Path
-    similarity: SimilarityService | None = None
-    lexical: LexicalService | None = None
+    search_runtime: SearchRuntime | None = None

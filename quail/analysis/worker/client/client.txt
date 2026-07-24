@@ -4,14 +4,17 @@ WorkerResult remembers:
   deleted_bindings
 
 run_worker_script(code, on_api_call, bindings default None, limits default None,
-                  rss_sampler default None):
+                  rss_sampler default None, cancel_event default None):
   Use STANDARD_LIMITS when limits is omitted.
   Spawn a cleared-env python -I -S -B -u subprocess.
   Put site-packages (for re2) and the repo root on sys.path.
   Send an execute message with the code, bindings, cpu_seconds, and
   max_memory_bytes.
-  Watch wall-clock and worker RSS; kill the process group on exceed.
+  Watch wall-clock and worker RSS; on exceed set cancel_event (when given)
+  and kill the process group.
   For each api_call, invoke on_api_call and reply with api_result.
+  Host cancel/wall/memory errors from on_api_call are re-raised (not wrapped
+  as worker api_result failures).
   When result arrives ok, give back WorkerResult with binding deltas.
   On wall, CPU, or memory exceed, raise QuailRuntimeError with repair_hint.
   On worker failure or protocol errors, raise.

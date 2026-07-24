@@ -6,6 +6,7 @@ from .errors import (
     QuailRuntimeError,
     QuailScopeError,
     QuailServerBusyError,
+    QuailSessionBusyError,
     QuailSyntaxError,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "QuailRuntimeError",
     "QuailScopeError",
     "QuailServerBusyError",
+    "QuailSessionBusyError",
     "QuailSyntaxError",
 ]

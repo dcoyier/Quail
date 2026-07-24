@@ -36,6 +36,7 @@ from quail.mcp.oauth import (
     build_clerk_auth_settings,
     register_clerk_oauth_discovery,
 )
+from quail.mcp.offload import run_blocking
 from quail.mcp.results import (
     error_result,
     success_printed_output,
@@ -43,7 +44,7 @@ from quail.mcp.results import (
     validate_time_window,
 )
 from quail.mcp.sticky import StickyWorkspaceStore
-from quail.search import LexicalService, SimilarityService, search_services_from_config
+from quail.search.runtime import SearchRuntime, search_runtime_from_config
 from quail.session import create_session, get_session
 from quail.session.sessions import require_active_session
 
@@ -74,8 +75,7 @@ class ClerkMcpRuntime:
     sticky: StickyWorkspaceStore
     host: str
     port: int
-    similarity: SimilarityService | None = None
-    lexical: LexicalService | None = None
+    search_runtime: SearchRuntime | None = None
 
 
 def create_mcp_server(
@@ -86,20 +86,17 @@ def create_mcp_server(
     api_docs_path: str | Path | None = None,
     host: str = "127.0.0.1",
     port: int = 8000,
-    similarity: SimilarityService | None = None,
-    lexical: LexicalService | None = None,
+    search_runtime: SearchRuntime | None = None,
 ) -> FastMCP:
     """Build an unrestricted loopback FastMCP app with the six core tools."""
 
     docs_path = Path(api_docs_path) if api_docs_path is not None else _DEFAULT_API_DOCS
-    db = open_core_db(db_path)
     context = McpContext(
-        db=db,
+        db_path=Path(db_path).expanduser().resolve(),
         workspace_id=workspace_id,
         feedback_path=Path(feedback_path),
         api_docs_path=docs_path,
-        similarity=similarity,
-        lexical=lexical,
+        search_runtime=search_runtime,
     )
     server = FastMCP(
         "quail",
@@ -122,9 +119,7 @@ def create_mcp_server_from_config(
     from quail.analysis.admission import configure_execution_slots
 
     configure_execution_slots(config.max_concurrent_executions)
-    services = search_services_from_config(config)
-    similarity = None if services is None else services.similarity
-    lexical = None if services is None else services.lexical
+    runtime = search_runtime_from_config(config)
     if config.auth_mode == "unrestricted":
         assert config.workspace_id is not None
         return create_mcp_server(
@@ -134,16 +129,14 @@ def create_mcp_server_from_config(
             api_docs_path=api_docs_path,
             host=config.bind,
             port=config.port,
-            similarity=similarity,
-            lexical=lexical,
+            search_runtime=runtime,
         )
     assert config.clerk_domain is not None
     return create_clerk_mcp_server(
         config,
         api_docs_path=api_docs_path,
         verifier=verifier or ClerkJwtVerifier(config.clerk_domain),
-        similarity=similarity,
-        lexical=lexical,
+        search_runtime=runtime,
     )
 
 
@@ -152,17 +145,13 @@ def create_clerk_mcp_server(
     *,
     verifier: TokenVerifier,
     api_docs_path: str | Path | None = None,
-    similarity: SimilarityService | None = None,
-    lexical: LexicalService | None = None,
+    search_runtime: SearchRuntime | None = None,
 ) -> FastMCP:
     """Build Clerk-authenticated MCP with list/switch workspace tools."""
 
     docs_path = Path(api_docs_path) if api_docs_path is not None else _DEFAULT_API_DOCS
-    if similarity is None and lexical is None:
-        services = search_services_from_config(config)
-        if services is not None:
-            similarity = services.similarity
-            lexical = services.lexical
+    if search_runtime is None:
+        search_runtime = search_runtime_from_config(config)
     runtime = ClerkMcpRuntime(
         db_path=config.database,
         feedback_path=config.feedback,
@@ -172,11 +161,8 @@ def create_clerk_mcp_server(
         sticky=StickyWorkspaceStore(),
         host=config.bind,
         port=config.port,
-        similarity=similarity,
-        lexical=lexical,
+        search_runtime=search_runtime,
     )
-    # Base instructions; locked addendum applied when principal is known at tool-time
-    # via repair hints / list behavior. Process-level instructions stay locking-agnostic.
     assert config.clerk_domain is not None
     server = FastMCP(
         "quail",
@@ -190,50 +176,55 @@ def create_clerk_mcp_server(
         token_verifier=ClerkAccessTokenVerifier(verifier),
     )
     register_clerk_oauth_discovery(server, clerk_domain=config.clerk_domain)
-    # Keep a mutable slot so tools can expose locked addendum via a resource-less path:
-    # FastMCP instructions are fixed at construction; locked guidance is in tool handlers.
     _register_clerk_tools(server, runtime)
     return server
 
 
 def _register_unrestricted_tools(server: FastMCP, context: McpContext) -> None:
     @server.tool(title="Get Quail API docs")
-    def quail_get_api_docs() -> CallToolResult:
+    async def quail_get_api_docs() -> CallToolResult:
         """Return the analysis-language docs for code inside quail_exec.
 
         Necessary for writing quail_exec code.
         Dataset and session workflow live in the other tools.
         """
 
-        try:
-            documentation = context.api_docs_path.read_text(encoding="utf-8")
-        except Exception as error:
-            return error_result(error=error, repair_hint="Ensure docs/api.md is readable.")
-        return success_result({"documentation": documentation})
+        def work() -> CallToolResult:
+            try:
+                documentation = context.api_docs_path.read_text(encoding="utf-8")
+            except Exception as error:
+                return error_result(error=error, repair_hint="Ensure docs/api.md is readable.")
+            return success_result({"documentation": documentation})
+
+        return await run_blocking(work)
 
     @server.tool(title="List Quail datasets")
-    def quail_list_datasets() -> CallToolResult:
+    async def quail_list_datasets() -> CallToolResult:
         """List datasets in this server's fixed workspace.
 
         Returns dataset_id, optional name, and active_version_id. Use a
         dataset_id with quail_get_dataset_info and quail_exec.
         """
 
-        try:
-            datasets = [
-                {
-                    "dataset_id": ref.dataset_id,
-                    "name": ref.name,
-                    "active_version_id": ref.active_version_id,
-                }
-                for ref in list_datasets(context.db, context.workspace_id)
-            ]
-        except Exception as error:
-            return error_result(error=error)
-        return success_result({"datasets": datasets})
+        def work() -> CallToolResult:
+            try:
+                with open_core_db(context.db_path) as db:
+                    datasets = [
+                        {
+                            "dataset_id": ref.dataset_id,
+                            "name": ref.name,
+                            "active_version_id": ref.active_version_id,
+                        }
+                        for ref in list_datasets(db, context.workspace_id)
+                    ]
+            except Exception as error:
+                return error_result(error=error)
+            return success_result({"datasets": datasets})
+
+        return await run_blocking(work)
 
     @server.tool(title="Start Quail session")
-    def quail_start_session() -> CallToolResult:
+    async def quail_start_session() -> CallToolResult:
         """Create an active analysis session in this workspace.
 
         The session belongs to this workspace (workspace_id is returned).
@@ -241,45 +232,55 @@ def _register_unrestricted_tools(server: FastMCP, context: McpContext) -> None:
         persist on this session across successful execs.
         """
 
-        try:
-            session = create_session(context.db, context.workspace_id)
-        except Exception as error:
-            return error_result(error=error)
-        return success_result(
-            {
-                "session_id": session.id,
-                "workspace_id": session.workspace_id,
-                "state_revision": session.state_revision,
-            }
-        )
+        def work() -> CallToolResult:
+            try:
+                with open_core_db(context.db_path) as db:
+                    session = create_session(db, context.workspace_id)
+            except Exception as error:
+                return error_result(error=error)
+            return success_result(
+                {
+                    "session_id": session.id,
+                    "workspace_id": session.workspace_id,
+                    "state_revision": session.state_revision,
+                }
+            )
+
+        return await run_blocking(work)
 
     @server.tool(title="Get Quail dataset info")
-    def quail_get_dataset_info(dataset_id: str) -> CallToolResult:
+    async def quail_get_dataset_info(dataset_id: str) -> CallToolResult:
         """Return dataset identity plus short corpus/guidance documentation.
 
         Call this for dataset-specific notes before analyzing. Do not invent
         field meanings beyond what this tool and quail_exec inspection return.
         """
 
-        try:
-            ref = get_dataset(context.db, context.workspace_id, dataset_id)
-            if ref is None:
-                raise ValueError(f"Dataset not found: {dataset_id}")
-            display = ref.name or ref.dataset_id
-            documentation = f"Dataset {display} ({ref.dataset_id}). {_DATASET_INFO_STUB}"
-        except Exception as error:
-            return error_result(error=error)
-        return success_result(
-            {
-                "dataset_id": ref.dataset_id,
-                "name": ref.name,
-                "active_version_id": ref.active_version_id,
-                "documentation": documentation,
-            }
-        )
+        def work() -> CallToolResult:
+            try:
+                with open_core_db(context.db_path) as db:
+                    ref = get_dataset(db, context.workspace_id, dataset_id)
+                    if ref is None:
+                        raise ValueError(f"Dataset not found: {dataset_id}")
+                    display = ref.name or ref.dataset_id
+                    documentation = (
+                        f"Dataset {display} ({ref.dataset_id}). {_DATASET_INFO_STUB}"
+                    )
+            except Exception as error:
+                return error_result(error=error)
+            return success_result(
+                {
+                    "dataset_id": ref.dataset_id,
+                    "name": ref.name,
+                    "active_version_id": ref.active_version_id,
+                    "documentation": documentation,
+                }
+            )
+
+        return await run_blocking(work)
 
     @server.tool(title="Execute Quail analysis")
-    def quail_exec(
+    async def quail_exec(
         session_id: str,
         dataset_id: str,
         code: str,
@@ -295,31 +296,34 @@ def _register_unrestricted_tools(server: FastMCP, context: McpContext) -> None:
         at 256 MiB.
         """
 
-        try:
-            validate_time_window(time_window)
-            session = require_active_session(context.db, session_id)
-            if session.workspace_id != context.workspace_id:
-                raise ValueError("Session does not belong to this workspace")
-            outcome = exec_script(
-                context.db,
-                session_id=session_id,
-                dataset_id=dataset_id,
-                expected_revision=session.state_revision,
-                code=code,
-                similarity=context.similarity,
-                lexical=context.lexical,
-                time_window=time_window,
-            )
-        except Exception as error:
-            return error_result(
-                error=error,
-                execution_id=None,
-                repair_hint=_exec_repair_hint(error),
-            )
-        return success_printed_output(outcome.printed_output)
+        def work() -> CallToolResult:
+            try:
+                validate_time_window(time_window)
+                with open_core_db(context.db_path) as db:
+                    session = require_active_session(db, session_id)
+                    if session.workspace_id != context.workspace_id:
+                        raise ValueError("Session does not belong to this workspace")
+                    outcome = exec_script(
+                        db,
+                        session_id=session_id,
+                        dataset_id=dataset_id,
+                        expected_revision=session.state_revision,
+                        code=code,
+                        search_runtime=context.search_runtime,
+                        time_window=time_window,
+                    )
+            except Exception as error:
+                return error_result(
+                    error=error,
+                    execution_id=None,
+                    repair_hint=_exec_repair_hint(error),
+                )
+            return success_printed_output(outcome.printed_output)
+
+        return await run_blocking(work)
 
     @server.tool(title="Provide feedback")
-    def provide_feedback(
+    async def provide_feedback(
         message: str,
         category: str | None = None,
         session_id: str | None = None,
@@ -331,26 +335,30 @@ def _register_unrestricted_tools(server: FastMCP, context: McpContext) -> None:
         expected outcomes that did not occur. Low bar for entry.
         """
 
-        try:
-            if session_id is not None:
-                session = get_session(context.db, session_id)
-                if session is None:
-                    raise ValueError(f"Session not found: {session_id}")
-            if dataset_id is not None:
-                ref = get_dataset(context.db, context.workspace_id, dataset_id)
-                if ref is None:
-                    raise ValueError(f"Dataset not found: {dataset_id}")
-            append_feedback(
-                context.feedback_path,
-                workspace_id=context.workspace_id,
-                message=message,
-                category=category,
-                session_id=session_id,
-                dataset_id=dataset_id,
-            )
-        except Exception as error:
-            return error_result(error=error)
-        return success_result({"accepted": True})
+        def work() -> CallToolResult:
+            try:
+                with open_core_db(context.db_path) as db:
+                    if session_id is not None:
+                        session = get_session(db, session_id)
+                        if session is None:
+                            raise ValueError(f"Session not found: {session_id}")
+                    if dataset_id is not None:
+                        ref = get_dataset(db, context.workspace_id, dataset_id)
+                        if ref is None:
+                            raise ValueError(f"Dataset not found: {dataset_id}")
+                append_feedback(
+                    context.feedback_path,
+                    workspace_id=context.workspace_id,
+                    message=message,
+                    category=category,
+                    session_id=session_id,
+                    dataset_id=dataset_id,
+                )
+            except Exception as error:
+                return error_result(error=error)
+            return success_result({"accepted": True})
+
+        return await run_blocking(work)
 
 
 def _register_clerk_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
@@ -393,7 +401,7 @@ def _register_clerk_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
         return active
 
     @server.tool(title="List Quail workspaces")
-    def quail_list_workspaces(ctx: Context | None = None) -> CallToolResult:
+    async def quail_list_workspaces(ctx: Context | None = None) -> CallToolResult:
         """List workspaces you may use and the active sticky workspace id.
 
         active_workspace_id is null when unbound. Locked users see only their
@@ -401,21 +409,24 @@ def _register_clerk_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
         user asks to change or the task clearly requires another.
         """
 
-        principal = _auth(ctx)
-        if isinstance(principal, CallToolResult):
-            return principal
-        key = _connection_key(principal, ctx)
-        active = runtime.sticky.ensure_initial_bind(key, principal.user)
-        if principal.user.lock_workspace:
-            assert principal.user.default_workspace is not None
-            workspaces = [{"workspace_id": principal.user.default_workspace}]
-            active = principal.user.default_workspace
-        else:
-            workspaces = [{"workspace_id": wid} for wid in principal.user.workspaces]
-        return success_result({"workspaces": workspaces, "active_workspace_id": active})
+        def work() -> CallToolResult:
+            principal = _auth(ctx)
+            if isinstance(principal, CallToolResult):
+                return principal
+            key = _connection_key(principal, ctx)
+            active = runtime.sticky.ensure_initial_bind(key, principal.user)
+            if principal.user.lock_workspace:
+                assert principal.user.default_workspace is not None
+                workspaces = [{"workspace_id": principal.user.default_workspace}]
+                active = principal.user.default_workspace
+            else:
+                workspaces = [{"workspace_id": wid} for wid in principal.user.workspaces]
+            return success_result({"workspaces": workspaces, "active_workspace_id": active})
+
+        return await run_blocking(work)
 
     @server.tool(title="Switch Quail workspace")
-    def quail_switch_workspace(
+    async def quail_switch_workspace(
         workspace_id: str,
         ctx: Context | None = None,
     ) -> CallToolResult:
@@ -427,63 +438,72 @@ def _register_clerk_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
         memberships. Success returns active_workspace_id.
         """
 
-        principal = _auth(ctx)
-        if isinstance(principal, CallToolResult):
-            return principal
-        if principal.user.lock_workspace:
-            return error_result(
-                error=ForbiddenError("Workspace is locked for this user"),
-                repair_hint=LOCK_REPAIR_HINT,
-            )
-        if workspace_id not in principal.user.workspaces:
-            return error_result(
-                error=ForbiddenError(f"Not allowlisted for workspace: {workspace_id}"),
-                repair_hint="Call quail_list_workspaces and pick an allowlisted id.",
-            )
-        key = _connection_key(principal, ctx)
-        active = runtime.sticky.bind(key, workspace_id)
-        return success_result({"active_workspace_id": active})
+        def work() -> CallToolResult:
+            principal = _auth(ctx)
+            if isinstance(principal, CallToolResult):
+                return principal
+            if principal.user.lock_workspace:
+                return error_result(
+                    error=ForbiddenError("Workspace is locked for this user"),
+                    repair_hint=LOCK_REPAIR_HINT,
+                )
+            if workspace_id not in principal.user.workspaces:
+                return error_result(
+                    error=ForbiddenError(f"Not allowlisted for workspace: {workspace_id}"),
+                    repair_hint="Call quail_list_workspaces and pick an allowlisted id.",
+                )
+            key = _connection_key(principal, ctx)
+            active = runtime.sticky.bind(key, workspace_id)
+            return success_result({"active_workspace_id": active})
+
+        return await run_blocking(work)
 
     @server.tool(title="Get Quail API docs")
-    def quail_get_api_docs(ctx: Context | None = None) -> CallToolResult:
+    async def quail_get_api_docs(ctx: Context | None = None) -> CallToolResult:
         """Return the analysis-language docs for code inside quail_exec."""
 
-        principal = _auth(ctx)
-        if isinstance(principal, CallToolResult):
-            return principal
-        del principal
-        try:
-            documentation = runtime.api_docs_path.read_text(encoding="utf-8")
-        except Exception as error:
-            return error_result(error=error, repair_hint="Ensure docs/api.md is readable.")
-        return success_result({"documentation": documentation})
+        def work() -> CallToolResult:
+            principal = _auth(ctx)
+            if isinstance(principal, CallToolResult):
+                return principal
+            del principal
+            try:
+                documentation = runtime.api_docs_path.read_text(encoding="utf-8")
+            except Exception as error:
+                return error_result(error=error, repair_hint="Ensure docs/api.md is readable.")
+            return success_result({"documentation": documentation})
+
+        return await run_blocking(work)
 
     @server.tool(title="List Quail datasets")
-    def quail_list_datasets(ctx: Context | None = None) -> CallToolResult:
+    async def quail_list_datasets(ctx: Context | None = None) -> CallToolResult:
         """List datasets in the active sticky workspace."""
 
-        principal = _auth(ctx)
-        if isinstance(principal, CallToolResult):
-            return principal
-        workspace_id = _require_workspace(principal, ctx)
-        if isinstance(workspace_id, CallToolResult):
-            return workspace_id
-        try:
-            with open_core_db(runtime.db_path) as db:
-                datasets = [
-                    {
-                        "dataset_id": ref.dataset_id,
-                        "name": ref.name,
-                        "active_version_id": ref.active_version_id,
-                    }
-                    for ref in list_datasets(db, workspace_id)
-                ]
-        except Exception as error:
-            return error_result(error=error)
-        return success_result({"datasets": datasets})
+        def work() -> CallToolResult:
+            principal = _auth(ctx)
+            if isinstance(principal, CallToolResult):
+                return principal
+            workspace_id = _require_workspace(principal, ctx)
+            if isinstance(workspace_id, CallToolResult):
+                return workspace_id
+            try:
+                with open_core_db(runtime.db_path) as db:
+                    datasets = [
+                        {
+                            "dataset_id": ref.dataset_id,
+                            "name": ref.name,
+                            "active_version_id": ref.active_version_id,
+                        }
+                        for ref in list_datasets(db, workspace_id)
+                    ]
+            except Exception as error:
+                return error_result(error=error)
+            return success_result({"datasets": datasets})
+
+        return await run_blocking(work)
 
     @server.tool(title="Start Quail session")
-    def quail_start_session(ctx: Context | None = None) -> CallToolResult:
+    async def quail_start_session(ctx: Context | None = None) -> CallToolResult:
         """Create an analysis session in the active sticky workspace.
 
         The session belongs to that workspace (workspace_id is returned).
@@ -491,58 +511,66 @@ def _register_clerk_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
         old session_id. Reuse this session_id serially on quail_exec.
         """
 
-        principal = _auth(ctx)
-        if isinstance(principal, CallToolResult):
-            return principal
-        workspace_id = _require_workspace(principal, ctx)
-        if isinstance(workspace_id, CallToolResult):
-            return workspace_id
-        try:
-            with open_core_db(runtime.db_path) as db:
-                session = create_session(db, workspace_id)
-        except Exception as error:
-            return error_result(error=error)
-        return success_result(
-            {
-                "session_id": session.id,
-                "workspace_id": session.workspace_id,
-                "state_revision": session.state_revision,
-            }
-        )
+        def work() -> CallToolResult:
+            principal = _auth(ctx)
+            if isinstance(principal, CallToolResult):
+                return principal
+            workspace_id = _require_workspace(principal, ctx)
+            if isinstance(workspace_id, CallToolResult):
+                return workspace_id
+            try:
+                with open_core_db(runtime.db_path) as db:
+                    session = create_session(db, workspace_id)
+            except Exception as error:
+                return error_result(error=error)
+            return success_result(
+                {
+                    "session_id": session.id,
+                    "workspace_id": session.workspace_id,
+                    "state_revision": session.state_revision,
+                }
+            )
+
+        return await run_blocking(work)
 
     @server.tool(title="Get Quail dataset info")
-    def quail_get_dataset_info(
+    async def quail_get_dataset_info(
         dataset_id: str,
         ctx: Context | None = None,
     ) -> CallToolResult:
         """Return dataset identity plus short guidance for the active workspace."""
 
-        principal = _auth(ctx)
-        if isinstance(principal, CallToolResult):
-            return principal
-        workspace_id = _require_workspace(principal, ctx)
-        if isinstance(workspace_id, CallToolResult):
-            return workspace_id
-        try:
-            with open_core_db(runtime.db_path) as db:
-                ref = get_dataset(db, workspace_id, dataset_id)
-                if ref is None:
-                    raise ValueError(f"Dataset not found: {dataset_id}")
-                display = ref.name or ref.dataset_id
-                documentation = f"Dataset {display} ({ref.dataset_id}). {_DATASET_INFO_STUB}"
-        except Exception as error:
-            return error_result(error=error)
-        return success_result(
-            {
-                "dataset_id": ref.dataset_id,
-                "name": ref.name,
-                "active_version_id": ref.active_version_id,
-                "documentation": documentation,
-            }
-        )
+        def work() -> CallToolResult:
+            principal = _auth(ctx)
+            if isinstance(principal, CallToolResult):
+                return principal
+            workspace_id = _require_workspace(principal, ctx)
+            if isinstance(workspace_id, CallToolResult):
+                return workspace_id
+            try:
+                with open_core_db(runtime.db_path) as db:
+                    ref = get_dataset(db, workspace_id, dataset_id)
+                    if ref is None:
+                        raise ValueError(f"Dataset not found: {dataset_id}")
+                    display = ref.name or ref.dataset_id
+                    documentation = (
+                        f"Dataset {display} ({ref.dataset_id}). {_DATASET_INFO_STUB}"
+                    )
+            except Exception as error:
+                return error_result(error=error)
+            return success_result(
+                {
+                    "dataset_id": ref.dataset_id,
+                    "name": ref.name,
+                    "active_version_id": ref.active_version_id,
+                    "documentation": documentation,
+                }
+            )
+
+        return await run_blocking(work)
 
     @server.tool(title="Execute Quail analysis")
-    def quail_exec(
+    async def quail_exec(
         session_id: str,
         dataset_id: str,
         code: str,
@@ -555,38 +583,40 @@ def _register_clerk_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
         same session_id. After switching workspace, start a new session first.
         """
 
-        principal = _auth(ctx)
-        if isinstance(principal, CallToolResult):
-            return principal
-        workspace_id = _require_workspace(principal, ctx)
-        if isinstance(workspace_id, CallToolResult):
-            return workspace_id
-        try:
-            validate_time_window(time_window)
-            with open_core_db(runtime.db_path) as db:
-                session = require_active_session(db, session_id)
-                if session.workspace_id != workspace_id:
-                    raise ValueError("Session does not belong to the active workspace")
-                outcome = exec_script(
-                    db,
-                    session_id=session_id,
-                    dataset_id=dataset_id,
-                    expected_revision=session.state_revision,
-                    code=code,
-                    similarity=runtime.similarity,
-                    lexical=runtime.lexical,
-                    time_window=time_window,
+        def work() -> CallToolResult:
+            principal = _auth(ctx)
+            if isinstance(principal, CallToolResult):
+                return principal
+            workspace_id = _require_workspace(principal, ctx)
+            if isinstance(workspace_id, CallToolResult):
+                return workspace_id
+            try:
+                validate_time_window(time_window)
+                with open_core_db(runtime.db_path) as db:
+                    session = require_active_session(db, session_id)
+                    if session.workspace_id != workspace_id:
+                        raise ValueError("Session does not belong to the active workspace")
+                    outcome = exec_script(
+                        db,
+                        session_id=session_id,
+                        dataset_id=dataset_id,
+                        expected_revision=session.state_revision,
+                        code=code,
+                        search_runtime=runtime.search_runtime,
+                        time_window=time_window,
+                    )
+            except Exception as error:
+                return error_result(
+                    error=error,
+                    execution_id=None,
+                    repair_hint=_exec_repair_hint(error),
                 )
-        except Exception as error:
-            return error_result(
-                error=error,
-                execution_id=None,
-                repair_hint=_exec_repair_hint(error),
-            )
-        return success_printed_output(outcome.printed_output)
+            return success_printed_output(outcome.printed_output)
+
+        return await run_blocking(work)
 
     @server.tool(title="Provide feedback")
-    def provide_feedback(
+    async def provide_feedback(
         message: str,
         category: str | None = None,
         session_id: str | None = None,
@@ -595,33 +625,36 @@ def _register_clerk_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
     ) -> CallToolResult:
         """Record friction notes outside the core analysis DB for the active workspace."""
 
-        principal = _auth(ctx)
-        if isinstance(principal, CallToolResult):
-            return principal
-        workspace_id = _require_workspace(principal, ctx)
-        if isinstance(workspace_id, CallToolResult):
-            return workspace_id
-        try:
-            with open_core_db(runtime.db_path) as db:
-                if session_id is not None:
-                    session = get_session(db, session_id)
-                    if session is None:
-                        raise ValueError(f"Session not found: {session_id}")
-                if dataset_id is not None:
-                    ref = get_dataset(db, workspace_id, dataset_id)
-                    if ref is None:
-                        raise ValueError(f"Dataset not found: {dataset_id}")
-            append_feedback(
-                runtime.feedback_path,
-                workspace_id=workspace_id,
-                message=message,
-                category=category,
-                session_id=session_id,
-                dataset_id=dataset_id,
-            )
-        except Exception as error:
-            return error_result(error=error)
-        return success_result({"accepted": True})
+        def work() -> CallToolResult:
+            principal = _auth(ctx)
+            if isinstance(principal, CallToolResult):
+                return principal
+            workspace_id = _require_workspace(principal, ctx)
+            if isinstance(workspace_id, CallToolResult):
+                return workspace_id
+            try:
+                with open_core_db(runtime.db_path) as db:
+                    if session_id is not None:
+                        session = get_session(db, session_id)
+                        if session is None:
+                            raise ValueError(f"Session not found: {session_id}")
+                    if dataset_id is not None:
+                        ref = get_dataset(db, workspace_id, dataset_id)
+                        if ref is None:
+                            raise ValueError(f"Dataset not found: {dataset_id}")
+                append_feedback(
+                    runtime.feedback_path,
+                    workspace_id=workspace_id,
+                    message=message,
+                    category=category,
+                    session_id=session_id,
+                    dataset_id=dataset_id,
+                )
+            except Exception as error:
+                return error_result(error=error)
+            return success_result({"accepted": True})
+
+        return await run_blocking(work)
 
 
 def _authorization_header(ctx: Context | None) -> str | None:

@@ -1,26 +1,58 @@
-"""Build host search services from slim config."""
+"""Build host search runtime (pool + providers) from slim config."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
-from quail.config.models import QuailConfig
+from quail.config.models import ProvidersConfig, QuailConfig
 from quail.search.db import SearchDb, open_search_db
 from quail.search.lexical import LexicalService
+from quail.search.pool import SearchDbPool, open_search_pool
 from quail.search.similarity import SimilarityService
 
 
 @dataclass(slots=True)
+class SearchRuntime:
+    """Search file path, providers, and a connection pool for concurrent exec."""
+
+    path: Path
+    providers: ProvidersConfig
+    pool: SearchDbPool
+
+    def bind_services(self, search: SearchDb) -> tuple[SimilarityService, LexicalService]:
+        """Build per-exec Lexical/Similarity services on one SearchDb."""
+
+        return (
+            SimilarityService(search=search, providers=self.providers),
+            LexicalService(search=search),
+        )
+
+
+@dataclass(slots=True)
 class SearchServices:
-    """Shared search DB plus Semantic and Lexical host services."""
+    """One-shot search handle for warm helpers and single-threaded tests."""
 
     search: SearchDb
     similarity: SimilarityService
     lexical: LexicalService
 
 
+def search_runtime_from_config(config: QuailConfig) -> SearchRuntime | None:
+    """Build a pooled search runtime when search_database is configured."""
+
+    if config.search_database is None:
+        return None
+    path = Path(config.search_database).expanduser().resolve()
+    return SearchRuntime(
+        path=path,
+        providers=config.providers,
+        pool=open_search_pool(path, max_size=config.max_concurrent_executions),
+    )
+
+
 def search_services_from_config(config: QuailConfig) -> SearchServices | None:
-    """Open search DB once and build both SimilarityService and LexicalService."""
+    """Open one SearchDb and wrap both services (single-threaded helpers)."""
 
     if config.search_database is None:
         return None

@@ -14,6 +14,7 @@ from quail.analysis.errors import (
     QuailRuntimeError,
     QuailScopeError,
     QuailServerBusyError,
+    QuailSessionBusyError,
     QuailSyntaxError,
 )
 from quail.auth.errors import AuthError, ForbiddenError, UnauthorizedError
@@ -101,6 +102,8 @@ def classify_exception(error: BaseException) -> tuple[str, str]:
         return "QuailFieldError", "quail_field_error"
     if isinstance(error, QuailServerBusyError):
         return "QuailRuntimeError", QuailServerBusyError.stable_error_code
+    if isinstance(error, QuailSessionBusyError):
+        return "QuailRuntimeError", QuailSessionBusyError.stable_error_code
     if isinstance(error, QuailRuntimeError):
         return "QuailRuntimeError", "quail_runtime_error"
     if isinstance(error, QuailError):
