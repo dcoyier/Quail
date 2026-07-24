@@ -1,15 +1,35 @@
+AuthMode is unrestricted or clerk.
+
 DatasetSpec is one CSV dataset declared in the manifest.
 DatasetSpec remembers:
+  workspace_id
   dataset_id
   source
   name (optional)
 
-QuailConfig is the resolved slim deployment config for unrestricted loopback run.
+WorkspaceSpec is one workspace and its declared datasets.
+WorkspaceSpec remembers:
+  workspace_id
+  datasets
+
+UserSpec is a TOML allowlisted Clerk user.
+UserSpec remembers:
+  user_id
+  clerk_user_id
+  workspaces
+  default_workspace (optional)
+  lock_workspace
+
+QuailConfig is the resolved slim deployment config for quail run.
 QuailConfig remembers:
   manifest_path
   database
   feedback
-  workspace_id
+  auth_mode
   bind
   port
-  datasets
+  workspace_id (unrestricted only; None for clerk)
+  clerk_domain (clerk only; None for unrestricted)
+  workspaces
+  users
+  datasets (flattened for apply)

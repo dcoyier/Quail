@@ -71,8 +71,9 @@ fetched via `quail_get_dataset_info`, not embedded in static instructions.
 quail run --config /absolute/path/to/quail.toml
 ```
 
-Read slim TOML → import declared CSVs → serve unrestricted loopback MCP.
-Refresh = edit file, stop, run again. The CLI never writes the TOML.
+Read slim TOML → import declared CSVs → serve MCP (unrestricted loopback or
+Clerk allowlist on one URL). Refresh = edit file, stop, run again. The CLI
+never writes the TOML.
 
 ## Preserve (invariants — improve shape, do not weaken)
 
@@ -115,8 +116,11 @@ Refresh = edit file, stop, run again. The CLI never writes the TOML.
    `quail_get_dataset_info`, `quail_exec`, and `provide_feedback` (JSONL store
    separate from the core analysis DB).
 8. TOML + `quail run --config` — **first slice done:** slim native TOML, CSV
-   reconcile on run, streamable-http loopback MCP. OIDC / `[[users]]` still next.
-9. OIDC/Clerk + TOML allowlist
+   reconcile on run, streamable-http loopback MCP.
+9. Clerk + TOML allowlist — **first slice done:** Clerk JWT, `[[users]]` /
+   `[[workspaces]]`, sticky `quail_list_workspaces` / `quail_switch_workspace`
+   on one deployment URL; optional `default_workspace` / `lock_workspace`.
+   Invitations and generic OIDC still out.
 10. Connector SDK (later)
 
 Search **infrastructure** may follow the AST/API surface; Lexical/Semantic remain part of the public contract in `api.md`.

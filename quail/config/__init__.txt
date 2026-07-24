@@ -1,1 +1,2 @@
-This package re-exports ConfigError, DatasetSpec, QuailConfig, load_config, and parse_config.
+This package re-exports AuthMode, ConfigError, DatasetSpec, QuailConfig, UserSpec,
+WorkspaceSpec, load_config, and parse_config.

@@ -15,6 +15,7 @@ from quail.analysis.errors import (
     QuailScopeError,
     QuailSyntaxError,
 )
+from quail.auth.errors import AuthError, ForbiddenError, UnauthorizedError
 from quail.datasets.errors import DatasetConflictError, DatasetError, DatasetSyntaxError
 from quail.session.errors import (
     SessionClosedError,
@@ -104,6 +105,12 @@ def classify_exception(error: BaseException) -> tuple[str, str]:
     if isinstance(error, QuailRuntimeError):
         return "QuailRuntimeError", "quail_runtime_error"
     if isinstance(error, QuailError):
+        return type(error).__name__, _to_snake(type(error).__name__)
+    if isinstance(error, UnauthorizedError):
+        return "UnauthorizedError", "unauthorized"
+    if isinstance(error, ForbiddenError):
+        return "ForbiddenError", "forbidden"
+    if isinstance(error, AuthError):
         return type(error).__name__, _to_snake(type(error).__name__)
     if isinstance(error, SessionSyntaxError):
         return "SessionSyntaxError", "session_syntax_error"

@@ -1,0 +1,3 @@
+AuthError is the base auth failure.
+UnauthorizedError means missing or invalid bearer token.
+ForbiddenError means a valid token that is not allowlisted or not permitted.

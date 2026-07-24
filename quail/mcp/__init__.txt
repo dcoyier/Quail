@@ -1,1 +1,2 @@
-This package re-exports create_mcp_server for the thin loopback MCP adapter.
+This package re-exports create_mcp_server, create_mcp_server_from_config,
+create_clerk_mcp_server, and bearer_token.

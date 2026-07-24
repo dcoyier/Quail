@@ -1,0 +1,9 @@
+There are repair hint strings for unbound and locked workspace cases.
+There is a private locked-user instructions addendum.
+
+unrestricted_instructions(workspace_id):
+  Give back fixed-workspace connect-time instructions.
+
+clerk_instructions(locked default false):
+  Give back Clerk hierarchy/workflow instructions.
+  When locked is true, append the locked-user addendum.

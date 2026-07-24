@@ -1,0 +1,11 @@
+StickyWorkspaceStore maps connection keys to bound workspace ids.
+
+active(connection_key):
+  Give back the bound workspace id, or None.
+
+ensure_initial_bind(connection_key, user):
+  The first time a connection is seen, if the user has default_workspace, bind it.
+  Give back the active workspace id, or None when unbound.
+
+bind(connection_key, workspace_id):
+  Remember the sticky workspace and give it back.

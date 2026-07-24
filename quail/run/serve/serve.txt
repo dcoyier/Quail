@@ -1,8 +1,8 @@
-serve(config):
+serve(config, verifier default None):
   Apply the config (import CSVs).
   Close the apply DB handle.
-  Build create_mcp_server with database, feedback, workspace, bind, and port.
+  Build MCP from config (optional test verifier for Clerk).
   Block on streamable-http transport.
 
-run_from_config(config):
+run_from_config(config, verifier default None):
   Same as serve.

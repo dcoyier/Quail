@@ -1,4 +1,4 @@
-"""Apply slim config: ensure workspace and import declared CSVs."""
+"""Apply slim config: ensure workspaces and import declared CSVs."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from quail.datasets.db import CoreDb
 
 
 def apply_config(config: QuailConfig) -> CoreDb:
-    """Open the core DB, ensure workspace, import each declared CSV (activate)."""
+    """Open the core DB, ensure workspaces, import each declared CSV (activate)."""
 
     for spec in config.datasets:
         if not spec.source.is_file():
@@ -17,11 +17,12 @@ def apply_config(config: QuailConfig) -> CoreDb:
 
     db = open_core_db(config.database)
     try:
-        ensure_workspace(db, config.workspace_id)
+        for workspace in config.workspaces:
+            ensure_workspace(db, workspace.workspace_id)
         for spec in config.datasets:
             import_csv_dataset(
                 db,
-                config.workspace_id,
+                spec.workspace_id,
                 spec.dataset_id,
                 spec.source,
                 name=spec.name,

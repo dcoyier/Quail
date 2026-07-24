@@ -1,0 +1,39 @@
+# Example Clerk deployment (TOML-only allowlist). Replace clerk_domain and
+# clerk_user_id with values from your Clerk instance. Restart after edits.
+#
+#   uv run quail run --config /absolute/path/to/examples/quail.clerk.toml
+
+[core]
+database = "data/clerk-quail.turso"
+feedback = "data/clerk-feedback.jsonl"
+
+[auth]
+mode = "clerk"
+clerk_domain = "your-instance.clerk.accounts.dev"
+
+[hosting]
+bind = "127.0.0.1"
+port = 8000
+
+[[workspaces]]
+id = "acme"
+
+[[workspaces.datasets]]
+id = "notes"
+source = "data/notes.csv"
+name = "Notes"
+
+[[workspaces]]
+id = "labs"
+
+[[workspaces.datasets]]
+id = "other"
+source = "data/notes.csv"
+name = "Other copy"
+
+[[users]]
+id = "alice"
+clerk_user_id = "user_replace_me"
+workspaces = ["acme", "labs"]
+default_workspace = "acme"
+# lock_workspace = true

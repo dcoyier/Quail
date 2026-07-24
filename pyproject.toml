@@ -8,6 +8,7 @@ license = { text = "Proprietary" }
 authors = [{ name = "Dashiell Coyier" }]
 dependencies = [
   "mcp==1.28.1",
+  "pyjwt[crypto]==2.13.0",
   "pyturso==0.7.0",
 ]
 

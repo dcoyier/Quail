@@ -22,5 +22,5 @@ diagnostic_from_exception(error, repair_hint default None):
   Give back the diagnostic object.
 
 classify_exception(error):
-  Map Quail, Session, Dataset, and ValueError types to stable codes.
+  Map Quail, Auth, Session, Dataset, and ValueError types to stable codes.
   Unknown errors become InternalError / internal_error.

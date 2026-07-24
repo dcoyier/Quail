@@ -1,21 +1,19 @@
-"""Access adapters: unrestricted loopback and Clerk allowlist auth."""
+"""Public exports for ``quail.auth.clerk``."""
 
-from quail.auth.clerk import (
+from .clerk import (
     AllowlistedPrincipal,
     ClerkJwtVerifier,
     StaticTokenVerifier,
+    TokenVerifier,
     authenticate_bearer,
     resolve_allowlisted_user,
 )
-from quail.auth.errors import AuthError, ForbiddenError, UnauthorizedError
 
 __all__ = [
     "AllowlistedPrincipal",
-    "AuthError",
     "ClerkJwtVerifier",
-    "ForbiddenError",
     "StaticTokenVerifier",
-    "UnauthorizedError",
+    "TokenVerifier",
     "authenticate_bearer",
     "resolve_allowlisted_user",
 ]

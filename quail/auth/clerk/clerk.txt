@@ -1,0 +1,20 @@
+AllowlistedPrincipal remembers the resolved TOML user and clerk_user_id.
+
+TokenVerifier.verify(token):
+  Give back the Clerk user id (sub).
+
+ClerkJwtVerifier(clerk_domain):
+  Derive issuer and JWKS URL from the Clerk domain.
+  verify(token): decode RS256 JWT, require exp/iat/sub, give back sub.
+  On failure, raise UnauthorizedError.
+
+StaticTokenVerifier(tokens):
+  Test helper mapping exact bearer strings to clerk user ids.
+
+resolve_allowlisted_user(users, clerk_user_id):
+  Give back the matching UserSpec, or raise ForbiddenError.
+
+authenticate_bearer(authorization, verifier, users):
+  Require Bearer token.
+  Verify and resolve allowlisted user.
+  Give back AllowlistedPrincipal.

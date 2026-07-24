@@ -70,9 +70,9 @@ def test_parse_rejects_unknown_keys(tmp_path: Path) -> None:
         load_config(manifest)
 
 
-def test_parse_rejects_non_unrestricted_auth(tmp_path: Path) -> None:
+def test_parse_rejects_unknown_auth_mode(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path, auth_mode="oidc")
-    with pytest.raises(ConfigError, match="unrestricted"):
+    with pytest.raises(ConfigError, match="unrestricted|clerk"):
         load_config(manifest)
 
 
@@ -124,6 +124,7 @@ def test_apply_then_mcp_list_datasets(tmp_path: Path) -> None:
     config = load_config(manifest)
     db = apply_config(config)
     db.close()
+    assert config.workspace_id is not None
     server = create_mcp_server(
         config.database,
         config.feedback,
