@@ -19,7 +19,7 @@ Rebuild Quail so the author can understand and extend it. Keep load-bearing inva
 | --- | --- |
 | Agent | MCP + analysis language (`quail_exec`, print-only output) plus |
 |  | `provide_feedback` for friction / improvement notes |
-| Operator | Hand-edited `quail.toml` + `quail run --config …` (CLI never writes TOML) |
+| Operator | Hand-edited `quail.toml` + `quail process` / `quail run` (CLI never writes TOML) |
 | Connector author | Deferred — not in the first build |
 
 ### MCP agent tools (first slice)
@@ -65,15 +65,23 @@ fetched via `quail_get_dataset_info`, not embedded in static instructions.
 - One MCP session binds to **one** workspace at a time.
 - Unrestricted mode omits `[[users]]`.
 
-## Operator command
+## Operator commands
 
 ```sh
+quail process --config /absolute/path/to/quail.toml
 quail run --config /absolute/path/to/quail.toml
 ```
 
-Read slim TOML → import declared CSVs → serve MCP (unrestricted loopback or
-Clerk allowlist on one URL). Refresh = edit file, stop, run again. The CLI
-never writes the TOML.
+`process` reads slim TOML → import CSVs → warm Lexical FTS and (when declared)
+unbounded corpus embeddings into `core.search_database`. Knobs live under
+`[search.warm]` (`embed_batch_size`, `max_concurrent_embed_requests`).
+`process --clear` wipes search warm/vectors/FTS for active versions, then
+re-warms; core data is never deleted.
+
+`run` imports CSVs, fail-closes unless each dataset’s warm receipt matches the
+active version and current TOML embedding profile, then serves MCP
+(unrestricted loopback or Clerk allowlist on one URL). Edit TOML → process →
+run. The CLI never writes the TOML.
 
 ## Preserve (invariants — improve shape, do not weaken)
 

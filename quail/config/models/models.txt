@@ -14,6 +14,9 @@ OllamaProvider remembers base_url.
 OpenRouterProvider remembers base_url and api_key (env:NAME ref string).
 ProvidersConfig remembers optional ollama and openrouter blocks.
 
+SearchWarmConfig remembers embed_batch_size and max_concurrent_embed_requests
+for quail process (defaults 32 and 2).
+
 DatasetSpec is one CSV dataset declared in the manifest.
 DatasetSpec remembers:
   workspace_id
@@ -50,3 +53,4 @@ QuailConfig remembers:
   datasets (flattened for apply)
   search_database (optional; required when any dataset has embedding)
   providers
+  search_warm

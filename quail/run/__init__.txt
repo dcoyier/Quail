@@ -1,1 +1,2 @@
-This package re-exports apply_config, serve, and run_from_config.
+This package re-exports apply_config, process_config, assert_search_warm,
+serve, and run_from_config.

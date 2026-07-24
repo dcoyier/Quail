@@ -87,6 +87,14 @@ class UserSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class SearchWarmConfig:
+    """Batch and concurrency knobs for quail process embedding warm."""
+
+    embed_batch_size: int = 32
+    max_concurrent_embed_requests: int = 2
+
+
+@dataclass(frozen=True, slots=True)
 class QuailConfig:
     """Resolved slim deployment config for quail run."""
 
@@ -105,3 +113,4 @@ class QuailConfig:
     datasets: tuple[DatasetSpec, ...]
     search_database: Path | None = None
     providers: ProvidersConfig = ProvidersConfig()
+    search_warm: SearchWarmConfig = SearchWarmConfig()

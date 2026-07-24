@@ -10,6 +10,7 @@ from quail.config.models import (
     OpenRouterProvider,
     ProvidersConfig,
     QuailConfig,
+    SearchWarmConfig,
     UserSpec,
     WorkspaceSpec,
 )
@@ -25,6 +26,7 @@ __all__ = [
     "OpenRouterProvider",
     "ProvidersConfig",
     "QuailConfig",
+    "SearchWarmConfig",
     "UserSpec",
     "WorkspaceSpec",
     "load_config",

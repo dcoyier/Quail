@@ -1,7 +1,9 @@
 # Example Clerk deployment (TOML-only allowlist). Replace clerk_domain and
 # clerk_user_id with values from your Clerk instance. Restart after edits.
 #
+#   uv run quail process --config /absolute/path/to/examples/quail.clerk.toml
 #   uv run quail run --config /absolute/path/to/examples/quail.clerk.toml
+
 
 [core]
 database = "data/clerk-quail.turso"

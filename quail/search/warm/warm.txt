@@ -1,0 +1,33 @@
+WarmReceipt remembers workspace_id, dataset_id, version_id, profile_hash,
+lexical_ready, embedding_ready, text_count, and warmed_at.
+
+WarmDatasetResult remembers one process summary for a dataset version.
+
+get_warm_receipt / put_warm_receipt:
+  Load or upsert the quail_search_warm row.
+
+clear_search_version:
+  Drop Lexical FTS tables and registry row, all vectors for the version, and
+  the warm receipt.
+
+delete_vectors_for_profile:
+  Delete cached vectors for one profile_hash on a version.
+
+collect_corpus_texts:
+  Read every source field for every entry.
+  Keep non-empty text cells.
+  Give back the flat text list and per-entry segment lists.
+
+warm_dataset:
+  Optionally clear the version.
+  If an existing receipt has a different profile_hash, delete those vectors.
+  Collect texts, build Lexical corpus segments for all entries.
+  When a profile is set, embed unique missing texts in batches with at most
+  max_concurrent_embed_requests in flight (provider calls only; cache writes
+  stay on the main thread).
+  Write a ready warm receipt.
+  Give back WarmDatasetResult.
+
+require_warm_ready:
+  Fail closed when the receipt is missing, Lexical is not ready, profile_hash
+  does not match TOML, embedding readiness disagrees, or the pin mismatches.

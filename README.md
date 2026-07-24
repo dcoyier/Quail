@@ -9,8 +9,10 @@ This tree is intentionally small. Product decisions live in
 
 ## Status
 
-`quail run --config /absolute/path/to/quail.toml` loads a slim hand-edited
-manifest, imports declared CSV datasets, and serves MCP.
+`quail process --config /absolute/path/to/quail.toml` imports declared CSVs and
+warms Lexical FTS plus corpus embeddings into the search database.
+`quail run --config …` applies CSVs, fail-closes unless warm receipts match the
+current TOML pins, then serves MCP.
 
 - **Unrestricted:** fixed workspace, loopback, no sign-in
   ([`examples/quail.toml`](examples/quail.toml)).
@@ -28,8 +30,14 @@ Invitations remain deferred.
 ## Operator path
 
 Edit `quail.toml` by hand (the CLI never writes it). Paths inside the file are
-relative to the manifest directory. Restart to pick up changes:
+relative to the manifest directory. Process once per version/embedding profile,
+then run (and re-run) without re-embedding:
 
 ```sh
+uv run quail process --config /absolute/path/to/Quail/examples/quail.toml
 uv run quail run --config /absolute/path/to/Quail/examples/quail.toml
 ```
+
+After changing `[datasets.embedding]` or `[search.warm]`, run `quail process`
+again. Use `quail process --clear` to wipe search artifacts for active versions
+and rebuild under the current TOML (core CSV versions stay untouched).

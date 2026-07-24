@@ -1,7 +1,7 @@
 [core]
 database = "data/quail.turso"
 feedback = "data/feedback.jsonl"
-# Optional Semantic search DB (must differ from database):
+# Optional search DB for Lexical FTS + Semantic vectors (must differ from database):
 # search_database = "data/quail-search.turso"
 
 [auth]
@@ -11,6 +11,11 @@ workspace = "local"
 [hosting]
 bind = "127.0.0.1"
 port = 8000
+
+# Optional warm knobs for `quail process` (defaults: batch 32, concurrency 2):
+# [search.warm]
+# embed_batch_size = 32
+# max_concurrent_embed_requests = 2
 
 # Optional embedding providers when any dataset declares [datasets.embedding]:
 # [providers.ollama]
@@ -25,7 +30,7 @@ id = "notes"
 source = "data/notes.csv"
 name = "Notes"
 
-# Optional per-dataset embedding profile (pins on apply for Semantic()):
+# Optional per-dataset embedding profile (pinned on apply; warmed by quail process):
 # [datasets.embedding]
 # provider = "ollama"
 # model = "embeddinggemma:latest"

@@ -9,6 +9,7 @@ from .models import (
     OpenRouterProvider,
     ProvidersConfig,
     QuailConfig,
+    SearchWarmConfig,
     UserSpec,
     WorkspaceSpec,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "OpenRouterProvider",
     "ProvidersConfig",
     "QuailConfig",
+    "SearchWarmConfig",
     "UserSpec",
     "WorkspaceSpec",
 ]

@@ -14,12 +14,17 @@ from quail.config.models import (
     OpenRouterProvider,
     ProvidersConfig,
     QuailConfig,
+    SearchWarmConfig,
     UserSpec,
     WorkspaceSpec,
 )
 
-_ALLOWED_ROOT_UNRESTRICTED = frozenset({"core", "auth", "hosting", "datasets", "providers"})
-_ALLOWED_ROOT_CLERK = frozenset({"core", "auth", "hosting", "workspaces", "users", "providers"})
+_ALLOWED_ROOT_UNRESTRICTED = frozenset(
+    {"core", "auth", "hosting", "datasets", "providers", "search"}
+)
+_ALLOWED_ROOT_CLERK = frozenset(
+    {"core", "auth", "hosting", "workspaces", "users", "providers", "search"}
+)
 _ALLOWED_CORE = frozenset({"database", "feedback", "search_database"})
 _ALLOWED_AUTH_UNRESTRICTED = frozenset({"mode", "workspace"})
 _ALLOWED_AUTH_CLERK = frozenset({"mode", "clerk_domain"})
@@ -33,6 +38,14 @@ _ALLOWED_USER = frozenset(
 _ALLOWED_PROVIDERS = frozenset({"ollama", "openrouter"})
 _ALLOWED_OLLAMA = frozenset({"base_url"})
 _ALLOWED_OPENROUTER = frozenset({"base_url", "api_key"})
+_ALLOWED_SEARCH = frozenset({"warm"})
+_ALLOWED_SEARCH_WARM = frozenset({"embed_batch_size", "max_concurrent_embed_requests"})
+_DEFAULT_EMBED_BATCH_SIZE = 32
+_DEFAULT_MAX_CONCURRENT_EMBED_REQUESTS = 2
+_MIN_EMBED_BATCH_SIZE = 1
+_MAX_EMBED_BATCH_SIZE = 512
+_MIN_CONCURRENT_EMBED_REQUESTS = 1
+_MAX_CONCURRENT_EMBED_REQUESTS = 32
 
 
 def load_config(config_path: str | Path) -> QuailConfig:
@@ -95,6 +108,7 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
         raise ConfigError("hosting.port must be an integer from 1 to 65535")
 
     providers = _parse_providers(data.get("providers"))
+    search_warm = _parse_search_warm(data.get("search"))
 
     if mode == "unrestricted":
         config = _parse_unrestricted(
@@ -105,6 +119,7 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
             feedback=feedback,
             search_database=search_database,
             providers=providers,
+            search_warm=search_warm,
             bind=bind,
             port=port,
         )
@@ -117,6 +132,7 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
             feedback=feedback,
             search_database=search_database,
             providers=providers,
+            search_warm=search_warm,
             bind=bind,
             port=port,
         )
@@ -133,6 +149,7 @@ def _parse_unrestricted(
     feedback: Path,
     search_database: Path | None,
     providers: ProvidersConfig,
+    search_warm: SearchWarmConfig,
     bind: str,
     port: int,
 ) -> QuailConfig:
@@ -159,6 +176,7 @@ def _parse_unrestricted(
         datasets=datasets,
         search_database=search_database,
         providers=providers,
+        search_warm=search_warm,
     )
 
 
@@ -171,6 +189,7 @@ def _parse_clerk(
     feedback: Path,
     search_database: Path | None,
     providers: ProvidersConfig,
+    search_warm: SearchWarmConfig,
     bind: str,
     port: int,
 ) -> QuailConfig:
@@ -281,6 +300,49 @@ def _parse_clerk(
         datasets=tuple(flat_datasets),
         search_database=search_database,
         providers=providers,
+        search_warm=search_warm,
+    )
+
+
+def _parse_search_warm(raw: object) -> SearchWarmConfig:
+    if raw is None:
+        return SearchWarmConfig()
+    if not isinstance(raw, dict):
+        raise ConfigError("search must be a table")
+    _reject_unknown(raw, _ALLOWED_SEARCH, label="search")
+    warm_raw = raw.get("warm")
+    if warm_raw is None:
+        return SearchWarmConfig()
+    if not isinstance(warm_raw, dict):
+        raise ConfigError("search.warm must be a table")
+    _reject_unknown(warm_raw, _ALLOWED_SEARCH_WARM, label="search.warm")
+    batch = _DEFAULT_EMBED_BATCH_SIZE
+    if "embed_batch_size" in warm_raw:
+        batch = warm_raw["embed_batch_size"]
+        if (
+            not isinstance(batch, int)
+            or isinstance(batch, bool)
+            or not (_MIN_EMBED_BATCH_SIZE <= batch <= _MAX_EMBED_BATCH_SIZE)
+        ):
+            raise ConfigError(
+                "search.warm.embed_batch_size must be an integer from "
+                f"{_MIN_EMBED_BATCH_SIZE} to {_MAX_EMBED_BATCH_SIZE}"
+            )
+    concurrency = _DEFAULT_MAX_CONCURRENT_EMBED_REQUESTS
+    if "max_concurrent_embed_requests" in warm_raw:
+        concurrency = warm_raw["max_concurrent_embed_requests"]
+        if (
+            not isinstance(concurrency, int)
+            or isinstance(concurrency, bool)
+            or not (_MIN_CONCURRENT_EMBED_REQUESTS <= concurrency <= _MAX_CONCURRENT_EMBED_REQUESTS)
+        ):
+            raise ConfigError(
+                "search.warm.max_concurrent_embed_requests must be an integer from "
+                f"{_MIN_CONCURRENT_EMBED_REQUESTS} to {_MAX_CONCURRENT_EMBED_REQUESTS}"
+            )
+    return SearchWarmConfig(
+        embed_batch_size=batch,
+        max_concurrent_embed_requests=concurrency,
     )
 
 

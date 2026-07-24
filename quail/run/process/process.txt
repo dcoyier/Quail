@@ -1,0 +1,13 @@
+ProcessOutcome remembers results from one process_config call.
+
+process_config(config, clear=False, embedder_factory=None):
+  Apply CSV import and embedding pins.
+  When search_database is unset, stop after apply.
+  Otherwise warm Lexical (and embeddings when declared) for each dataset.
+  With clear=True, wipe that version's search artifacts before warming.
+  Give back ProcessOutcome.
+
+assert_search_warm(db, config):
+  When search_database is set, require a matching warm receipt for every
+  declared dataset's active version.
+  Used by quail run before MCP starts.
