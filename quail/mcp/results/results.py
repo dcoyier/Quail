@@ -120,7 +120,9 @@ def classify_exception(error: BaseException) -> tuple[str, str]:
     if isinstance(error, AuthError):
         return type(error).__name__, _to_snake(type(error).__name__)
     if isinstance(error, SessionSyntaxError):
-        return "SessionSyntaxError", "session_syntax_error"
+        # Agent-facing diagnostics use the api.md Quail* table; session/dataset
+        # resolve failures are scope pairing problems.
+        return "QuailScopeError", "quail_scope_error"
     if isinstance(error, SessionConflictError):
         return "SessionConflictError", "session_conflict_error"
     if isinstance(error, SessionClosedError):
@@ -134,7 +136,7 @@ def classify_exception(error: BaseException) -> tuple[str, str]:
     if isinstance(error, DatasetError):
         return type(error).__name__, _to_snake(type(error).__name__)
     if isinstance(error, ValueError):
-        return "ValueError", "value_error"
+        return "QuailSyntaxError", "quail_syntax_error"
     return "InternalError", "internal_error"
 
 

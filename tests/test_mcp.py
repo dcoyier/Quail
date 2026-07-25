@@ -235,3 +235,46 @@ def test_exec_scope_error_class(tmp_path: Path) -> None:
         assert payload["diagnostic"]["error_class"] == "QuailScopeError"
 
     asyncio.run(run())
+
+
+def test_exec_unknown_dataset_error_class(tmp_path: Path) -> None:
+    server, _, _ = _seed(tmp_path)
+
+    async def run() -> None:
+        started = _as_dict(await _call(server, "quail_start_session"))
+        result = await _call(
+            server,
+            "quail_exec",
+            {
+                "session_id": started["session_id"],
+                "dataset_id": "no-such-dataset",
+                "code": "print(1)\n",
+            },
+        )
+        assert _is_error(result)
+        payload = _as_dict(result)
+        assert payload["diagnostic"]["error_class"] == "QuailScopeError"
+
+    asyncio.run(run())
+
+
+def test_exec_bad_time_window_error_class(tmp_path: Path) -> None:
+    server, _, _ = _seed(tmp_path)
+
+    async def run() -> None:
+        started = _as_dict(await _call(server, "quail_start_session"))
+        result = await _call(
+            server,
+            "quail_exec",
+            {
+                "session_id": started["session_id"],
+                "dataset_id": "notes",
+                "code": "print(1)\n",
+                "time_window": "forever",
+            },
+        )
+        assert _is_error(result)
+        payload = _as_dict(result)
+        assert payload["diagnostic"]["error_class"] == "QuailSyntaxError"
+
+    asyncio.run(run())

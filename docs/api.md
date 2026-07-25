@@ -157,8 +157,11 @@ atomically (no tags, bindings, or printed output).
 
 ### `Field(name, kind=None)`
 
-`kind` is `"source"`, `"analysis"`, or `None` (resolve by name).  
-Do not compare fields directly — use `Expression(field, Value())`.
+`kind` is `"source"`, `"analysis"`, or `None` (resolve by name at use).  
+Do not compare a Field to a value or order Fields — that raises
+`QuailSyntaxError`; use `Expression(field, Value())` (or a numeric op) for
+entry-value predicates. `Field == Field` is only identity of `(name, kind)`,
+not a value predicate.
 
 ### `Unit(scope, field=None)`
 
@@ -193,7 +196,7 @@ Comparisons (`==`, `!=`, `<`, …) produce a **Predicate**.
 | `RegexSearch(pattern, flags=0)` | First match substring, or `None` |
 | `RegexFindAll(pattern, flags=0)` | `list[str]` of matches |
 | `RegexSub(pattern, replacement, flags=0)` | Literal replace (no backrefs) |
-| `Slice(start, end=None)` | Text slice `[start:end]` |
+| `Slice(start, end=None)` | Python slice `[start:end]` on text **or** list |
 | `Length()` | len(text), len(list), or `0` for `None` |
 | `Lexical(query, ...)` | Lexical relevance score (ends the pipeline) |
 | `Semantic(query, ...)` | Embedding similarity score (ends the pipeline) |

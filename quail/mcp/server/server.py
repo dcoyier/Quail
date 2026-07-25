@@ -9,7 +9,7 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import CallToolResult
 
-from quail.analysis.errors import QuailRuntimeError
+from quail.analysis.errors import QuailRuntimeError, QuailScopeError
 from quail.analysis.exec_host import exec_script
 from quail.auth import (
     AllowlistedPrincipal,
@@ -319,7 +319,7 @@ def _register_unrestricted_tools(
                 with open_core_db(context.db_path) as db:
                     ref = get_dataset(db, context.workspace_id, dataset_id)
                     if ref is None:
-                        raise ValueError(f"Dataset not found: {dataset_id}")
+                        raise QuailScopeError(f"Dataset not found: {dataset_id}")
                     documentation = _dataset_documentation(
                         connector_catalog,
                         workspace_id=context.workspace_id,
@@ -406,7 +406,7 @@ def _register_unrestricted_tools(
                     if dataset_id is not None:
                         ref = get_dataset(db, context.workspace_id, dataset_id)
                         if ref is None:
-                            raise ValueError(f"Dataset not found: {dataset_id}")
+                            raise QuailScopeError(f"Dataset not found: {dataset_id}")
                 append_feedback(
                     context.feedback_path,
                     workspace_id=context.workspace_id,
@@ -617,7 +617,7 @@ def _register_clerk_tools(
                 with open_core_db(runtime.db_path) as db:
                     ref = get_dataset(db, workspace_id, dataset_id)
                     if ref is None:
-                        raise ValueError(f"Dataset not found: {dataset_id}")
+                        raise QuailScopeError(f"Dataset not found: {dataset_id}")
                     documentation = _dataset_documentation(
                         connector_catalog,
                         workspace_id=workspace_id,
@@ -710,7 +710,7 @@ def _register_clerk_tools(
                     if dataset_id is not None:
                         ref = get_dataset(db, workspace_id, dataset_id)
                         if ref is None:
-                            raise ValueError(f"Dataset not found: {dataset_id}")
+                            raise QuailScopeError(f"Dataset not found: {dataset_id}")
                 append_feedback(
                     runtime.feedback_path,
                     workspace_id=workspace_id,

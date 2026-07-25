@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from quail.analysis.errors import QuailSyntaxError
+
 # Always-on worker RSS ceiling (same for every time_window).
 MAX_MEMORY_BYTES = 256 * 1024 * 1024
 
@@ -57,9 +59,9 @@ def validate_time_window(time_window: str | None) -> str:
     if time_window is None:
         return "standard"
     if not isinstance(time_window, str):
-        raise ValueError("time_window must be a string or None")
+        raise QuailSyntaxError("time_window must be a string or None")
     if time_window not in _TIME_WINDOWS:
-        raise ValueError('time_window must be "standard" or "extended"')
+        raise QuailSyntaxError('time_window must be "standard" or "extended"')
     return time_window
 
 

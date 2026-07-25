@@ -8,6 +8,7 @@ ExecLimits remembers wall_seconds, cpu_seconds, and max_memory_bytes.
 validate_time_window(time_window):
   Treat None as standard.
   Require standard or extended.
+  Raise QuailSyntaxError when the window is invalid.
   Give back the normalized window name.
 
 limits_for_time_window(time_window):
