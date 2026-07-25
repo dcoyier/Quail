@@ -1,5 +1,5 @@
-# Unrestricted soak deploy: Garden Gate issues 170+171 (no semantic_text).
-# Agents should Lexical/Semantic on Field("content").
+# Unrestricted soak: full Garden Gate CSV (no semantic_text column).
+# Embed only content; Lexical still indexes all source fields.
 #
 #   uv run quail process --config /absolute/path/to/examples/quail.soak.toml
 #   uv run quail run --config /absolute/path/to/examples/quail.soak.toml
@@ -24,8 +24,8 @@ base_url = "http://127.0.0.1:11434"
 
 [[datasets]]
 id = "garden-gate"
-source = "data/garden-gate-170-171.csv"
-name = "Garden Gate 170-171"
+source = "data/garden-gate.csv"
+name = "Garden Gate"
 
 [datasets.embedding]
 provider = "ollama"
