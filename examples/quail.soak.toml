@@ -1,10 +1,11 @@
-# Unrestricted soak deploy: full Garden Gate corpus (no semantic_text).
-# Lexical indexes title+content; Semantic embeds content only.
+# Unrestricted soak deploy: sample notes corpus.
+# Lexical indexes title+body; Semantic embeds body only when embedding is set.
 #
 #   uv run quail process --config /absolute/path/to/examples/quail.soak.toml
 #   uv run quail run --config /absolute/path/to/examples/quail.soak.toml
 #
-# Requires a reachable Ollama with the embedding model below (or switch provider).
+# Optional: pin the example notes connector after
+# `uv pip install -e ./examples/notes-connector`.
 
 [core]
 database = "data/soak-quail.turso"
@@ -23,16 +24,16 @@ port = 8000
 base_url = "http://127.0.0.1:11434"
 
 [[datasets]]
-id = "garden-gate"
-source = "data/garden-gate.csv"
-name = "Garden Gate"
+id = "notes"
+source = "data/notes.csv"
+name = "Notes"
 
 [datasets.lexical]
-fields = ["title", "content"]
+fields = ["title", "body"]
 
 [datasets.embedding]
 provider = "ollama"
 model = "embeddinggemma:latest"
 dimensions = 768
 revision = "soak-embeddinggemma-v1"
-fields = ["content"]
+fields = ["body"]

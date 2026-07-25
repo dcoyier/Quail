@@ -3,20 +3,20 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Garden Gate dataset card</title>
+    <title>Notes dataset card</title>
     <style>
       :root { color-scheme: light dark; font-family: Georgia, "Times New Roman", serif; }
-      body { margin: 0; padding: 1rem; background: linear-gradient(160deg, #e8f0e4, #f7f4ee); }
+      body { margin: 0; padding: 1rem; background: linear-gradient(160deg, #e8eef5, #f7f4ee); }
       article { display: grid; gap: 0.5rem; }
       h1, p { margin: 0; }
-      h1 { font-size: 1.25rem; color: #1f3d2a; }
+      h1 { font-size: 1.25rem; color: #1f2a3d; }
       button { justify-self: start; padding: 0.4rem 0.75rem; }
       #status { opacity: 0.7; font-size: 0.9rem; }
     </style>
   </head>
   <body>
     <article>
-      <h1 id="heading">Garden Gate</h1>
+      <h1 id="heading">Notes</h1>
       <p id="dataset">Waiting for a tool result.</p>
       <p id="version"></p>
       <button id="refresh" type="button" disabled>Refresh</button>
@@ -36,7 +36,7 @@
         function render(value) {
           if (!value || typeof value !== "object") return;
           selectedDatasetId = value?.dataset_id;
-          document.querySelector("#heading").textContent = value?.heading ?? "Garden Gate";
+          document.querySelector("#heading").textContent = value?.heading ?? "Notes";
           document.querySelector("#dataset").textContent =
             value?.name ?? value?.dataset_id ?? "Unknown";
           document.querySelector("#version").textContent = value?.active_version_id
@@ -54,7 +54,7 @@
           if (!allowBeforeInitialization && !initialized) {
             return Promise.reject(new Error("The widget is not initialized."));
           }
-          const id = `garden-gate-${nextId++}`;
+          const id = `notes-${nextId++}`;
           return new Promise((resolve, reject) => {
             pending.set(id, { resolve, reject });
             send({ jsonrpc: "2.0", id, method, params });
@@ -131,7 +131,7 @@
           status.textContent = "Refreshing…";
           try {
             const result = await request("tools/call", {
-              name: "garden_gate_describe_dataset",
+              name: "notes_describe_dataset",
               arguments: { dataset_id: selectedDatasetId },
             });
             if (result?.isError) status.textContent = "Refresh failed.";
@@ -148,7 +148,7 @@
           try {
             const result = await request("ui/initialize", {
               protocolVersion,
-              appInfo: { name: "quail-garden-gate-dataset-card", version: "1.0.0" },
+              appInfo: { name: "quail-notes-dataset-card", version: "1.0.0" },
               appCapabilities: {},
             }, true);
             if (!validInitializeResult(result)) throw new Error("Invalid initialize result");

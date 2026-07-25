@@ -55,17 +55,17 @@ Tools may overlap on the same dataset; only competing **docs** are rejected.
 
 ```toml
 [[extensions]]
-id = "garden_gate"
+id = "notes"
 version = "1.0.0"
 
 [[connectors]]
-id = "garden_gate"
+id = "notes"
 
 [connectors.config]
-heading = "Garden Gate"
+heading = "Notes"
 
 [[connectors.datasets]]
-id = "garden-gate"
+id = "notes"
 ```
 
 Unknown keys in `config` must be listed on `ConnectorManifest.config_keys` or
@@ -86,9 +86,8 @@ route hosting in v1.
 
 ## Example
 
-See [`examples/garden-gate-connector/`](../examples/garden-gate-connector/) for
-a runnable package (tool + garden-gate docs + widget) and install notes.
-
+See [`examples/notes-connector/`](../examples/notes-connector/) for a runnable
+package (tool + notes docs + widget) and install notes.
 ## Fail-closed operator errors
 
 | Situation | Behavior |

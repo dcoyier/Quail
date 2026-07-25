@@ -102,7 +102,7 @@ class _ToolProvider:
         )
 
     def dataset_document(self, context: ConnectorContext, dataset_id: str) -> str | None:
-        if dataset_id != "garden-gate":
+        if dataset_id != "sample":
             return None
         self._host.require_dataset(context, dataset_id)
         return f"Docs from {self._label} for {dataset_id}"
@@ -180,11 +180,11 @@ def _config(
     csv_path = tmp_path / "notes.csv"
     if not csv_path.exists():
         csv_path.write_text("id,title,content\ne1,Hello,body\n", encoding="utf-8")
-    garden = tmp_path / "garden.csv"
-    if not garden.exists():
-        garden.write_text(
-            "id,issue,page,type,title,author,content,asset_ref\n"
-            "g1,170,1,text,Cover,,hello,\n",
+    sample = tmp_path / "sample.csv"
+    if not sample.exists():
+        sample.write_text(
+            "id,title,body\n"
+            "s1,Cover,hello\n",
             encoding="utf-8",
         )
     manifest = tmp_path / "quail.toml"
@@ -213,14 +213,14 @@ def _config(
 
 def _seed_db(tmp_path: Path, workspace_id: str = "local") -> Path:
     db_path = tmp_path / "core.turso"
-    csv_path = tmp_path / "garden.csv"
+    csv_path = tmp_path / "sample.csv"
     csv_path.write_text(
-        "id,issue,page,type,title,author,content,asset_ref\n"
-        "g1,170,1,text,Cover,,hello,\n",
+        "id,title,body\n"
+        "s1,Cover,hello\n",
         encoding="utf-8",
     )
     with open_core_db(db_path) as db:
-        import_csv_dataset(db, workspace_id, "garden-gate", csv_path, activate=True)
+        import_csv_dataset(db, workspace_id, "sample", csv_path, activate=True)
         import_csv_dataset(
             db,
             workspace_id,
@@ -275,7 +275,7 @@ def test_version_mismatch_fail_closed(tmp_path: Path, monkeypatch: pytest.Monkey
     config = _config(
         tmp_path,
         extensions=(ExtensionPin("alpha", "9.9.9"),),
-        connectors=(ConnectorBinding("alpha", {}, ("garden-gate",)),),
+        connectors=(ConnectorBinding("alpha", {}, ("sample",)),),
     )
     with open_core_db(_seed_db(tmp_path)) as db:
         with pytest.raises(ConnectorLoadError, match="does not match TOML pin"):
@@ -293,7 +293,7 @@ def test_doc_ownership_conflict_fail_closed(
                 environment,
                 extension_id=extension_id,
                 version="1.0.0",
-                docs={"garden-gate": f"docs from {extension_id}"},
+                docs={"sample": f"docs from {extension_id}"},
             )
 
         return factory
@@ -314,8 +314,8 @@ def test_doc_ownership_conflict_fail_closed(
         tmp_path,
         extensions=(ExtensionPin("alpha", "1.0.0"), ExtensionPin("beta", "1.0.0")),
         connectors=(
-            ConnectorBinding("alpha", {}, ("garden-gate",)),
-            ConnectorBinding("beta", {}, ("garden-gate",)),
+            ConnectorBinding("alpha", {}, ("sample",)),
+            ConnectorBinding("beta", {}, ("sample",)),
         ),
     )
     with open_core_db(_seed_db(tmp_path)) as db:
@@ -329,7 +329,7 @@ def test_workspace_isolation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
             environment,
             extension_id="alpha",
             version="1.0.0",
-            docs={"garden-gate": "only in ws-a"},
+            docs={"sample": "only in ws-a"},
         )
 
     def fake_load(
@@ -354,8 +354,8 @@ def test_workspace_isolation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     )
     db_path = tmp_path / "core.turso"
     with open_core_db(db_path) as db:
-        import_csv_dataset(db, "ws-a", "garden-gate", csv_a, activate=True)
-        import_csv_dataset(db, "ws-b", "garden-gate", csv_b, activate=True)
+        import_csv_dataset(db, "ws-a", "sample", csv_a, activate=True)
+        import_csv_dataset(db, "ws-b", "sample", csv_b, activate=True)
 
     config = QuailConfig(
         manifest_path=tmp_path / "quail.toml",
@@ -371,7 +371,7 @@ def test_workspace_isolation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
             WorkspaceSpec(
                 workspace_id="ws-a",
                 datasets=(),
-                connectors=(ConnectorBinding("alpha", {}, ("garden-gate",)),),
+                connectors=(ConnectorBinding("alpha", {}, ("sample",)),),
             ),
             WorkspaceSpec(workspace_id="ws-b", datasets=(), connectors=()),
         ),
@@ -381,7 +381,7 @@ def test_workspace_isolation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     )
     with open_core_db(db_path) as db:
         catalog = load_connector_catalog(config, db)
-    assert "garden-gate" in catalog.for_workspace("ws-a").docs_by_dataset
+    assert "sample" in catalog.for_workspace("ws-a").docs_by_dataset
     assert catalog.for_workspace("ws-b").docs_by_dataset == {}
     assert catalog.for_workspace("ws-b").providers == ()
 
@@ -400,7 +400,7 @@ def test_dataset_document_resolve(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     config = _config(
         tmp_path,
         extensions=(ExtensionPin("alpha", "1.0.0"),),
-        connectors=(ConnectorBinding("alpha", {"heading": "Gate"}, ("garden-gate",)),),
+        connectors=(ConnectorBinding("alpha", {"heading": "Sample"}, ("sample",)),),
     )
     db_path = _seed_db(tmp_path)
     with open_core_db(db_path) as db:
@@ -409,7 +409,7 @@ def test_dataset_document_resolve(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
             catalog.for_workspace("local"),
             workspace_id="local",
             user_id=None,
-            dataset_id="garden-gate",
+            dataset_id="sample",
         )
     assert text is not None
     assert "Docs from alpha" in text
@@ -442,7 +442,7 @@ def test_mcp_tool_and_widget_and_dataset_info(
     config = _config(
         tmp_path,
         extensions=(ExtensionPin("alpha", "1.0.0"),),
-        connectors=(ConnectorBinding("alpha", {}, ("garden-gate",)),),
+        connectors=(ConnectorBinding("alpha", {}, ("sample",)),),
     )
     with open_core_db(db_path) as db:
         catalog = load_connector_catalog(config, db)
@@ -459,12 +459,12 @@ def test_mcp_tool_and_widget_and_dataset_info(
         assert "probe_dataset" in tools
         resources = {str(resource.uri) for resource in await server.list_resources()}
         assert "ui://probe/card.html" in resources
-        probe = await server.call_tool("probe_dataset", {"dataset_id": "garden-gate"})
+        probe = await server.call_tool("probe_dataset", {"dataset_id": "sample"})
         assert isinstance(probe, CallToolResult)
         assert not probe.isError
         assert probe.structuredContent is not None
         assert probe.structuredContent["label"] == "alpha"
-        info = await server.call_tool("quail_get_dataset_info", {"dataset_id": "garden-gate"})
+        info = await server.call_tool("quail_get_dataset_info", {"dataset_id": "sample"})
         assert isinstance(info, CallToolResult)
         assert not info.isError
         assert info.structuredContent is not None
@@ -567,12 +567,12 @@ def test_example_package_surface(tmp_path: Path) -> None:
     example_src = (
         Path(__file__).resolve().parents[1]
         / "examples"
-        / "garden-gate-connector"
+        / "notes-connector"
         / "src"
     )
     sys.path.insert(0, str(example_src))
     try:
-        from quail_garden_gate_connector import create_connector
+        from quail_notes_connector import create_connector
     finally:
         sys.path.remove(str(example_src))
 
@@ -585,32 +585,32 @@ def test_example_package_surface(tmp_path: Path) -> None:
             base_path=tmp_path,
         )
         connector = create_connector(environment)
-        assert connector.manifest.id == "garden_gate"
+        assert connector.manifest.id == "notes"
         assert connector.manifest.version == "1.0.0"
-        assert any(t.name == "garden_gate_describe_dataset" for t in connector.manifest.tools)
+        assert any(t.name == "notes_describe_dataset" for t in connector.manifest.tools)
         assert any(w.uri.startswith("ui://") for w in connector.manifest.widgets)
         provider = connector.connect(
             WorkspaceConnectorRuntime(
                 workspace_id="local",
-                config={"heading": "Garden Gate"},
-                dataset_ids=frozenset({"garden-gate"}),
+                config={"heading": "Notes"},
+                dataset_ids=frozenset({"notes"}),
             )
         )
         context = ConnectorContext(
             workspace_id="local",
             user_id=None,
-            extension_id="garden_gate",
+            extension_id="notes",
             extension_version="1.0.0",
-            dataset_ids=frozenset({"garden-gate"}),
+            dataset_ids=frozenset({"notes"}),
         )
-        docs = provider.dataset_document(context, "garden-gate")
+        docs = provider.dataset_document(context, "notes")
         assert docs is not None
         assert "Lexical" in docs
-        result = provider.call_tool(context, "garden_gate_describe_dataset", {"dataset_id": "garden-gate"})
+        result = provider.call_tool(context, "notes_describe_dataset", {"dataset_id": "notes"})
         assert isinstance(result, ToolResult)
-        assert result.structured_content["heading"] == "Garden Gate"
-        html = connector.read_resource("ui://garden-gate/dataset-card.html")
-        assert "garden_gate_describe_dataset" in html
+        assert result.structured_content["heading"] == "Notes"
+        html = connector.read_resource("ui://notes/dataset-card.html")
+        assert "notes_describe_dataset" in html
 
 
 class _CoreHostAdapter:

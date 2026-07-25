@@ -13,3 +13,7 @@ build/
 .quail/
 *.toml.lock
 .env
+*.turso
+*.turso-shm
+*.turso-wal
+examples/data/soak-*.jsonl

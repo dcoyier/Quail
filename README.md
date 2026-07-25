@@ -13,7 +13,7 @@ This tree stays small. Product decisions live in
 First-build spine through Clerk, search warm, `quail_exec` concurrency, and the
 Connector SDK (extra tools, dataset docs, MCP UI widgets) is in place. Author
 guide: [`docs/connector-sdk.md`](docs/connector-sdk.md). Example package:
-[`examples/garden-gate-connector/`](examples/garden-gate-connector/).
+[`examples/notes-connector/`](examples/notes-connector/).
 
 `quail process --config /absolute/path/to/quail.toml` imports declared CSVs and
 warms Lexical FTS plus corpus embeddings into the search database.
