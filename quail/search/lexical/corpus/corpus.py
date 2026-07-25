@@ -1,4 +1,4 @@
-"""Per-version Turso FTS document and term tables inside the search DB."""
+"""Per-version Turso document tables; FTS indexes built after plain inserts."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from quail.search.lexical.query import prepare_prefix_text, prepare_text
 
 _TABLE_NAME_RE = re.compile(r"^quail_lex_[dt]_[0-9a-f]{32}$")
 _MAX_PREFIX_TERMS = 4_096
-# Bound WAL growth during quail process warm (one giant commit blew past 12GB).
+# Bound WAL growth while writing plain segment rows during warm.
 _ENTRY_COMMIT_BATCH_SIZE = 64
 
 
@@ -33,7 +33,7 @@ def resolve_corpus(
     dataset_id: str,
     version_id: str,
 ) -> LexicalCorpus:
-    """Return existing or newly created per-version FTS tables."""
+    """Return existing or newly created per-version document tables (no FTS yet)."""
 
     connection = search.connection
     row = connection.execute(
@@ -78,20 +78,6 @@ def resolve_corpus(
         )
         connection.execute(
             f"""
-            CREATE INDEX {doc_table}_fts
-            ON {doc_table} USING fts(text)
-            WITH (tokenizer = 'whitespace')
-            """
-        )
-        connection.execute(
-            f"""
-            CREATE INDEX {doc_table}_prefix_fts
-            ON {doc_table} USING fts(prefix_text)
-            WITH (tokenizer = 'whitespace')
-            """
-        )
-        connection.execute(
-            f"""
             CREATE INDEX {doc_table}_entry
             ON {doc_table}(entry_id, segment_position)
             """
@@ -108,7 +94,7 @@ def resolve_corpus(
     except Exception:
         connection.rollback()
         raise QuailRuntimeError(
-            "Failed to create lexical FTS corpus tables",
+            "Failed to create lexical corpus tables",
             repair_hint="Retry the whole exec; if it persists, rebuild the search database.",
         ) from None
     return LexicalCorpus(doc_table=doc_table, terms_table=terms_table)
@@ -120,7 +106,7 @@ def load_entry_segment_counts(
     *,
     entry_ids: Sequence[str],
 ) -> dict[str, int]:
-    """Return entry_id → segment count for entries that already have FTS rows."""
+    """Return entry_id → segment count for entries that already have document rows."""
 
     if not entry_ids:
         return {}
@@ -138,80 +124,49 @@ def load_entry_segment_counts(
     return {str(row[0]): int(row[1]) for row in rows}
 
 
+def warm_entry_segments(
+    search: SearchDb,
+    corpus: LexicalCorpus,
+    *,
+    entry_segments: dict[str, list[str]],
+) -> dict[str, int]:
+    """Full Lexical rebuild: plain segment writes, then one dual FTS index build.
+
+    Used by ``quail process``. Drops any existing FTS indexes first so inserts
+    stay cheap (v0.10 build order). Score paths should use
+    ``ensure_entry_segments`` for small fallback patches.
+    """
+
+    _drop_fts_indexes(search, corpus)
+    counts = _write_entry_segments(
+        search,
+        corpus,
+        entry_segments=entry_segments,
+        replace_all=True,
+    )
+    _create_fts_indexes(search, corpus)
+    return counts
+
+
 def ensure_entry_segments(
     search: SearchDb,
     corpus: LexicalCorpus,
     *,
     entry_segments: dict[str, list[str]],
 ) -> dict[str, int]:
-    """Replace indexed segments for each entry; return segment counts.
+    """Replace segments for the given entries; ensure FTS indexes exist afterward.
 
-    Used by ``quail process`` warm and by score-time fallback when lexical warm
-    is missing or incomplete. Score paths should prefer
+    Score-time fallback when warm is missing or incomplete. Prefer
     ``load_entry_segment_counts`` when the warm receipt is lexical-ready.
-
-    Commits every ``_ENTRY_COMMIT_BATCH_SIZE`` entries so Turso WAL does not
-    hold the whole corpus until one final commit. A crash mid-pass leaves a
-    partial index; the next warm rewrites every entry (delete-then-insert).
     """
 
-    if not entry_segments:
-        return {}
-
-    connection = search.connection
-    counts: dict[str, int] = {}
-    batch: list[tuple[str, list[str]]] = []
-
-    def _commit_batch() -> None:
-        if not batch:
-            return
-        try:
-            connection.execute("BEGIN IMMEDIATE")
-            for entry_id, segments in batch:
-                connection.execute(
-                    f"DELETE FROM {corpus.doc_table} WHERE entry_id = ?",
-                    (entry_id,),
-                )
-                for position, segment in enumerate(segments):
-                    prepared, analyzed = prepare_text(segment)
-                    prefix_prepared, prefix_terms = prepare_prefix_text(analyzed)
-                    connection.execute(
-                        f"""
-                        INSERT INTO {corpus.doc_table}(
-                          entry_id, segment_position, text, prefix_text
-                        ) VALUES (?, ?, ?, ?)
-                        """,
-                        (entry_id, position, prepared, prefix_prepared),
-                    )
-                    if prefix_terms:
-                        connection.executemany(
-                            f"""
-                            INSERT OR IGNORE INTO {corpus.terms_table}(term, indexed_term)
-                            VALUES (?, ?)
-                            """,
-                            list(prefix_terms),
-                        )
-                counts[entry_id] = len(segments)
-            connection.commit()
-            # FTS writes pile into WAL; truncate after each batch so peaks
-            # stay bounded as the dual indexes grow.
-            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        except QuailRuntimeError:
-            connection.rollback()
-            raise
-        except Exception as error:
-            connection.rollback()
-            raise QuailRuntimeError(
-                "Failed to index lexical corpus segments",
-                repair_hint="Retry the whole exec; if it persists, rebuild the search database.",
-            ) from error
-        batch.clear()
-
-    for entry_id, segments in entry_segments.items():
-        batch.append((entry_id, segments))
-        if len(batch) >= _ENTRY_COMMIT_BATCH_SIZE:
-            _commit_batch()
-    _commit_batch()
+    counts = _write_entry_segments(
+        search,
+        corpus,
+        entry_segments=entry_segments,
+        replace_all=False,
+    )
+    _create_fts_indexes(search, corpus)
     return counts
 
 
@@ -247,6 +202,153 @@ def expand_prefixes(
         expanded_count += len(terms)
         output[prefix] = terms
     return output
+
+
+def _write_entry_segments(
+    search: SearchDb,
+    corpus: LexicalCorpus,
+    *,
+    entry_segments: dict[str, list[str]],
+    replace_all: bool,
+) -> dict[str, int]:
+    if not entry_segments and not replace_all:
+        return {}
+
+    connection = search.connection
+    doc_table = validate_table_ident(corpus.doc_table)
+    terms_table = validate_table_ident(corpus.terms_table)
+    counts: dict[str, int] = {}
+    batch: list[tuple[str, list[str]]] = []
+
+    def _commit_batch() -> None:
+        if not batch:
+            return
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            for entry_id, segments in batch:
+                connection.execute(
+                    f"DELETE FROM {doc_table} WHERE entry_id = ?",
+                    (entry_id,),
+                )
+                for position, segment in enumerate(segments):
+                    prepared, analyzed = prepare_text(segment)
+                    prefix_prepared, prefix_terms = prepare_prefix_text(analyzed)
+                    connection.execute(
+                        f"""
+                        INSERT INTO {doc_table}(
+                          entry_id, segment_position, text, prefix_text
+                        ) VALUES (?, ?, ?, ?)
+                        """,
+                        (entry_id, position, prepared, prefix_prepared),
+                    )
+                    if prefix_terms:
+                        connection.executemany(
+                            f"""
+                            INSERT OR IGNORE INTO {terms_table}(term, indexed_term)
+                            VALUES (?, ?)
+                            """,
+                            list(prefix_terms),
+                        )
+                counts[entry_id] = len(segments)
+            connection.commit()
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except QuailRuntimeError:
+            connection.rollback()
+            raise
+        except Exception as error:
+            connection.rollback()
+            raise QuailRuntimeError(
+                "Failed to write lexical corpus segments",
+                repair_hint="Retry the whole exec; if it persists, rebuild the search database.",
+            ) from error
+        batch.clear()
+
+    if replace_all:
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(f"DELETE FROM {doc_table}")
+            connection.execute(f"DELETE FROM {terms_table}")
+            connection.commit()
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception as error:
+            connection.rollback()
+            raise QuailRuntimeError(
+                "Failed to clear lexical corpus segments",
+                repair_hint="Retry quail process; if it persists, rebuild the search database.",
+            ) from error
+
+    for entry_id, segments in entry_segments.items():
+        batch.append((entry_id, segments))
+        if len(batch) >= _ENTRY_COMMIT_BATCH_SIZE:
+            _commit_batch()
+    _commit_batch()
+    return counts
+
+
+def _fts_index_names(doc_table: str) -> tuple[str, str]:
+    return f"{doc_table}_fts", f"{doc_table}_prefix_fts"
+
+
+def _fts_indexes_present(search: SearchDb, corpus: LexicalCorpus) -> bool:
+    fts_name, _prefix = _fts_index_names(validate_table_ident(corpus.doc_table))
+    row = search.connection.execute(
+        """
+        SELECT 1 FROM sqlite_master
+        WHERE type = 'index' AND name = ?
+        """,
+        (fts_name,),
+    ).fetchone()
+    return row is not None
+
+
+def _drop_fts_indexes(search: SearchDb, corpus: LexicalCorpus) -> None:
+    doc_table = validate_table_ident(corpus.doc_table)
+    fts_name, prefix_name = _fts_index_names(doc_table)
+    connection = search.connection
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute(f"DROP INDEX IF EXISTS {fts_name}")
+        connection.execute(f"DROP INDEX IF EXISTS {prefix_name}")
+        connection.commit()
+        connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    except Exception as error:
+        connection.rollback()
+        raise QuailRuntimeError(
+            "Failed to drop lexical FTS indexes",
+            repair_hint="Retry quail process; if it persists, rebuild the search database.",
+        ) from error
+
+
+def _create_fts_indexes(search: SearchDb, corpus: LexicalCorpus) -> None:
+    if _fts_indexes_present(search, corpus):
+        return
+    doc_table = validate_table_ident(corpus.doc_table)
+    fts_name, prefix_name = _fts_index_names(doc_table)
+    connection = search.connection
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute(
+            f"""
+            CREATE INDEX {fts_name}
+            ON {doc_table} USING fts(text)
+            WITH (tokenizer = 'whitespace')
+            """
+        )
+        connection.execute(
+            f"""
+            CREATE INDEX {prefix_name}
+            ON {doc_table} USING fts(prefix_text)
+            WITH (tokenizer = 'whitespace')
+            """
+        )
+        connection.commit()
+        connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    except Exception as error:
+        connection.rollback()
+        raise QuailRuntimeError(
+            "Failed to create lexical FTS indexes",
+            repair_hint="Retry quail process; if it persists, rebuild the search database.",
+        ) from error
 
 
 def _require_safe_table(name: str) -> None:

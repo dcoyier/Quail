@@ -146,6 +146,15 @@ def test_ensure_entry_segments_commits_in_batches(
         dataset_id="notes",
         version_id="v1",
     )
+    # resolve_corpus must not create FTS up front (FTS-last warm order).
+    fts_name = f"{corpus.doc_table}_fts"
+    assert (
+        search.connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='index' AND name=?",
+            (fts_name,),
+        ).fetchone()
+        is None
+    )
     commits: list[int] = []
     original_commit = search.connection.commit
 
@@ -166,12 +175,60 @@ def test_ensure_entry_segments_commits_in_batches(
         },
     )
     assert counts == {"e1": 1, "e2": 1, "e3": 1, "e4": 1, "e5": 1}
-    # 5 entries / batch size 2 → 3 indexing commits (resolve_corpus already committed).
-    assert len(commits) == 3
+    # 5 entries / batch size 2 → 3 write commits, then one FTS-create commit.
+    assert len(commits) == 4
+    assert (
+        search.connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='index' AND name=?",
+            (fts_name,),
+        ).fetchone()
+        is not None
+    )
     loaded = corpus_mod.load_entry_segment_counts(
         search, corpus, entry_ids=["e1", "e2", "e3", "e4", "e5"]
     )
     assert loaded == counts
+    search.close()
+
+
+def test_warm_entry_segments_builds_fts_after_rows(tmp_path: Path) -> None:
+    from quail.search.lexical.corpus import resolve_corpus, warm_entry_segments
+
+    search = open_search_db(tmp_path / "search.turso")
+    corpus = resolve_corpus(
+        search,
+        workspace_id="ws",
+        dataset_id="notes",
+        version_id="v1",
+    )
+    fts_name = f"{corpus.doc_table}_fts"
+    create_order: list[str] = []
+    original_execute = search.connection.execute
+
+    def _tracking_execute(sql: object, params: object = ()) -> object:
+        text = str(sql)
+        if "CREATE INDEX" in text and "USING fts" in text:
+            create_order.append("fts")
+        if "INSERT INTO" in text and corpus.doc_table in text:
+            create_order.append("insert")
+        return original_execute(sql, params)
+
+    search.connection.execute = _tracking_execute  # type: ignore[method-assign]
+    warm_entry_segments(
+        search,
+        corpus,
+        entry_segments={"e1": ["hydrangea care"], "e2": ["climate notes"]},
+    )
+    assert "insert" in create_order
+    assert "fts" in create_order
+    assert create_order.index("insert") < create_order.index("fts")
+    assert (
+        search.connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='index' AND name=?",
+            (fts_name,),
+        ).fetchone()
+        is not None
+    )
     search.close()
 
 

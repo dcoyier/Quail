@@ -14,9 +14,9 @@ from quail.providers import EmbeddingClient, ProviderError
 from quail.search.cache import get_cached_vector_blob, put_cached_vector
 from quail.search.db import SearchDb
 from quail.search.lexical.corpus import (
-    ensure_entry_segments,
     resolve_corpus,
     validate_table_ident,
+    warm_entry_segments,
 )
 from quail.search.pin import get_pinned_profile_hash
 from quail.search.vectors import text_hash, unit_vector
@@ -296,8 +296,8 @@ def warm_dataset(
         dataset_id=dataset_id,
         version_id=version_id,
     )
-    # Batched Lexical commits can leave a partial index; clear readiness first so
-    # serve cannot treat a failed re-warm as authoritative.
+    # Full Lexical rebuild writes plain rows then creates FTS once. Clear
+    # readiness first so serve cannot treat a failed re-warm as authoritative.
     put_warm_receipt(
         search,
         workspace_id=workspace_id,
@@ -308,7 +308,7 @@ def warm_dataset(
         embedding_ready=False,
         text_count=0,
     )
-    ensure_entry_segments(search, corpus, entry_segments=entry_segments)
+    warm_entry_segments(search, corpus, entry_segments=entry_segments)
 
     embedded_batches = 0
     embedding_ready = False

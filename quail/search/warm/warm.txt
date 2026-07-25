@@ -24,9 +24,9 @@ warm_dataset:
   If an existing receipt has a different profile_hash, delete those vectors.
   Collect texts for Lexical using lexical_fields when set (else all fields).
   Resolve the Lexical corpus.
-  Write a not-ready warm receipt before Lexical indexing so a mid-pass failure
+  Write a not-ready warm receipt before Lexical rebuild so a mid-pass failure
   cannot leave lexical_ready over a partial index.
-  Build Lexical corpus segments for those entries (batched commits).
+  Rebuild Lexical with warm_entry_segments (plain row writes, then one FTS build).
   When a profile is set, collect embed texts from profile.fields only
   (or all fields when fields is omitted — never reuse the Lexical text list),
   then embed unique missing texts in batches with at most

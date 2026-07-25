@@ -1,6 +1,6 @@
 There is a safe table-name pattern quail_lex_[dt]_<32 hex> and a default
 prefix-term budget of 4096.
-There is an entry commit batch size of 64 for Lexical indexing.
+There is an entry commit batch size of 64 for plain segment writes.
 
 LexicalCorpus remembers doc_table and terms_table for one version.
 
@@ -8,30 +8,45 @@ resolve_corpus(search, workspace_id, dataset_id, version_id):
   Look up quail_lexical_corpus.
   If present, require safe table names and give back LexicalCorpus.
   Otherwise hash the scope to table names, create the document and terms
-  tables, create dual whitespace FTS indexes on text and prefix_text, create
-  the entry index, register the corpus row, and give back LexicalCorpus.
+  tables, create the entry index (not FTS), register the corpus row, and
+  give back LexicalCorpus.
   Raise QuailRuntimeError with a rebuild hint when creation fails.
 
-ensure_entry_segments(search, corpus, entry_segments):
-  If entry_segments is empty, give back {}.
-  Otherwise index in batches of _ENTRY_COMMIT_BATCH_SIZE entries: for each
-  entry delete existing document rows, prepare text and prefix text, insert
-  segments, and insert-or-ignore prefix dictionary terms, then commit and
-  truncate the WAL checkpoint.
-  Give back entry_id -> segment count.
-  Raise QuailRuntimeError when a batch fails (prior batches stay committed).
-  Used by quail process warm and by score-time fallback when lexical warm is
-  missing or incomplete.
-
 load_entry_segment_counts(search, corpus, entry_ids):
-  Read existing FTS row counts for the given entry ids (GROUP BY entry_id).
+  Read existing document row counts for the given entry ids (GROUP BY entry_id).
   Give back entry_id -> count for entries that already have rows.
   Used by score paths to reuse process-warmed segments without rewrite.
+
+warm_entry_segments(search, corpus, entry_segments):
+  Drop any existing dual FTS indexes.
+  Clear all document and terms rows.
+  Write every entry's segments in batches of _ENTRY_COMMIT_BATCH_SIZE
+  (prepare text/prefix text, insert rows, insert-or-ignore terms).
+  Create dual whitespace FTS indexes on text and prefix_text once.
+  Give back entry_id -> segment count.
+  Used by quail process warm.
+
+ensure_entry_segments(search, corpus, entry_segments):
+  Write the given entries' rows in batches (delete then insert), then create
+  FTS indexes if they are missing (including when entry_segments is empty).
+  Give back entry_id -> segment count.
+  Used by score-time fallback when lexical warm is missing or incomplete.
 
 expand_prefixes(search, corpus, prefixes, max_prefix_terms default 4096):
   Range-scan the terms table for each prefix under the remaining budget.
   Raise when expansion would exceed the request-wide term limit.
   Give back prefix -> indexed_term tuple.
+
+_write_entry_segments(search, corpus, entry_segments, replace_all):
+  When replace_all, delete every document and terms row first.
+  When entry_segments is empty and replace_all is false, give back {} without
+  writing.
+  Otherwise batch-write entry segments and checkpoint the WAL.
+  Raise QuailRuntimeError when a batch fails.
+
+_drop_fts_indexes / _create_fts_indexes:
+  Drop or create the dual FTS indexes for corpus.doc_table.
+  create is a no-op when the primary FTS index already exists.
 
 _require_safe_table(name):
   Raise when the name does not match the safe pattern.

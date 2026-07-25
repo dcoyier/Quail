@@ -295,7 +295,7 @@ def test_failed_rewarm_clears_lexical_ready(
         raise QuailRuntimeError("simulated mid-warm failure")
 
     monkeypatch.setattr(
-        "quail.search.warm.warm.ensure_entry_segments",
+        "quail.search.warm.warm.warm_entry_segments",
         _failing_ensure,
     )
 

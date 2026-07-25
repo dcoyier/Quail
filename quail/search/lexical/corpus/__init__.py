@@ -7,6 +7,7 @@ from .corpus import (
     load_entry_segment_counts,
     resolve_corpus,
     validate_table_ident,
+    warm_entry_segments,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "load_entry_segment_counts",
     "resolve_corpus",
     "validate_table_ident",
+    "warm_entry_segments",
 ]
