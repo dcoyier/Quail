@@ -132,6 +132,49 @@ def test_lexical_score_reuses_warm_segments_without_rewrite(
     search.close()
 
 
+def test_ensure_entry_segments_commits_in_batches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from quail.search.lexical.corpus import corpus as corpus_mod
+    from quail.search.lexical.corpus import ensure_entry_segments, resolve_corpus
+
+    monkeypatch.setattr(corpus_mod, "_ENTRY_COMMIT_BATCH_SIZE", 2)
+    search = open_search_db(tmp_path / "search.turso")
+    corpus = resolve_corpus(
+        search,
+        workspace_id="ws",
+        dataset_id="notes",
+        version_id="v1",
+    )
+    commits: list[int] = []
+    original_commit = search.connection.commit
+
+    def _counting_commit() -> None:
+        commits.append(1)
+        original_commit()
+
+    monkeypatch.setattr(search.connection, "commit", _counting_commit)
+    counts = ensure_entry_segments(
+        search,
+        corpus,
+        entry_segments={
+            "e1": ["alpha"],
+            "e2": ["beta"],
+            "e3": ["gamma"],
+            "e4": ["delta"],
+            "e5": ["epsilon"],
+        },
+    )
+    assert counts == {"e1": 1, "e2": 1, "e3": 1, "e4": 1, "e5": 1}
+    # 5 entries / batch size 2 → 3 indexing commits (resolve_corpus already committed).
+    assert len(commits) == 3
+    loaded = corpus_mod.load_entry_segment_counts(
+        search, corpus, entry_ids=["e1", "e2", "e3", "e4", "e5"]
+    )
+    assert loaded == counts
+    search.close()
+
+
 def test_lexical_match_and_miss(tmp_path: Path) -> None:
     search = open_search_db(tmp_path / "search.turso")
     service = LexicalService(search=search)

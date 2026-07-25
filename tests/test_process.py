@@ -45,6 +45,7 @@ def _write_manifest(
     warm_knobs: str = "",
     extra_rows: str = "",
     embedding_fields: str = "",
+    lexical_fields: str = "",
 ) -> Path:
     data = tmp_path / "data"
     data.mkdir(parents=True, exist_ok=True)
@@ -67,6 +68,12 @@ revision = "{revision}"{fields_line}
         providers = """
 [providers.ollama]
 base_url = "http://127.0.0.1:11434"
+"""
+    lexical_block = ""
+    if lexical_fields:
+        lexical_block = f"""
+[datasets.lexical]
+fields = {lexical_fields}
 """
     warm = ""
     if warm_knobs:
@@ -94,6 +101,7 @@ port = 8765
 id = "notes"
 source = "data/notes.csv"
 name = "Notes"
+{lexical_block}
 {embedding_block}
 """,
         encoding="utf-8",
@@ -273,6 +281,59 @@ def test_lexical_only_warm_without_embedding(tmp_path: Path) -> None:
         db.close()
 
 
+def test_failed_rewarm_clears_lexical_ready(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from quail.search.warm import require_warm_ready, warm_dataset
+
+    manifest = _write_manifest(tmp_path, embedding=False)
+    config = load_config(manifest)
+    outcome = process_config(config)
+    version_id = outcome.results[0].version_id
+
+    def _failing_ensure(*args: object, **kwargs: object) -> dict[str, int]:
+        raise QuailRuntimeError("simulated mid-warm failure")
+
+    monkeypatch.setattr(
+        "quail.search.warm.warm.ensure_entry_segments",
+        _failing_ensure,
+    )
+
+    db = open_core_db(config.database)
+    search = open_search_db(config.search_database)  # type: ignore[arg-type]
+    try:
+        with pytest.raises(QuailRuntimeError, match="simulated mid-warm failure"):
+            warm_dataset(
+                db,
+                search,
+                workspace_id="local",
+                dataset_id="notes",
+                version_id=version_id,
+                profile=None,
+                warm=config.search_warm,
+                embedder_factory=lambda _p: (_ for _ in ()).throw(RuntimeError("no")),
+            )
+        receipt = get_warm_receipt(
+            search,
+            workspace_id="local",
+            dataset_id="notes",
+            version_id=version_id,
+        )
+        assert receipt is not None
+        assert receipt.lexical_ready is False
+        with pytest.raises(QuailRuntimeError, match="Lexical warm is incomplete"):
+            require_warm_ready(
+                search,
+                workspace_id="local",
+                dataset_id="notes",
+                version_id=version_id,
+                profile=None,
+            )
+    finally:
+        search.close()
+        db.close()
+
+
 def test_process_without_search_database_is_apply_only(tmp_path: Path) -> None:
     csv_path = tmp_path / "data" / "notes.csv"
     csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -364,8 +425,81 @@ def test_embedding_fields_limits_vectors_not_lexical(tmp_path: Path) -> None:
 def test_embedding_fields_unknown_raises(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path, embedding_fields='["missing"]')
     config = load_config(manifest)
-    with pytest.raises(QuailRuntimeError, match="Embedding fields not present"):
+    with pytest.raises(QuailRuntimeError, match="Source fields not present"):
         process_config(config, embedder_factory=lambda _p: RecordingEmbedder())
+
+
+def test_lexical_fields_limits_warm_segments(tmp_path: Path) -> None:
+    from quail.search.lexical.corpus import load_entry_segment_counts, resolve_corpus
+    from quail.search import LexicalService
+
+    manifest = _write_manifest(
+        tmp_path,
+        embedding=False,
+        lexical_fields='["body"]',
+    )
+    config = load_config(manifest)
+    assert config.datasets[0].lexical_fields == ("body",)
+    outcome = process_config(config)
+    result = outcome.results[0]
+    assert result.text_count == 2  # only body values for Lexical
+    search = open_search_db(config.search_database)  # type: ignore[arg-type]
+    try:
+        corpus = resolve_corpus(
+            search,
+            workspace_id="local",
+            dataset_id="notes",
+            version_id=result.version_id,
+        )
+        counts = load_entry_segment_counts(
+            search, corpus, entry_ids=["e1", "e2"]
+        )
+        assert counts == {"e1": 1, "e2": 1}
+        service = LexicalService(search=search)
+        scores = service.lexical_scores_for_entries(
+            workspace_id="local",
+            dataset_id="notes",
+            version_id=result.version_id,
+            corpus_by_entry={"e1": "hydrangea care", "e2": "climate notes"},
+            query_record={"kind": "LiteralText", "text": "hydrangea"},
+            input_aggregation=None,
+            target_aggregation=None,
+        )
+        assert scores["e1"] > 0
+        assert scores["e2"] == 0.0
+    finally:
+        search.close()
+
+
+def test_lexical_fields_do_not_narrow_unrestricted_embedding(tmp_path: Path) -> None:
+    manifest = _write_manifest(
+        tmp_path,
+        lexical_fields='["body"]',
+        # embedding.fields omitted → embed every source field
+    )
+    config = load_config(manifest)
+    assert config.datasets[0].lexical_fields == ("body",)
+    assert config.datasets[0].embedding is not None
+    assert config.datasets[0].embedding.fields is None
+    fake = RecordingEmbedder(dimensions=4)
+    outcome = process_config(config, embedder_factory=lambda _p: fake)
+    result = outcome.results[0]
+    assert result.text_count == 2  # Lexical: body only
+    assert result.unique_text_count == 4  # embed: title+body
+    embedded = {text for batch in fake.calls for text in batch}
+    assert embedded == {"Hello", "hydrangea care", "Other", "climate notes"}
+
+
+def test_lexical_fields_unknown_raises(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, embedding=False, lexical_fields='["missing"]')
+    config = load_config(manifest)
+    with pytest.raises(QuailRuntimeError, match="Source fields not present"):
+        process_config(config)
+
+
+def test_lexical_fields_parse_rejects_empty(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="fields"):
+        load_config(_write_manifest(tmp_path, embedding=False, lexical_fields="[]"))
 
 
 def test_embedding_fields_parse_rejects_empty(tmp_path: Path) -> None:

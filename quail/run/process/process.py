@@ -60,6 +60,7 @@ def process_config(
                 warm=config.search_warm,
                 embedder_factory=factory,
                 clear=clear,
+                lexical_fields=spec.lexical_fields,
             )
             results.append(result)
     except Exception:

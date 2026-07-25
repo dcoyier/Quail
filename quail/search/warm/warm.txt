@@ -17,14 +17,19 @@ collect_corpus_texts:
   Read source fields for every entry (all fields, or field_names when set).
   Keep non-empty text cells.
   Give back the flat text list and per-entry segment lists.
-  Unknown field_names raise QuailRuntimeError.
+  Unknown field_names raise QuailRuntimeError (source fields message).
 
 warm_dataset:
   Optionally clear the version.
   If an existing receipt has a different profile_hash, delete those vectors.
-  Collect all-field texts, build Lexical corpus segments for all entries.
-  When a profile is set, embed unique missing texts from profile.fields only
-  (or all fields when fields is omitted), in batches with at most
+  Collect texts for Lexical using lexical_fields when set (else all fields).
+  Resolve the Lexical corpus.
+  Write a not-ready warm receipt before Lexical indexing so a mid-pass failure
+  cannot leave lexical_ready over a partial index.
+  Build Lexical corpus segments for those entries (batched commits).
+  When a profile is set, collect embed texts from profile.fields only
+  (or all fields when fields is omitted — never reuse the Lexical text list),
+  then embed unique missing texts in batches with at most
   max_concurrent_embed_requests in flight (provider calls only; cache writes
   stay on the main thread).
   Write a ready warm receipt.

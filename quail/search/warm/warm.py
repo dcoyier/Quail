@@ -210,10 +210,10 @@ def collect_corpus_texts(
         if missing:
             missing_list = ", ".join(repr(name) for name in missing)
             raise QuailRuntimeError(
-                f"Embedding fields not present on dataset {dataset_id!r}: {missing_list}",
+                f"Source fields not present on dataset {dataset_id!r}: {missing_list}",
                 repair_hint=(
-                    "Fix datasets.embedding.fields to match CSV column names, "
-                    "then re-run quail process."
+                    "Fix datasets.lexical.fields or datasets.embedding.fields to match "
+                    "CSV column names, then re-run quail process."
                 ),
             )
         wanted = set(field_names)
@@ -250,6 +250,7 @@ def warm_dataset(
     warm: SearchWarmConfig,
     embedder_factory: Callable[[EmbeddingProfile], EmbeddingClient],
     clear: bool = False,
+    lexical_fields: Sequence[str] | None = None,
 ) -> WarmDatasetResult:
     """Warm Lexical (+ embeddings when profile set) and write the receipt."""
 
@@ -287,6 +288,7 @@ def warm_dataset(
         workspace_id=workspace_id,
         dataset_id=dataset_id,
         version_id=version_id,
+        field_names=lexical_fields,
     )
     corpus = resolve_corpus(
         search,
@@ -294,21 +296,32 @@ def warm_dataset(
         dataset_id=dataset_id,
         version_id=version_id,
     )
+    # Batched Lexical commits can leave a partial index; clear readiness first so
+    # serve cannot treat a failed re-warm as authoritative.
+    put_warm_receipt(
+        search,
+        workspace_id=workspace_id,
+        dataset_id=dataset_id,
+        version_id=version_id,
+        profile_hash=desired_hash,
+        lexical_ready=False,
+        embedding_ready=False,
+        text_count=0,
+    )
     ensure_entry_segments(search, corpus, entry_segments=entry_segments)
 
     embedded_batches = 0
     embedding_ready = False
     if profile is not None:
-        if profile.fields is None:
-            embed_texts = texts
-        else:
-            embed_texts, _ = collect_corpus_texts(
-                db,
-                workspace_id=workspace_id,
-                dataset_id=dataset_id,
-                version_id=version_id,
-                field_names=profile.fields,
-            )
+        # Always collect for the embedding field set (None = all source fields).
+        # Do not reuse Lexical `texts` — lexical_fields may be a narrower subset.
+        embed_texts, _ = collect_corpus_texts(
+            db,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+            field_names=profile.fields,
+        )
         unique_texts = _unique_texts(embed_texts)
         embedded_batches = _warm_embeddings(
             search,

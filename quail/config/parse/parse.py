@@ -43,8 +43,9 @@ _ALLOWED_HOSTING = frozenset({"bind", "port", "max_concurrent_executions", "publ
 _DEFAULT_MAX_CONCURRENT_EXECUTIONS = 2
 _MIN_MAX_CONCURRENT_EXECUTIONS = 1
 _MAX_MAX_CONCURRENT_EXECUTIONS = 100
-_ALLOWED_DATASET = frozenset({"id", "source", "name", "embedding"})
+_ALLOWED_DATASET = frozenset({"id", "source", "name", "embedding", "lexical"})
 _ALLOWED_EMBEDDING = frozenset({"provider", "model", "dimensions", "revision", "fields"})
+_ALLOWED_LEXICAL = frozenset({"fields"})
 _ALLOWED_WORKSPACE = frozenset({"id", "datasets", "connectors"})
 _ALLOWED_USER = frozenset(
     {"id", "clerk_user_id", "workspaces", "default_workspace", "lock_workspace"}
@@ -463,6 +464,9 @@ def _parse_flat_datasets(
         embedding: EmbeddingProfile | None = None
         if "embedding" in entry:
             embedding = _parse_embedding(entry["embedding"], label=f"{label}.embedding")
+        lexical_fields: tuple[str, ...] | None = None
+        if "lexical" in entry:
+            lexical_fields = _parse_lexical(entry["lexical"], label=f"{label}.lexical")
         datasets.append(
             DatasetSpec(
                 workspace_id=workspace_id,
@@ -470,6 +474,7 @@ def _parse_flat_datasets(
                 source=source,
                 name=name,
                 embedding=embedding,
+                lexical_fields=lexical_fields,
             )
         )
     return tuple(datasets)
@@ -489,7 +494,7 @@ def _parse_embedding(raw: object, *, label: str) -> EmbeddingProfile:
     revision = _require_string(raw, "revision", label=f"{label}.revision")
     fields: tuple[str, ...] | None = None
     if "fields" in raw:
-        fields = _parse_embedding_fields(raw["fields"], label=f"{label}.fields")
+        fields = _parse_field_names(raw["fields"], label=f"{label}.fields")
     return EmbeddingProfile(
         provider=provider,  # type: ignore[arg-type]
         model=model,
@@ -499,7 +504,16 @@ def _parse_embedding(raw: object, *, label: str) -> EmbeddingProfile:
     )
 
 
-def _parse_embedding_fields(raw: object, *, label: str) -> tuple[str, ...]:
+def _parse_lexical(raw: object, *, label: str) -> tuple[str, ...]:
+    if not isinstance(raw, dict):
+        raise ConfigError(f"{label} must be a table")
+    _reject_unknown(raw, _ALLOWED_LEXICAL, label=label)
+    if "fields" not in raw:
+        raise ConfigError(f"{label}.fields is required when {label} is set")
+    return _parse_field_names(raw["fields"], label=f"{label}.fields")
+
+
+def _parse_field_names(raw: object, *, label: str) -> tuple[str, ...]:
     if not isinstance(raw, list) or not raw:
         raise ConfigError(f"{label} must be a non-empty array of field names")
     names: list[str] = []

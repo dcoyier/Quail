@@ -25,6 +25,8 @@ DatasetSpec remembers:
   source
   name (optional)
   embedding (optional EmbeddingProfile)
+  lexical_fields (optional tuple of source field names for Lexical warm;
+    None = all fields)
 
 ExtensionPin is a deployment-wide trusted connector package identity.
 ExtensionPin remembers:

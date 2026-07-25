@@ -1,5 +1,6 @@
 There is a safe table-name pattern quail_lex_[dt]_<32 hex> and a default
 prefix-term budget of 4096.
+There is an entry commit batch size of 64 for Lexical indexing.
 
 LexicalCorpus remembers doc_table and terms_table for one version.
 
@@ -12,10 +13,13 @@ resolve_corpus(search, workspace_id, dataset_id, version_id):
   Raise QuailRuntimeError with a rebuild hint when creation fails.
 
 ensure_entry_segments(search, corpus, entry_segments):
-  For each entry, delete existing document rows, prepare text and prefix text,
-  insert segments, and insert-or-ignore prefix dictionary terms.
+  If entry_segments is empty, give back {}.
+  Otherwise index in batches of _ENTRY_COMMIT_BATCH_SIZE entries: for each
+  entry delete existing document rows, prepare text and prefix text, insert
+  segments, and insert-or-ignore prefix dictionary terms, then commit and
+  truncate the WAL checkpoint.
   Give back entry_id -> segment count.
-  Raise QuailRuntimeError when indexing fails.
+  Raise QuailRuntimeError when a batch fails (prior batches stay committed).
   Used by quail process warm and by score-time fallback when lexical warm is
   missing or incomplete.
 

@@ -3,7 +3,8 @@ ProcessOutcome remembers results from one process_config call.
 process_config(config, clear=False, embedder_factory=None):
   Apply CSV import and embedding pins.
   When search_database is unset, stop after apply.
-  Otherwise warm Lexical (and embeddings when declared) for each dataset.
+  Otherwise warm Lexical (using datasets.lexical.fields when set) and embeddings
+  when declared for each dataset.
   With clear=True, wipe that version's search artifacts before warming.
   Give back ProcessOutcome.
 

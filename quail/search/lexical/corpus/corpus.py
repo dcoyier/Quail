@@ -14,6 +14,8 @@ from quail.search.lexical.query import prepare_prefix_text, prepare_text
 
 _TABLE_NAME_RE = re.compile(r"^quail_lex_[dt]_[0-9a-f]{32}$")
 _MAX_PREFIX_TERMS = 4_096
+# Bound WAL growth during quail process warm (one giant commit blew past 12GB).
+_ENTRY_COMMIT_BATCH_SIZE = 64
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,47 +149,69 @@ def ensure_entry_segments(
     Used by ``quail process`` warm and by score-time fallback when lexical warm
     is missing or incomplete. Score paths should prefer
     ``load_entry_segment_counts`` when the warm receipt is lexical-ready.
+
+    Commits every ``_ENTRY_COMMIT_BATCH_SIZE`` entries so Turso WAL does not
+    hold the whole corpus until one final commit. A crash mid-pass leaves a
+    partial index; the next warm rewrites every entry (delete-then-insert).
     """
+
+    if not entry_segments:
+        return {}
 
     connection = search.connection
     counts: dict[str, int] = {}
-    try:
-        connection.execute("BEGIN IMMEDIATE")
-        for entry_id, segments in entry_segments.items():
-            connection.execute(
-                f"DELETE FROM {corpus.doc_table} WHERE entry_id = ?",
-                (entry_id,),
-            )
-            for position, segment in enumerate(segments):
-                prepared, analyzed = prepare_text(segment)
-                prefix_prepared, prefix_terms = prepare_prefix_text(analyzed)
+    batch: list[tuple[str, list[str]]] = []
+
+    def _commit_batch() -> None:
+        if not batch:
+            return
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            for entry_id, segments in batch:
                 connection.execute(
-                    f"""
-                    INSERT INTO {corpus.doc_table}(
-                      entry_id, segment_position, text, prefix_text
-                    ) VALUES (?, ?, ?, ?)
-                    """,
-                    (entry_id, position, prepared, prefix_prepared),
+                    f"DELETE FROM {corpus.doc_table} WHERE entry_id = ?",
+                    (entry_id,),
                 )
-                if prefix_terms:
-                    connection.executemany(
+                for position, segment in enumerate(segments):
+                    prepared, analyzed = prepare_text(segment)
+                    prefix_prepared, prefix_terms = prepare_prefix_text(analyzed)
+                    connection.execute(
                         f"""
-                        INSERT OR IGNORE INTO {corpus.terms_table}(term, indexed_term)
-                        VALUES (?, ?)
+                        INSERT INTO {corpus.doc_table}(
+                          entry_id, segment_position, text, prefix_text
+                        ) VALUES (?, ?, ?, ?)
                         """,
-                        list(prefix_terms),
+                        (entry_id, position, prepared, prefix_prepared),
                     )
-            counts[entry_id] = len(segments)
-        connection.commit()
-    except QuailRuntimeError:
-        connection.rollback()
-        raise
-    except Exception as error:
-        connection.rollback()
-        raise QuailRuntimeError(
-            "Failed to index lexical corpus segments",
-            repair_hint="Retry the whole exec; if it persists, rebuild the search database.",
-        ) from error
+                    if prefix_terms:
+                        connection.executemany(
+                            f"""
+                            INSERT OR IGNORE INTO {corpus.terms_table}(term, indexed_term)
+                            VALUES (?, ?)
+                            """,
+                            list(prefix_terms),
+                        )
+                counts[entry_id] = len(segments)
+            connection.commit()
+            # FTS writes pile into WAL; truncate after each batch so peaks
+            # stay bounded as the dual indexes grow.
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except QuailRuntimeError:
+            connection.rollback()
+            raise
+        except Exception as error:
+            connection.rollback()
+            raise QuailRuntimeError(
+                "Failed to index lexical corpus segments",
+                repair_hint="Retry the whole exec; if it persists, rebuild the search database.",
+            ) from error
+        batch.clear()
+
+    for entry_id, segments in entry_segments.items():
+        batch.append((entry_id, segments))
+        if len(batch) >= _ENTRY_COMMIT_BATCH_SIZE:
+            _commit_batch()
+    _commit_batch()
     return counts
 
 

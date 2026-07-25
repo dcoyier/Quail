@@ -20,7 +20,7 @@ class EmbeddingProfile:
     model: str
     dimensions: int
     revision: str
-    # None = embed every non-empty source field (Lexical is always all fields).
+    # None = embed every non-empty source field.
     fields: tuple[str, ...] | None = None
 
     def profile_hash(self) -> str:
@@ -85,6 +85,8 @@ class DatasetSpec:
     source: Path
     name: str | None
     embedding: EmbeddingProfile | None = None
+    # None = Lexical-index every non-empty source field.
+    lexical_fields: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)

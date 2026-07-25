@@ -1,6 +1,6 @@
 There are private allowed-key sets for unrestricted and clerk roots, auth, core,
-hosting, workspace, dataset, embedding, providers, user, extension, and connector
-tables.
+hosting, workspace, dataset, embedding, lexical, providers, user, extension, and
+connector tables.
 
 load_config(config_path):
   Require an absolute path.
@@ -27,7 +27,8 @@ parse_config(raw_text, manifest_path):
   dataset ids.
   For datasets: optional [datasets.embedding] with provider, model, dimensions > 0, revision,
   and optional fields (non-empty string array of CSV columns to embed; omit = all fields).
-  Lexical warm always uses every source field; fields only limits embedding warm.
+  Optional [datasets.lexical] with required fields (non-empty string array of CSV columns
+  for Lexical warm; omit the table = all source fields).
   For users: validate memberships, optional default_workspace, optional lock_workspace (requires default).
   When any dataset has embedding: require search_database and the matching provider blocks.
   Give back a QuailConfig.
