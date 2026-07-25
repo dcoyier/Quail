@@ -26,7 +26,8 @@ from quail.search import (
     open_search_db,
     pin_embedding_profile,
 )
-from quail.search.vectors import pack_unit_vector, unit_vector
+from quail.search.cache import get_cached_vector_blob, put_cached_vector
+from quail.search.vectors import pack_unit_vector, text_hash, unit_vector
 from quail.session import create_session
 
 
@@ -366,6 +367,78 @@ def test_semantic_cache_hits(tmp_path: Path) -> None:
     assert abs(first - second) < 1e-6
     # One embed batch for corpus+query texts on the first call; second is cache-only.
     assert len(fake.calls) == 1
+    search.close()
+
+
+def test_semantic_reuses_warm_vectors_when_pin_omits_fields(tmp_path: Path) -> None:
+    """Score must key the cache by stored pin hash, not recomputed fields=None hash."""
+
+    search = open_search_db(tmp_path / "search.turso")
+    profile = EmbeddingProfile(
+        provider="ollama",
+        model="fake",
+        dimensions=4,
+        revision="r1",
+        fields=("body",),
+    )
+    pin_embedding_profile(
+        search,
+        workspace_id="ws",
+        dataset_id="notes",
+        version_id="v1",
+        profile=profile,
+    )
+    warm_hash = profile.profile_hash()
+    omitted_hash = EmbeddingProfile(
+        provider="ollama",
+        model="fake",
+        dimensions=4,
+        revision="r1",
+    ).profile_hash()
+    assert warm_hash != omitted_hash
+
+    corpus = "hydrangea care"
+    put_cached_vector(
+        search,
+        workspace_id="ws",
+        dataset_id="notes",
+        version_id="v1",
+        profile_hash=warm_hash,
+        text_hash=text_hash(corpus),
+        dimensions=4,
+        vector=unit_vector([1.0, 0.0, 0.0, 0.0]),
+    )
+
+    fake = FakeEmbedder(dimensions=4)
+    service = SimilarityService(
+        search=search,
+        providers=ProvidersConfig(),
+        embedder_factory=lambda _profile: fake,
+    )
+    score = service.semantic_score(
+        workspace_id="ws",
+        dataset_id="notes",
+        version_id="v1",
+        corpus=corpus,
+        query_record={"kind": "LiteralText", "text": "hydrangea"},
+        input_aggregation=None,
+        target_aggregation=None,
+    )
+    assert score is not None
+    assert len(fake.calls) == 1
+    assert fake.calls[0] == ("hydrangea",)
+    assert (
+        get_cached_vector_blob(
+            search,
+            workspace_id="ws",
+            dataset_id="notes",
+            version_id="v1",
+            profile_hash=omitted_hash,
+            text_hash=text_hash(corpus),
+            dimensions=4,
+        )
+        is None
+    )
     search.close()
 
 

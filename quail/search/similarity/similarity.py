@@ -12,7 +12,7 @@ from quail.config.models import EmbeddingProfile, ProvidersConfig
 from quail.providers import EmbeddingClient, ProviderError, build_embedding_client
 from quail.search.cache import get_cached_vector_blob, put_cached_vector
 from quail.search.db import SearchDb
-from quail.search.pin import get_embedding_pin
+from quail.search.pin import get_embedding_pin, get_pinned_profile_hash
 from quail.search.vectors import text_hash, unit_vector
 
 _SCORE_TARGET_BATCH = 32
@@ -79,6 +79,19 @@ class SimilarityService:
                     "then retry the whole exec."
                 ),
             )
+        profile_key = get_pinned_profile_hash(
+            self.search,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+        )
+        if profile_key is None:
+            raise QuailRuntimeError(
+                "Semantic requires a stored pin profile_hash for this version",
+                repair_hint=(
+                    "Re-run quail apply/run to refresh the embedding pin, then retry."
+                ),
+            )
 
         target_texts = _target_texts(query_record)
         if not target_texts:
@@ -106,10 +119,10 @@ class SimilarityService:
             dataset_id=dataset_id,
             version_id=version_id,
             profile=profile,
+            profile_hash=profile_key,
             texts=unique_texts,
         )
 
-        profile_key = profile.profile_hash()
         target_hashes = [text_hash(text) for text in target_texts]
         target_blobs = [
             self._require_blob(
@@ -151,9 +164,9 @@ class SimilarityService:
         dataset_id: str,
         version_id: str,
         profile: EmbeddingProfile,
+        profile_hash: str,
         texts: Sequence[str],
     ) -> None:
-        profile_key = profile.profile_hash()
         missing: list[tuple[str, str]] = []
         seen: set[str] = set()
         for text in texts:
@@ -166,7 +179,7 @@ class SimilarityService:
                 workspace_id=workspace_id,
                 dataset_id=dataset_id,
                 version_id=version_id,
-                profile_hash=profile_key,
+                profile_hash=profile_hash,
                 text_hash=digest,
                 dimensions=profile.dimensions,
             )
@@ -205,7 +218,7 @@ class SimilarityService:
                 workspace_id=workspace_id,
                 dataset_id=dataset_id,
                 version_id=version_id,
-                profile_hash=profile_key,
+                profile_hash=profile_hash,
                 text_hash=digest,
                 dimensions=profile.dimensions,
                 vector=unit_vector(raw),

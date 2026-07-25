@@ -6,6 +6,8 @@ semantic_score(...):
 semantic_scores_for_entries(workspace_id, dataset_id, version_id, corpus_by_entry,
                             query_record, input_aggregation, target_aggregation):
   Require a pinned embedding profile for the version.
+  Use the stored pin profile_hash for vector cache keys (not a recomputed hash
+  from get_embedding_pin, which omits optional fields).
   Resolve corpus and LiteralText / LiteralTextList query texts.
   Reject unresolved EntryGroup / EntryList (QueryEngine must resolve those first).
   Embed missing texts once through the provider and cache unit-vector blobs.

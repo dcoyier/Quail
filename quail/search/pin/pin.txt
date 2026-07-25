@@ -4,8 +4,10 @@ pin_embedding_profile(db, workspace_id, dataset_id, version_id, profile):
 
 get_embedding_pin(db, workspace_id, dataset_id, version_id):
   Give back the pinned EmbeddingProfile or None.
-  Does not restore optional embed field lists (not needed for Semantic scoring).
+  Does not restore optional embed field lists (client identity only:
+  provider, model, dimensions, revision).
 
 get_pinned_profile_hash(db, workspace_id, dataset_id, version_id):
   Give back the stored pin profile_hash, or None.
-  Use this for TOML gate comparisons when fields are part of the hash.
+  Use this for TOML warm gates and for Semantic vector cache keys when fields
+  are part of the hash; do not recompute from get_embedding_pin columns.
