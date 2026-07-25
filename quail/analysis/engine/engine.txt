@@ -1,10 +1,15 @@
 QueryEngine evaluates plans for one Scope against catalog data and an in-memory overlay.
 
 It remembers db, scope, optional SimilarityService, optional LexicalService, staged
-mutations, created fields, and value overlay.
+mutations, created fields, value overlay, and a per-exec Lexical/Semantic score cache.
 
 mutations:
   Give back the staged FieldCreate, ValueWrite, and ValueDelete tuple.
+
+resolve_field(field):
+  Resolve a Field or name against the catalog.
+  When kind is set and does not match the catalog, raise QuailFieldError.
+  Unknown names raise QuailFieldError.
 
 retrieve(plan):
   For fields units, evaluate the field group and apply limit/order.
@@ -21,20 +26,20 @@ create_field(plan):
   Stage FieldCreate when new and remember the analysis Field.
 
 tag(plan):
-  Require an analysis field.
+  Require an analysis field (via resolve_field).
   For each selected entry, stage ValueWrite and update the overlay.
 
 untag(plan):
   Clear matching overlay cells and stage ValueDelete.
 
 entry_value / entry_fields:
-  Read through overlay then durable source or analysis values.
+  Read through overlay then durable source or analysis values (kind-checked).
 
 Helpers evaluate groups and predicates, run expression pipelines (Value, AsText,
 AsNumber, regex, Slice, Length, Lexical via LexicalService, Semantic via
 SimilarityService). Before Lexical/Semantic scoring, resolve query targets from
 LiteralText, LiteralTextList, EntryGroup, or EntryList using the expression root
 field; Lexical Entry* targets are term-quoted. Predicates and rankings that end in
-Lexical/Semantic share one per-retrieve/count score cache: each distinct search-
-terminal Expression is batch-scored once over its candidate entry ids, then
-predicate filters and ranking reads reuse those scores in host memory.
+Lexical/Semantic share one per-exec score cache keyed by Expression.to_record():
+each distinct search-terminal Expression is batch-scored once over needed entry
+ids (gap-fill missing ids), then predicate filters and ranking reuse those scores.

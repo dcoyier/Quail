@@ -14,6 +14,7 @@ from quail.analysis.errors import (
     QuailRuntimeError,
     QuailScopeError,
     QuailSyntaxError,
+    rehydrate_quail_error,
 )
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
@@ -77,7 +78,7 @@ class HostEndpoint:
             raise QuailRuntimeError("Host returned a mismatched api_result")
         if not response.get("ok"):
             message = str(response.get("message") or "host api_call failed")
-            raise QuailRuntimeError(message)
+            raise rehydrate_quail_error(response.get("exception_type"), message)
         return decode_value(response["result"])
 
 

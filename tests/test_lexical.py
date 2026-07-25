@@ -567,8 +567,56 @@ def test_engine_lexical_where_batches_once_per_expression(tmp_path: Path) -> Non
                 },
             )
             assert len(ranked) == 5
-            # Same Expression object: where + rank share one batch inside retrieve.
-            assert lexical.batch_calls == 2
+            # Same logical Expression across count + retrieve: one batch for the exec.
+            assert lexical.batch_calls == 1
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            lexical=lexical,
+        )
+    search.close()
+
+
+def test_engine_lexical_batches_survive_rpc_clones(tmp_path: Path) -> None:
+    rows = ["id,body"] + [f"e{i},note {i} hydrangea garden" for i in range(20)]
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    db = open_core_db(tmp_path / "core.turso")
+    import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+    session = create_session(db, "ws")
+    search = open_search_db(tmp_path / "search.turso")
+    lexical = _CountingLexical(search)
+    with db:
+        from quail.analysis.worker.protocol import decode_value, encode_value
+
+        score = Expression(Field("body"), Lexical("hydrangea"))
+        matching = G0.where(score > 0)
+        cloned_group = decode_value(encode_value(matching))
+        cloned_rank = decode_value(encode_value(Ranking(expression=score)))
+        cloned_score = decode_value(encode_value(score))
+        assert cloned_score is not score
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            total = dispatch_call(engine, "count", (), {"group": cloned_group})
+            assert total == 20
+            ranked = dispatch_call(
+                engine,
+                "retrieve",
+                (),
+                {
+                    "group": cloned_group,
+                    "rank": cloned_rank,
+                    "unit": cloned_score,
+                    "order": "top",
+                    "limit": 5,
+                },
+            )
+            assert len(ranked) == 5
+            assert lexical.batch_calls == 1
 
         run_analysis(
             db,

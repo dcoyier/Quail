@@ -18,3 +18,10 @@ It is a QuailRuntimeError with stable_error_code server_busy.
 
 QuailSessionBusyError means another quail_exec already holds this session_id.
 It is a QuailRuntimeError with stable_error_code session_busy.
+
+rehydrate_quail_error(exception_type, message):
+  Rebuild a Quail error from worker/host wire fields.
+  Map known type names to QuailSyntaxError, QuailScopeError, QuailFieldError,
+  QuailRuntimeError, busy subclasses, or QuailError.
+  Strip a redundant "TypeName: " prefix from the message when present.
+  Unknown types become QuailRuntimeError.

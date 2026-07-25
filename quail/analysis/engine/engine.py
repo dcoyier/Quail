@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Sequence
 from typing import Any
@@ -57,6 +58,8 @@ class QueryEngine:
         # (field_name, entry_id) -> value | _ABSENT sentinel for deletes in overlay
         self._value_overlay: dict[tuple[str, str], Any] = {}
         self._absent = object()
+        # Structural Expression key -> entry_id -> Lexical/Semantic score (one exec).
+        self._search_scores: dict[str, dict[str, float | None]] = {}
 
     @property
     def scope(self) -> Scope:
@@ -71,18 +74,18 @@ class QueryEngine:
             fields = self._evaluate_field_group(plan.group)
             return self._apply_limit(fields, plan.limit, plan.order)
 
-        search_scores: dict[int, dict[str, float | None]] = {}
+        search_scores = self._search_scores
         entry_ids = self._evaluate_entry_group(plan.group, search_scores=search_scores)
         if (
             isinstance(plan.unit, Unit)
             and plan.unit.scope == "entries"
             and plan.unit.field is not None
         ):
-            field_name = plan.unit.field.name
+            unit_field = plan.unit.field
             entry_ids = [
                 entry_id
                 for entry_id in entry_ids
-                if self._read_field_value(field_name, entry_id) is not None
+                if self._read_field_value(unit_field, entry_id) is not None
             ]
         entry_ids = self._apply_ranking(entry_ids, plan.ranking, search_scores=search_scores)
         entry_ids = self._apply_limit(entry_ids, plan.limit, plan.order)
@@ -98,15 +101,13 @@ class QueryEngine:
         if plan.unit.scope == "entries":
             if plan.unit.field is None:
                 return [self._make_entry(entry_id) for entry_id in entry_ids]
-            return [
-                self._read_field_value(plan.unit.field.name, entry_id) for entry_id in entry_ids
-            ]
+            return [self._read_field_value(plan.unit.field, entry_id) for entry_id in entry_ids]
         if plan.unit.scope == "values":
             assert plan.unit.field is not None
             seen: set[str] = set()
             values: list[Any] = []
             for entry_id in entry_ids:
-                value = self._read_field_value(plan.unit.field.name, entry_id)
+                value = self._read_field_value(plan.unit.field, entry_id)
                 if value is None:
                     continue
                 key = repr(value)
@@ -120,7 +121,7 @@ class QueryEngine:
     def count(self, plan: CountPlan) -> int:
         if isinstance(plan.unit, Unit) and plan.unit.scope == "fields":
             return len(self._evaluate_field_group(plan.group))
-        search_scores: dict[int, dict[str, float | None]] = {}
+        search_scores = self._search_scores
         entry_ids = self._evaluate_entry_group(plan.group, search_scores=search_scores)
         if isinstance(plan.unit, Expression):
             return len(entry_ids)
@@ -131,13 +132,13 @@ class QueryEngine:
             return sum(
                 1
                 for entry_id in entry_ids
-                if self._read_field_value(plan.unit.field.name, entry_id) is not None
+                if self._read_field_value(plan.unit.field, entry_id) is not None
             )
         if plan.unit.scope == "values":
             assert plan.unit.field is not None
             seen: set[str] = set()
             for entry_id in entry_ids:
-                value = self._read_field_value(plan.unit.field.name, entry_id)
+                value = self._read_field_value(plan.unit.field, entry_id)
                 if value is None:
                     continue
                 seen.add(repr(value))
@@ -157,17 +158,17 @@ class QueryEngine:
         return self._created_fields[name]
 
     def tag(self, plan: TagPlan) -> None:
-        field_name = plan.field.name
-        self._require_analysis_field(field_name)
+        field = self._require_analysis_field(plan.field)
+        field_name = field.name
         for entry_id in self._tag_entry_ids(plan.group):
             self._value_overlay[(field_name, entry_id)] = plan.value
             self._mutations.append(ValueWrite(field_name, entry_id, plan.value))
 
     def untag(self, plan: UntagPlan) -> None:
-        field_name = plan.field.name
-        self._require_analysis_field(field_name)
+        field = self._require_analysis_field(plan.field)
+        field_name = field.name
         for entry_id in self._tag_entry_ids(plan.group):
-            current = self._read_field_value(field_name, entry_id)
+            current = self._read_field_value(field, entry_id)
             if current is None:
                 continue
             if plan.value is not None and current != plan.value:
@@ -181,16 +182,17 @@ class QueryEngine:
         field: Field | str,
         default: Any = None,
     ) -> Any:
-        field_name = field.name if isinstance(field, Field) else field
-        if not isinstance(field_name, str) or not field_name:
+        if not isinstance(field, Field | str):
             raise QuailSyntaxError("field must be a Field or non-empty string")
-        value = self._read_field_value(field_name, entry.id)
+        if isinstance(field, str) and not field:
+            raise QuailSyntaxError("field must be a Field or non-empty string")
+        value = self._read_field_value(field, entry.id)
         return default if value is None else value
 
     def entry_fields(self, entry: Entry) -> list[Field]:
         present: list[Field] = []
         for field in self._catalog():
-            if self._read_field_value(field.name, entry.id) is not None:
+            if self._read_field_value(Field(field.name, kind=field.kind), entry.id) is not None:
                 present.append(Field(field.name, kind=field.kind))
         return present
 
@@ -215,15 +217,41 @@ class QueryEngine:
     def _tag_entry_ids(self, group: GroupExpr | tuple[Entry, ...]) -> list[str]:
         if isinstance(group, tuple):
             return [entry.id for entry in group]
-        return self._evaluate_entry_group(group, search_scores={})
+        return self._evaluate_entry_group(group, search_scores=self._search_scores)
 
-    def _require_analysis_field(self, name: str) -> None:
-        for field in self._catalog():
-            if field.name == name:
-                if field.kind != "analysis":
-                    raise QuailFieldError(f"Cannot tag source field: {name}")
-                return
-        raise QuailFieldError(f"Unknown analysis field: {name}")
+    def resolve_field(self, field: Field | str) -> Field:
+        """Resolve a Field or name against the catalog; enforce kind when set."""
+
+        if isinstance(field, Field):
+            name = field.name
+            requested_kind = field.kind
+        elif isinstance(field, str) and field:
+            name = field
+            requested_kind = None
+        else:
+            raise QuailSyntaxError("field must be a Field or non-empty string")
+
+        same_name = None
+        for catalog_field in self._catalog():
+            if catalog_field.name != name:
+                continue
+            same_name = catalog_field
+            if requested_kind is None or catalog_field.kind == requested_kind:
+                return Field(catalog_field.name, kind=catalog_field.kind)
+        if requested_kind is not None and same_name is not None:
+            raise QuailFieldError(
+                f"Field {name!r} is registered as {same_name.kind}, not {requested_kind}; "
+                f"use Field({name!r}, kind={same_name.kind!r}) or omit kind"
+            )
+        if requested_kind is None:
+            raise QuailFieldError(f"Unknown field: {name}")
+        raise QuailFieldError(f"Unknown {requested_kind} field: {name}")
+
+    def _require_analysis_field(self, field: Field | str) -> Field:
+        resolved = self.resolve_field(field)
+        if resolved.kind != "analysis":
+            raise QuailFieldError(f"Cannot tag source field: {resolved.name}")
+        return resolved
 
     def _all_entry_ids(self) -> list[str]:
         return [
@@ -240,7 +268,7 @@ class QueryEngine:
         self,
         group: GroupExpr,
         *,
-        search_scores: dict[int, dict[str, float | None]],
+        search_scores: dict[str, dict[str, float | None]],
     ) -> list[str]:
         if group.scope != "entries":
             raise QuailSyntaxError("Expected an entry-scoped group")
@@ -325,7 +353,7 @@ class QueryEngine:
         predicate: Predicate,
         entry_id: str,
         *,
-        search_scores: dict[int, dict[str, float | None]],
+        search_scores: dict[str, dict[str, float | None]],
     ) -> bool:
         if predicate.operator == "and":
             return self._eval_predicate(
@@ -368,16 +396,18 @@ class QueryEngine:
         expression: Expression,
         entry_id: str,
         *,
-        search_scores: dict[int, dict[str, float | None]] | None = None,
+        search_scores: dict[str, dict[str, float | None]] | None = None,
     ) -> Any:
+        score_key = _expression_score_key(expression)
         if (
             search_scores is not None
             and expression.operations
             and expression.operations[-1].kind in ("Lexical", "Semantic")
-            and id(expression) in search_scores
+            and score_key in search_scores
+            and entry_id in search_scores[score_key]
         ):
-            return search_scores[id(expression)].get(entry_id)
-        value: Any = self._read_field_value(expression.root.name, entry_id)
+            return search_scores[score_key].get(entry_id)
+        value: Any = self._read_field_value(expression.root, entry_id)
         for operation in expression.operations:
             value = self._apply_operation(
                 operation,
@@ -393,7 +423,7 @@ class QueryEngine:
         value: Any,
         *,
         root: Field | None = None,
-        search_scores: dict[int, dict[str, float | None]] | None = None,
+        search_scores: dict[str, dict[str, float | None]] | None = None,
     ) -> Any:
         kind = operation.kind
         if kind == "Value":
@@ -492,7 +522,7 @@ class QueryEngine:
         *,
         root: Field,
         operation_kind: str,
-        search_scores: dict[int, dict[str, float | None]] | None = None,
+        search_scores: dict[str, dict[str, float | None]] | None = None,
     ) -> dict[str, Any]:
         texts = self._resolve_search_targets(
             query_record,
@@ -510,7 +540,7 @@ class QueryEngine:
         *,
         root: Field,
         operation_kind: str,
-        search_scores: dict[int, dict[str, float | None]] | None = None,
+        search_scores: dict[str, dict[str, float | None]] | None = None,
     ) -> list[str]:
         """Expand Lexical/Semantic query records into ordered non-empty target strings."""
 
@@ -536,7 +566,7 @@ class QueryEngine:
                 segment
                 for entry_id in entry_ids
                 for segment in text_segments(
-                    self._read_field_value(root.name, entry_id),
+                    self._read_field_value(root, entry_id),
                     operation_kind=operation_kind,
                 )
             )
@@ -553,7 +583,7 @@ class QueryEngine:
                 segment
                 for entry_id in listed_ids
                 for segment in text_segments(
-                    self._read_field_value(root.name, entry_id),
+                    self._read_field_value(root, entry_id),
                     operation_kind=operation_kind,
                 )
             )
@@ -604,13 +634,15 @@ class QueryEngine:
             ]
         raise QuailRuntimeError("RegexSub requires text or list[text]")
 
-    def _read_field_value(self, field_name: str, entry_id: str) -> Any:
+    def _read_field_value(self, field: Field | str, entry_id: str) -> Any:
+        resolved = self.resolve_field(field)
+        field_name = resolved.name
         key = (field_name, entry_id)
         if key in self._value_overlay:
             value = self._value_overlay[key]
             return None if value is self._absent else value
 
-        kind = self._field_kind(field_name)
+        kind = resolved.kind
         if kind == "source":
             values = source_values(
                 self._db,
@@ -623,7 +655,7 @@ class QueryEngine:
             return values[0] if values else None
         if kind == "analysis":
             if field_name in self._created_fields and not any(
-                field.name == field_name for field in analysis_fields(self._db, self._scope)
+                catalog.name == field_name for catalog in analysis_fields(self._db, self._scope)
             ):
                 return None
             values = analysis_values(
@@ -635,18 +667,12 @@ class QueryEngine:
             return values[0] if values else None
         raise QuailFieldError(f"Unknown field: {field_name}")
 
-    def _field_kind(self, field_name: str) -> str | None:
-        for field in self._catalog():
-            if field.name == field_name:
-                return field.kind
-        return None
-
     def _apply_ranking(
         self,
         entry_ids: list[str],
         ranking: Ranking,
         *,
-        search_scores: dict[int, dict[str, float | None]],
+        search_scores: dict[str, dict[str, float | None]],
     ) -> list[str]:
         if (
             ranking.expression is None
@@ -671,22 +697,28 @@ class QueryEngine:
         self,
         expressions: list[Expression],
         entry_ids: list[str],
-        search_scores: dict[int, dict[str, float | None]],
+        search_scores: dict[str, dict[str, float | None]],
     ) -> None:
-        """Batch-score Lexical/Semantic-terminal expressions not already cached."""
+        """Batch-score Lexical/Semantic-terminal expressions; gap-fill missing entry ids."""
 
         if not entry_ids:
             return
         for expression in expressions:
             if not _is_search_terminal_expression(expression):
                 continue
-            key = id(expression)
-            if key in search_scores:
+            key = _expression_score_key(expression)
+            cached = search_scores.get(key)
+            missing_ids = (
+                list(entry_ids)
+                if cached is None
+                else [entry_id for entry_id in entry_ids if entry_id not in cached]
+            )
+            if not missing_ids:
                 continue
             operation = expression.operations[-1]
             prefix_ops = expression.operations[:-1]
             corpus_by_entry: dict[str, Any] = {}
-            for entry_id in entry_ids:
+            for entry_id in missing_ids:
                 if prefix_ops:
                     corpus_by_entry[entry_id] = self._eval_expression(
                         Expression(expression.root, *prefix_ops),
@@ -695,7 +727,7 @@ class QueryEngine:
                     )
                 else:
                     corpus_by_entry[entry_id] = self._read_field_value(
-                        expression.root.name, entry_id
+                        expression.root, entry_id
                     )
             if operation.kind == "Semantic":
                 if self._similarity is None:
@@ -706,7 +738,7 @@ class QueryEngine:
                             "re-run quail, then retry the whole exec."
                         ),
                     )
-                search_scores[key] = self._similarity.semantic_scores_for_entries(
+                scored = self._similarity.semantic_scores_for_entries(
                     workspace_id=self._scope.workspace_id,
                     dataset_id=self._scope.dataset_id,
                     version_id=self._scope.dataset_version_id,
@@ -728,7 +760,7 @@ class QueryEngine:
                             "Set core.search_database, re-run quail, then retry the whole exec."
                         ),
                     )
-                search_scores[key] = {
+                scored = {
                     entry_id: score
                     for entry_id, score in self._lexical.lexical_scores_for_entries(
                         workspace_id=self._scope.workspace_id,
@@ -745,22 +777,28 @@ class QueryEngine:
                         target_aggregation=operation.params.get("target_aggregation"),
                     ).items()
                 }
+            if cached is None:
+                search_scores[key] = dict(scored)
+            else:
+                cached.update(scored)
 
     def _score_ranking(
         self,
         ranking: Ranking,
         entry_id: str,
-        search_scores: dict[int, dict[str, float | None]] | None = None,
+        search_scores: dict[str, dict[str, float | None]] | None = None,
     ) -> float:
         if ranking.expression is not None:
             expression = ranking.expression
+            score_key = _expression_score_key(expression)
             if (
                 search_scores is not None
                 and expression.operations
                 and expression.operations[-1].kind in ("Lexical", "Semantic")
-                and id(expression) in search_scores
+                and score_key in search_scores
+                and entry_id in search_scores[score_key]
             ):
-                value = search_scores[id(expression)].get(entry_id)
+                value = search_scores[score_key].get(entry_id)
             else:
                 value = self._eval_expression(expression, entry_id, search_scores=search_scores)
             if value is None:
@@ -796,6 +834,12 @@ class QueryEngine:
             return list(items)
         start = max(0, (len(items) - limit) // 2)
         return items[start : start + limit]
+
+
+def _expression_score_key(expression: Expression) -> str:
+    """Stable cache key so worker RPC clones of the same Expression share scores."""
+
+    return json.dumps(expression.to_record(), sort_keys=True, separators=(",", ":"))
 
 
 def _is_search_terminal_expression(expression: Expression) -> bool:

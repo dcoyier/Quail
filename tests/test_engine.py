@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from quail.analysis.engine import QueryEngine
-from quail.analysis.errors import QuailRuntimeError
+from quail.analysis.errors import QuailFieldError, QuailRuntimeError
 from quail.analysis.exec_host import dispatch_call, run_analysis
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
@@ -145,6 +145,50 @@ def test_lexical_requires_search_database(tmp_path: Path) -> None:
         def driver(engine: QueryEngine, _prints) -> None:
             with pytest.raises(QuailRuntimeError, match="Lexical search is not configured"):
                 dispatch_call(engine, "count", (), {"group": matching})
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+        )
+
+
+def test_field_kind_mismatch_raises(tmp_path: Path) -> None:
+    db, session = _seed(tmp_path)
+    with db:
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            with pytest.raises(QuailFieldError, match="registered as source, not analysis"):
+                dispatch_call(
+                    engine,
+                    "count",
+                    (),
+                    {
+                        "group": G0.where(
+                            Expression(Field("body", "analysis"), Value()) != None  # noqa: E711
+                        )
+                    },
+                )
+            assert (
+                dispatch_call(
+                    engine,
+                    "count",
+                    (),
+                    {
+                        "group": G0.where(
+                            Expression(Field("body", "source"), Value()) != None  # noqa: E711
+                        )
+                    },
+                )
+                == 2
+            )
+            topic = dispatch_call(engine, "create_field", (Field("topic"),))
+            with pytest.raises(QuailFieldError, match="registered as analysis, not source"):
+                dispatch_call(engine, "tag", (G0, Field("topic", "source"), "x"))
+            sample = dispatch_call(engine, "retrieve", (), {"limit": 1})[0]
+            dispatch_call(engine, "tag", ([sample], topic, "x"))
 
         run_analysis(
             db,

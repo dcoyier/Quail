@@ -225,8 +225,17 @@ matching scope). Compose groups with `&` `|` `~`. Materialize with `retrieve` /
 ### `Ranking(expression=None)`
 
 Empty ranking = processing order. Non-empty = score each candidate, higher
-first. Combine with `+` and weight with `expr * weight` (weight on the right,
-non-negative).
+first. Combine rankable expressions (or `Ranking` values) with `+` and weight
+with `expr * weight` (weight on the right, non-negative). Example:
+
+```python
+rank = score_a + score_b * 0.5
+# or: Ranking(expression=score_a) + Ranking(expression=score_b) * 0.5
+ranked = retrieve(group=matching, rank=rank, limit=10)
+```
+
+Do **not** wrap an already-combined Ranking in `Ranking(expression=…)` — that
+constructor takes a single Expression, not a Ranking.
 
 Use the **same** group, rank, order, and limit when pulling aligned entries and
 scores.
@@ -241,6 +250,7 @@ count(unit=entries, group=G0)
 ```
 
 - `retrieve` always returns a **list** (possibly empty).
+- Omitted `limit` defaults to **1** (not the whole group).
 - `unit` may be a `Unit` or an `Expression` (expression → one value per entry).
 - `order`: `"top"` | `"middle"` | `"bottom"`.
 - Narrow with `.where` **before** expensive ranking when you can — ranking

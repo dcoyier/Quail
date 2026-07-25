@@ -17,7 +17,7 @@ from quail.analysis.bindings import (
     bindings_from_payload,
     bindings_to_payload,
 )
-from quail.analysis.errors import QuailRuntimeError, QuailSyntaxError
+from quail.analysis.errors import QuailRuntimeError, QuailSyntaxError, rehydrate_quail_error
 from quail.analysis.limits import (
     STANDARD_LIMITS,
     ExecLimits,
@@ -180,6 +180,7 @@ def run_worker_script(
                         "type": "api_result",
                         "id": call.id,
                         "ok": False,
+                        "exception_type": type(error).__name__,
                         "message": f"{type(error).__name__}: {error}",
                         "result": encode_value(None),
                     }
@@ -199,7 +200,7 @@ def run_worker_script(
                             active.cpu_seconds,
                             already_extended=active.already_extended,
                         )
-                    raise QuailRuntimeError(message_text)
+                    raise rehydrate_quail_error(message.get("exception_type"), message_text)
                 printed = message.get("printed_output", "")
                 if not isinstance(printed, str):
                     raise QuailRuntimeError("worker printed_output must be a string")

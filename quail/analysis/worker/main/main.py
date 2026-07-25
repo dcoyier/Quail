@@ -132,6 +132,7 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
             {
                 "type": "result",
                 "ok": False,
+                "exception_type": type(error).__name__,
                 "message": str(error),
                 "printed_output": "",
             },
@@ -142,6 +143,7 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
             {
                 "type": "result",
                 "ok": False,
+                "exception_type": type(error).__name__,
                 "message": str(error),
                 "printed_output": "",
             },
@@ -152,6 +154,7 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
             {
                 "type": "result",
                 "ok": False,
+                "exception_type": type(error).__name__,
                 "message": f"{type(error).__name__}: {error}",
                 "printed_output": "",
             },

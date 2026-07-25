@@ -189,3 +189,49 @@ def test_provide_feedback_appends_jsonl(tmp_path: Path) -> None:
     assert record["dataset_id"] is None
     assert "timestamp" in record
     assert db_path.read_bytes() == core_before
+
+
+def test_exec_field_kind_mismatch_error_class(tmp_path: Path) -> None:
+    server, _, _ = _seed(tmp_path)
+
+    async def run() -> None:
+        started = _as_dict(await _call(server, "quail_start_session"))
+        result = await _call(
+            server,
+            "quail_exec",
+            {
+                "session_id": started["session_id"],
+                "dataset_id": "notes",
+                "code": (
+                    'print(count(group=G0.where(Expression(Field("body", "analysis"), Value()) '
+                    "!= None)))\n"
+                ),
+            },
+        )
+        assert _is_error(result)
+        payload = _as_dict(result)
+        assert payload["diagnostic"]["error_class"] == "QuailFieldError"
+        assert "registered as source" in payload["diagnostic"]["message"]
+
+    asyncio.run(run())
+
+
+def test_exec_scope_error_class(tmp_path: Path) -> None:
+    server, _, _ = _seed(tmp_path)
+
+    async def run() -> None:
+        started = _as_dict(await _call(server, "quail_start_session"))
+        result = await _call(
+            server,
+            "quail_exec",
+            {
+                "session_id": started["session_id"],
+                "dataset_id": "notes",
+                "code": 'print(retrieve(unit=Unit("fields"), group=G0, limit=1))\n',
+            },
+        )
+        assert _is_error(result)
+        payload = _as_dict(result)
+        assert payload["diagnostic"]["error_class"] == "QuailScopeError"
+
+    asyncio.run(run())

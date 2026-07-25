@@ -753,3 +753,57 @@ def test_semantic_duplicate_entry_list_avg_weights(tmp_path: Path) -> None:
     finally:
         search.close()
         db.close()
+
+
+class _CountingSimilarity(SimilarityService):
+    batch_calls: int = 0
+
+    def semantic_scores_for_entries(self, **kwargs):  # type: ignore[no-untyped-def]
+        self.batch_calls += 1
+        return super().semantic_scores_for_entries(**kwargs)
+
+
+def test_engine_semantic_threshold_counts_batch_once(tmp_path: Path) -> None:
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text(
+        "id,body\ne1,hydrangea garden\ne2,climate policy\ne3,garden bloom\n",
+        encoding="utf-8",
+    )
+    db = open_core_db(tmp_path / "core.turso")
+    search = open_search_db(tmp_path / "search.turso")
+    try:
+        ref = import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+        profile = EmbeddingProfile(provider="ollama", model="fake", dimensions=4, revision="r1")
+        pin_embedding_profile(
+            search,
+            workspace_id="ws",
+            dataset_id="notes",
+            version_id=ref.version_id,
+            profile=profile,
+        )
+        fake = KeywordEmbedder(dimensions=4)
+        similarity = _CountingSimilarity(
+            search=search,
+            providers=ProvidersConfig(),
+            embedder_factory=lambda _profile: fake,
+        )
+        session = create_session(db, "ws")
+        score = Expression(Field("body"), Semantic("garden bloom"))
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            assert dispatch_call(engine, "count", (), {"group": G0.where(score > 0.1)}) >= 0
+            assert dispatch_call(engine, "count", (), {"group": G0.where(score > 0.2)}) >= 0
+            assert dispatch_call(engine, "count", (), {"group": G0.where(score > 0.3)}) >= 0
+            assert similarity.batch_calls == 1
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            similarity=similarity,
+        )
+    finally:
+        search.close()
+        db.close()

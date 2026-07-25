@@ -8,6 +8,7 @@ from .errors import (
     QuailServerBusyError,
     QuailSessionBusyError,
     QuailSyntaxError,
+    rehydrate_quail_error,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "QuailServerBusyError",
     "QuailSessionBusyError",
     "QuailSyntaxError",
+    "rehydrate_quail_error",
 ]
