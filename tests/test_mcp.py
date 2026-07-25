@@ -216,6 +216,28 @@ def test_exec_field_kind_mismatch_error_class(tmp_path: Path) -> None:
     asyncio.run(run())
 
 
+def test_exec_wrong_kind_field_commit_error_class(tmp_path: Path) -> None:
+    server, _, _ = _seed(tmp_path)
+
+    async def run() -> None:
+        started = _as_dict(await _call(server, "quail_start_session"))
+        result = await _call(
+            server,
+            "quail_exec",
+            {
+                "session_id": started["session_id"],
+                "dataset_id": "notes",
+                "code": 'bad = Field("body", "analysis")\nprint(bad.kind)\n',
+            },
+        )
+        assert _is_error(result)
+        payload = _as_dict(result)
+        assert payload["diagnostic"]["error_class"] == "QuailFieldError"
+        assert "registered as source" in payload["diagnostic"]["message"]
+
+    asyncio.run(run())
+
+
 def test_exec_scope_error_class(tmp_path: Path) -> None:
     server, _, _ = _seed(tmp_path)
 

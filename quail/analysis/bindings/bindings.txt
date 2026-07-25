@@ -30,6 +30,15 @@ encode_namespace(namespace, reserved_names default RESERVED_NAMES):
 decode_namespace(bindings):
   Require EncodedBinding values and give back a live namespace map.
 
+validate_binding_fields(value, check_field):
+  Walk Field, Expression (root plus Operation params), Unit.field,
+  Predicate, GroupExpr, Ranking, lists/tuples, and nested maps.
+  Call check_field for each live Field and each Field.to_record()-shaped map.
+  Skip Entry; ignore cycles.
+
+validate_encoded_bindings(bindings, check_field):
+  Decode each EncodedBinding then validate_binding_fields.
+
 canonical_binding_bytes(binding):
   Round-trip encode then give back deterministic UTF-8 JSON bytes.
 

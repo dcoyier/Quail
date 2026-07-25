@@ -16,6 +16,8 @@ from .bindings import (
     encode_binding_value,
     encode_namespace,
     require_namespace_name,
+    validate_binding_fields,
+    validate_encoded_bindings,
 )
 
 __all__ = [
@@ -34,4 +36,6 @@ __all__ = [
     "encode_binding_value",
     "encode_namespace",
     "require_namespace_name",
+    "validate_binding_fields",
+    "validate_encoded_bindings",
 ]

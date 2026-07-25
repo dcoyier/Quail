@@ -31,8 +31,12 @@ exec_script(db, session_id, dataset_id, expected_revision, code,
   When search_runtime is set, checkout a SearchDb and bind per-exec Lexical
   and Similarity services; otherwise use the passed similarity/lexical.
   Install interrupt_connections_on_cancel on core (and search) connections.
-  Load session bindings and spawn the worker with cancel_event so wall/memory
-  also cancel host Turso work.
+  Load session bindings.
+  Build QueryEngine, then validate_encoded_bindings on restored bindings
+  (explicit Field kinds vs catalog; QuailFieldError fails closed before worker).
+  Spawn the worker with cancel_event so wall/memory also cancel host Turso work.
   Answer api_call via dispatch_call with cancel checks.
-  On worker success, commit_overlay; always release SearchDb and locks.
+  On worker success, validate_encoded_bindings on changed_bindings before
+  commit_overlay; on mismatch raise and do not commit.
+  Always release SearchDb and locks.
   If the worker fails, do not commit.

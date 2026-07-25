@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from quail.analysis.admission import acquire_execution_slot
+from quail.analysis.bindings import validate_encoded_bindings
 from quail.analysis.cancel import interrupt_connections_on_cancel, raise_if_cancelled
 from quail.analysis.engine import QueryEngine
 from quail.analysis.limits import ExecLimits
@@ -142,6 +143,10 @@ def exec_script(
                     similarity=active_similarity,
                     lexical=active_lexical,
                 )
+                validate_encoded_bindings(
+                    initial_bindings,
+                    engine.check_bound_field_kind,
+                )
 
                 def on_api_call(call: ApiCall) -> Any:
                     raise_if_cancelled(host_cancel, limits=active_limits)
@@ -158,6 +163,10 @@ def exec_script(
                         limits=active_limits,
                         cancel_event=host_cancel,
                     )
+                validate_encoded_bindings(
+                    worker_result.changed_bindings,
+                    engine.check_bound_field_kind,
+                )
                 revision = commit_overlay(
                     db,
                     scope,

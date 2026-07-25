@@ -247,6 +247,24 @@ class QueryEngine:
             raise QuailFieldError(f"Unknown field: {name}")
         raise QuailFieldError(f"Unknown {requested_kind} field: {name}")
 
+    def check_bound_field_kind(self, field: Field) -> None:
+        """At bind restore/commit: enforce explicit kind vs catalog; skip unknown names."""
+
+        if not isinstance(field, Field):
+            raise QuailSyntaxError("check_bound_field_kind requires a Field")
+        if field.kind is None:
+            return
+        for catalog_field in self._catalog():
+            if catalog_field.name != field.name:
+                continue
+            if catalog_field.kind != field.kind:
+                raise QuailFieldError(
+                    f"Field {field.name!r} is registered as {catalog_field.kind}, "
+                    f"not {field.kind}; "
+                    f"use Field({field.name!r}, kind={catalog_field.kind!r}) or omit kind"
+                )
+            return
+
     def _require_analysis_field(self, field: Field | str) -> Field:
         resolved = self.resolve_field(field)
         if resolved.kind != "analysis":

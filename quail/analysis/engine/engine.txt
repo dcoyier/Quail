@@ -11,6 +11,11 @@ resolve_field(field):
   When kind is set and does not match the catalog, raise QuailFieldError.
   Unknown names raise QuailFieldError.
 
+check_bound_field_kind(field):
+  When field.kind is set and the name exists in the catalog with a different
+  kind, raise QuailFieldError.
+  kind=None and unknown names do nothing (forward refs stay allowed on bind).
+
 retrieve(plan):
   For fields units, evaluate the field group and apply limit/order.
   Otherwise evaluate entry ids.

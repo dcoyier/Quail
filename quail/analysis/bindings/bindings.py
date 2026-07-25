@@ -225,6 +225,116 @@ def decode_namespace(bindings: Mapping[str, EncodedBinding]) -> dict[str, Any]:
     return namespace
 
 
+def validate_binding_fields(value: Any, check_field: Callable[[Field], None]) -> None:
+    """Walk a binding value; call check_field for each live Field (and Field records)."""
+
+    _validate_binding_fields_node(value, check_field, seen=set())
+
+
+def validate_encoded_bindings(
+    bindings: Mapping[str, EncodedBinding],
+    check_field: Callable[[Field], None],
+) -> None:
+    """Decode each binding and validate explicit Field kinds via check_field."""
+
+    for name, binding in bindings.items():
+        require_namespace_name(name)
+        if not isinstance(binding, EncodedBinding):
+            raise QuailRuntimeError(f"Stored binding for {name!r} must be an EncodedBinding")
+        validate_binding_fields(
+            decode_binding_value(binding.value_kind, binding.value),
+            check_field,
+        )
+
+
+def _validate_binding_fields_node(
+    value: Any,
+    check_field: Callable[[Field], None],
+    *,
+    seen: set[int],
+) -> None:
+    if isinstance(value, Field):
+        check_field(value)
+        return
+    if isinstance(value, Expression):
+        check_field(value.root)
+        for operation in value.operations:
+            _validate_binding_fields_node(operation, check_field, seen=seen)
+        return
+    if isinstance(value, Operation):
+        _validate_binding_fields_node(dict(value.params), check_field, seen=seen)
+        return
+    if isinstance(value, Unit):
+        if value.field is not None:
+            check_field(value.field)
+        return
+    if isinstance(value, Predicate):
+        _validate_binding_fields_node(value.left, check_field, seen=seen)
+        if value.right is not None:
+            _validate_binding_fields_node(value.right, check_field, seen=seen)
+        return
+    if isinstance(value, GroupExpr):
+        if value.predicate is not None:
+            _validate_binding_fields_node(value.predicate, check_field, seen=seen)
+        if value.members is not None:
+            for member in value.members:
+                _validate_binding_fields_node(member, check_field, seen=seen)
+        if value.left is not None:
+            _validate_binding_fields_node(value.left, check_field, seen=seen)
+        if value.right is not None:
+            _validate_binding_fields_node(value.right, check_field, seen=seen)
+        return
+    if isinstance(value, Ranking):
+        if value.expression is not None:
+            _validate_binding_fields_node(value.expression, check_field, seen=seen)
+        if value.left is not None:
+            _validate_binding_fields_node(value.left, check_field, seen=seen)
+        if value.right is not None:
+            _validate_binding_fields_node(value.right, check_field, seen=seen)
+        return
+    if isinstance(value, Entry):
+        return
+    if isinstance(value, Mapping):
+        identity = id(value)
+        if identity in seen:
+            return
+        seen.add(identity)
+        try:
+            field = _field_from_binding_record(value)
+            if field is not None:
+                check_field(field)
+                return
+            for item in value.values():
+                _validate_binding_fields_node(item, check_field, seen=seen)
+        finally:
+            seen.discard(identity)
+        return
+    if isinstance(value, list | tuple):
+        identity = id(value)
+        if identity in seen:
+            return
+        seen.add(identity)
+        try:
+            for item in value:
+                _validate_binding_fields_node(item, check_field, seen=seen)
+        finally:
+            seen.discard(identity)
+
+
+def _field_from_binding_record(value: Mapping[Any, Any]) -> Field | None:
+    """Recognize a Field.to_record() map nested inside Operation params / group records."""
+
+    if "name" not in value or set(value.keys()) - {"name", "kind"}:
+        return None
+    name = value["name"]
+    kind = value.get("kind")
+    if not isinstance(name, str) or not name:
+        return None
+    if kind not in (None, "source", "analysis"):
+        return None
+    return Field(name, kind)
+
+
 def canonical_binding_bytes(binding: EncodedBinding) -> bytes:
     """Deterministic UTF-8 representation used for equality."""
 
