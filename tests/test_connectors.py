@@ -76,6 +76,10 @@ class _DocsProvider:
         context.require_dataset(dataset_id)
         return self._docs.get(dataset_id)
 
+    def handle_route(self, context, route_id, path_params):
+        del context, route_id, path_params
+        return None
+
 
 class _ToolProvider:
     def __init__(self, host: ConnectorHost, label: str) -> None:
@@ -106,6 +110,10 @@ class _ToolProvider:
             return None
         self._host.require_dataset(context, dataset_id)
         return f"Docs from {self._label} for {dataset_id}"
+
+    def handle_route(self, context, route_id, path_params):
+        del context, route_id, path_params
+        return None
 
 
 class _FakeConnector:
@@ -641,3 +649,83 @@ def test_register_connectors_noop_catalog() -> None:
         ConnectorCatalog(),
         resolve_workspace=lambda _ctx: ("local", None),
     )
+
+
+def test_connector_file_route_serves_bytes(tmp_path: Path) -> None:
+    from mcp.server.fastmcp import FastMCP
+    from starlette.testclient import TestClient
+
+    from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
+    from quail.connectors.sdk import FileResponse, RouteSpec
+
+    asset = tmp_path / "page.png"
+    asset.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 20)
+
+    class _RouteProvider:
+        def call_tool(self, context, name, arguments):
+            raise ConnectorError("UNKNOWN_TOOL", "none", "n/a")
+
+        def dataset_document(self, context, dataset_id):
+            return None
+
+        def handle_route(self, context, route_id, path_params):
+            if route_id != "asset" or path_params.get("token") != "good":
+                return None
+            if context.workspace_id != "garden":
+                return None
+            return FileResponse(asset, "image/png", filename="page.png", expires_at=9_999_999_999)
+
+    class _RouteConnector:
+        def __init__(self) -> None:
+            self._manifest = ConnectorManifest(
+                id="garden_gate",
+                version="1.0.0",
+                routes=(RouteSpec(id="asset", path_suffix="assets/{token}"),),
+            )
+
+        @property
+        def manifest(self):
+            return self._manifest
+
+        def read_resource(self, uri: str) -> str:
+            raise ValueError(uri)
+
+        def connect(self, runtime):
+            del runtime
+            return _RouteProvider()
+
+    connector = _RouteConnector()
+    connected = ConnectedProvider(
+        extension_id="garden_gate",
+        version="1.0.0",
+        manifest=connector.manifest,
+        connector=connector,
+        provider=_RouteProvider(),
+        dataset_ids=frozenset({"garden-gate"}),
+        provides_docs=False,
+    )
+    catalog = ConnectorCatalog(
+        by_workspace={
+            "garden": WorkspaceConnectorBundle(
+                workspace_id="garden",
+                providers=(connected,),
+                docs_by_dataset={},
+            )
+        }
+    )
+    server = FastMCP("t")
+    register_connectors(
+        server,
+        catalog,
+        resolve_workspace=lambda _ctx: ("garden", None),
+    )
+    app = server.streamable_http_app()
+    client = TestClient(app)
+    missing = client.get("/extensions/garden_gate/other/assets/good")
+    assert missing.status_code == 404
+    bad = client.get("/extensions/garden_gate/garden/assets/bad")
+    assert bad.status_code == 404
+    ok = client.get("/extensions/garden_gate/garden/assets/good")
+    assert ok.status_code == 200
+    assert ok.headers["content-type"].startswith("image/png")
+    assert ok.content.startswith(b"\x89PNG")

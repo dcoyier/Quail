@@ -116,6 +116,15 @@ class NotesProvider:
         self._authorized_dataset(context, dataset_id)
         return f"## {self._heading}\n\n{_NOTES_DOCS}"
 
+    def handle_route(
+        self,
+        context: ConnectorContext,
+        route_id: str,
+        path_params: Mapping[str, Any],
+    ):
+        del context, route_id, path_params
+        return None
+
     def _authorized_dataset(self, context: ConnectorContext, dataset_id: str) -> DatasetRef:
         if context.workspace_id != self._workspace_id:
             raise PermissionError("The request does not belong to this workspace provider")

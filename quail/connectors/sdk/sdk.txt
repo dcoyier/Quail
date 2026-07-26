@@ -7,7 +7,13 @@ ResourceSpec is one readable MCP resource (uri, title, description, mime_type).
 
 WidgetSpec is one MCP UI widget with a ui:// uri and optional compatibility uris.
 
-ConnectorManifest remembers id, version, tools, resources, widgets, and
+RouteSpec is one host HTTP GET route. Remember: id, path_suffix (under
+/extensions/{connector_id}/{workspace_id}/), method GET only, max_body_bytes.
+
+FileResponse is the route reply. Remember: path, content_type, optional
+filename, optional expires_at unix timestamp.
+
+ConnectorManifest remembers id, version, tools, resources, widgets, routes, and
 config_keys.
 
 DatasetRef remembers id, name, active_version_id.
@@ -34,3 +40,4 @@ Connector:
 Provider:
   call_tool(context, name, arguments) -> ToolResult or mapping.
   dataset_document(context, dataset_id) -> text or None.
+  handle_route(context, route_id, path_params) -> FileResponse or None.

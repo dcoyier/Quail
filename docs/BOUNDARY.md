@@ -23,7 +23,7 @@ Rebuild Quail so the author can understand and extend it. Keep load-bearing inva
 |  | `provide_feedback` for friction / improvement notes |
 | Operator | Hand-edited `quail.toml` + `quail process` / `quail run` (CLI never writes TOML); |
 |  | install connector wheels and pin/connect them in TOML |
-| Connector author | Thin SDK (`quail.connectors.sdk`): tools, dataset docs, MCP UI widgets |
+| Connector author | Thin SDK (`quail.connectors.sdk`): tools, dataset docs, MCP UI widgets, narrow file routes |
 
 ### MCP agent tools (core)
 
@@ -38,8 +38,8 @@ Unrestricted loopback FastMCP (`create_mcp_server`) exposes:
 | `quail_exec` | Worker `exec_script` for one session + dataset |
 | `provide_feedback` | Append friction/improvement notes to a JSONL file |
 
-Connected connectors may add further tools, resources, and MCP UI widgets for the
-active workspace.
+Connected connectors may add further tools, resources, MCP UI widgets, and
+narrow GET file routes for the active workspace.
 
 `provide_feedback(message, *, category=None, session_id=None, dataset_id=None)`
 is for confusing, blocked, or improvable Quail behavior — not analysis results.
@@ -146,7 +146,7 @@ by pasting Clerk `user_…` ids into `[[users]]`.
 - Invitations / identity linking / live admin user APIs
 - Search **infrastructure** extras: ANN and lexical workers/artifact roots
 - Hosting flourishes (ngrok as product; `public_base_url` remains)
-- HTTP connector routes / events host API
+- Connector **events** host API (file GET routes are in; pub/sub events are not)
 
 Semantic uses per-dataset embedding profiles (Ollama/OpenRouter), a rebuildable
 Turso vector cache, and **exact** batch cosine via `-vector_distance_dot`.
@@ -166,7 +166,8 @@ Lexical uses Turso **native FTS** in the same rebuildable search DB
 8. TOML + `quail process` / `quail run` — **done**
 9. Clerk + TOML allowlist + OAuth discovery — **done** (invitations / generic OIDC still out)
 10. Connector SDK — **done:** tools, dataset docs (`dataset_document` →
-    `quail_get_dataset_info`), MCP UI widgets; see [`connector-sdk.md`](connector-sdk.md)
+    `quail_get_dataset_info`), MCP UI widgets, narrow GET file routes
+    (`RouteSpec` / `FileResponse`); see [`connector-sdk.md`](connector-sdk.md)
 
 ## Working agreement
 

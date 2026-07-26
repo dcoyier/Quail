@@ -89,15 +89,64 @@ class WidgetSpec:
             object.__setattr__(self, "meta", _freeze_mapping(self.meta, "widget meta"))
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RouteSpec:
+    """One host HTTP GET route under ``/extensions/{id}/{workspace_id}/…``."""
+
+    id: str
+    path_suffix: str
+    method: str = "GET"
+    max_body_bytes: int = 64 * 1024 * 1024
+
+    def __post_init__(self) -> None:
+        _validate_surface_name(self.id, "route id")
+        if not isinstance(self.path_suffix, str) or not self.path_suffix.strip():
+            raise ValueError("Route path_suffix must be a non-empty string")
+        suffix = self.path_suffix.strip().lstrip("/")
+        if ".." in suffix.split("/") or suffix.startswith("extensions/"):
+            raise ValueError("Route path_suffix must stay under the extension prefix")
+        if self.method != "GET":
+            raise ValueError("Connector routes support GET only")
+        if (
+            isinstance(self.max_body_bytes, bool)
+            or not isinstance(self.max_body_bytes, int)
+            or self.max_body_bytes < 1
+        ):
+            raise ValueError("Route max_body_bytes must be a positive integer")
+        object.__setattr__(self, "path_suffix", suffix)
+
+
+@dataclass(frozen=True, slots=True)
+class FileResponse:
+    """Bytes (or path) returned from a connector HTTP route."""
+
+    path: Path
+    content_type: str
+    filename: str | None = None
+    expires_at: int | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.path, Path):
+            raise ValueError("FileResponse path must be a Path")
+        _require_bounded_text(self.content_type, "content type", maximum_bytes=256)
+        if self.filename is not None:
+            _require_bounded_text(self.filename, "filename", maximum_bytes=512)
+        if self.expires_at is not None and (
+            isinstance(self.expires_at, bool) or not isinstance(self.expires_at, int)
+        ):
+            raise ValueError("FileResponse expires_at must be an int unix timestamp")
+
+
 @dataclass(frozen=True, slots=True)
 class ConnectorManifest:
-    """Invariant package surface: id, version, tools, resources, widgets."""
+    """Invariant package surface: id, version, tools, resources, widgets, routes."""
 
     id: str
     version: str
     tools: tuple[ToolSpec, ...] = ()
     resources: tuple[ResourceSpec, ...] = ()
     widgets: tuple[WidgetSpec, ...] = ()
+    routes: tuple[RouteSpec, ...] = ()
     config_keys: frozenset[str] = field(default_factory=frozenset)
 
     def __post_init__(self) -> None:
@@ -107,8 +156,8 @@ class ConnectorManifest:
         _require_unique((tool.name for tool in self.tools), "tool names")
         _require_unique((resource.uri for resource in self.resources), "resource URIs")
         _require_unique((widget.id for widget in self.widgets), "widget ids")
+        _require_unique((route.id for route in self.routes), "route ids")
         object.__setattr__(self, "config_keys", frozenset(self.config_keys))
-
 
 @dataclass(frozen=True, slots=True)
 class DatasetRef:
@@ -220,6 +269,13 @@ class Provider(Protocol):
     ) -> ToolResult | Mapping[str, Any]: ...
 
     def dataset_document(self, context: ConnectorContext, dataset_id: str) -> str | None: ...
+
+    def handle_route(
+        self,
+        context: ConnectorContext,
+        route_id: str,
+        path_params: Mapping[str, str],
+    ) -> FileResponse | None: ...
 
 
 def _require_bounded_text(value: str, label: str, *, maximum_bytes: int = _MAX_TEXT_BYTES) -> None:

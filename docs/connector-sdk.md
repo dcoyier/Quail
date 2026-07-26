@@ -23,15 +23,16 @@ file paths in TOML. Hosting / ngrok stays outside the SDK
 
 | Kind | Symbols |
 | --- | --- |
-| Declarations | `ConnectorManifest`, `ToolSpec`, `ResourceSpec`, `WidgetSpec` |
+| Declarations | `ConnectorManifest`, `ToolSpec`, `ResourceSpec`, `WidgetSpec`, `RouteSpec` |
 | Lifecycle | `ConnectorFactory`, `Connector`, `Provider` |
 | Env / request | `ConnectorEnvironment`, `WorkspaceConnectorRuntime`, `ConnectorContext`, `ConnectorHost`, `DatasetRef` |
-| Results | `ToolResult`, `ConnectorError` |
+| Results | `ToolResult`, `ConnectorError`, `FileResponse` |
 
 ### Required methods
 
 - **Connector:** `manifest`, `read_resource(uri)`, `connect(runtime) -> Provider`
-- **Provider:** `call_tool(context, name, args)`, `dataset_document(context, dataset_id) -> str | None`
+- **Provider:** `call_tool(context, name, args)`, `dataset_document(context, dataset_id) -> str | None`,
+  `handle_route(context, route_id, path_params) -> FileResponse | None`
 - **ConnectorHost (v1):** `dataset`, `require_dataset` only
 
 Tool input schemas must be closed JSON Schema objects (`type: object`,
@@ -81,8 +82,18 @@ Guidance is SDK-only — there is no TOML `info=` field.
 ## Widgets
 
 Declare `WidgetSpec` with `ui://…` URIs. Host serves them as MCP resources
-(`text/html;profile=mcp-app`). Prefer in-MCP widgets; do not rely on HTTP
-route hosting in v1.
+(`text/html;profile=mcp-app`). Prefer in-MCP widgets for UI.
+
+## HTTP routes (narrow)
+
+Declare `RouteSpec` for trusted file delivery (for example short-lived signed
+asset downloads). The host mounts:
+
+`/extensions/{connector_id}/{workspace_id}/{path_suffix}`
+
+GET only. Implement `Provider.handle_route(context, route_id, path_params)` and
+return `FileResponse` or `None`. Do not use routes as a general app server —
+widgets and tools remain the agent-facing surface.
 
 ## Example
 

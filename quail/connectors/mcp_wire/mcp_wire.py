@@ -1,21 +1,35 @@
-"""Register connected connector tools, resources, and widgets on FastMCP."""
+"""Register connected connector tools, resources, widgets, and HTTP routes."""
 
 from __future__ import annotations
 
+import re
+import time
 from collections.abc import Callable, Mapping
 from typing import Any
+from urllib.parse import unquote
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, ToolAnnotations
+from starlette.requests import Request
+from starlette.responses import FileResponse as StarletteFileResponse
+from starlette.responses import Response
 
 from quail.connectors.load import (
     ConnectedProvider,
     ConnectorCatalog,
     make_request_context,
 )
-from quail.connectors.sdk import ConnectorError, ToolResult, ToolSpec
+from quail.connectors.sdk import (
+    ConnectorError,
+    FileResponse,
+    RouteSpec,
+    ToolResult,
+    ToolSpec,
+)
 from quail.mcp.offload import run_blocking
 from quail.mcp.results import error_result, success_result
+
+_PARAM = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
 def register_connectors(
@@ -29,6 +43,7 @@ def register_connectors(
     providers_by_tool: dict[str, list[tuple[str, ConnectedProvider]]] = {}
     seen_resource_uris: set[str] = set()
     tool_specs: dict[str, ToolSpec] = {}
+    route_owners: dict[tuple[str, str], list[tuple[str, ConnectedProvider, RouteSpec]]] = {}
 
     for workspace_id, bundle in catalog.by_workspace.items():
         for connected in bundle.providers:
@@ -61,9 +76,15 @@ def register_connectors(
                         mime_type="text/html;profile=mcp-app",
                         meta=dict(widget.meta) if widget.meta else None,
                     )
+            for route in connected.manifest.routes:
+                key = (connected.extension_id, route.id)
+                route_owners.setdefault(key, []).append((workspace_id, connected, route))
 
     for tool_name, owners in providers_by_tool.items():
         _register_tool(server, tool_specs[tool_name], owners, resolve_workspace)
+
+    for (_extension_id, _route_id), owners in route_owners.items():
+        _register_route(server, owners)
 
 
 def _register_resource(
@@ -184,6 +205,75 @@ def _register_tool(
         ),
         meta=dict(spec.meta) if spec.meta else None,
     )
+
+
+def _register_route(
+    server: FastMCP,
+    owners: list[tuple[str, ConnectedProvider, RouteSpec]],
+) -> None:
+    sample = owners[0][2]
+    extension_id = owners[0][1].extension_id
+    route_id = sample.id
+    path = f"/extensions/{extension_id}/{{workspace_id}}/{sample.path_suffix}"
+    param_names = _PARAM.findall(sample.path_suffix)
+
+    @server.custom_route(path, methods=["GET"], name=f"connector_{extension_id}_{route_id}")
+    async def route_handler(request: Request) -> Response:
+        workspace_id = unquote(request.path_params.get("workspace_id", ""))
+        path_params = {
+            name: unquote(str(request.path_params.get(name, ""))) for name in param_names
+        }
+        path_params["workspace_id"] = workspace_id
+
+        def work() -> FileResponse | None:
+            connected = _provider_for_workspace(
+                [(owner_workspace, connected) for owner_workspace, connected, _route in owners],
+                workspace_id,
+            )
+            if connected is None:
+                return None
+            context = make_request_context(
+                workspace_id=workspace_id,
+                user_id=None,
+                connected=connected,
+            )
+            handle = getattr(connected.provider, "handle_route", None)
+            if handle is None:
+                return None
+            result = handle(context, route_id, path_params)
+            if result is None:
+                return None
+            if not isinstance(result, FileResponse):
+                raise ConnectorError(
+                    "INVALID_ROUTE_RESULT",
+                    "Connector route returned an unsupported result type.",
+                    "Return FileResponse or None.",
+                )
+            size = result.path.stat().st_size
+            if size > sample.max_body_bytes:
+                raise ConnectorError(
+                    "ASSET_TOO_LARGE",
+                    "The connector file exceeds the route body limit.",
+                    "Ask the operator to raise max_body_bytes or shrink the file.",
+                )
+            return result
+
+        try:
+            file_result = await run_blocking(work)
+        except Exception:
+            return Response(status_code=500)
+        if file_result is None:
+            return Response(status_code=404)
+        headers: dict[str, str] = {}
+        if file_result.expires_at is not None:
+            remaining = max(0, file_result.expires_at - int(time.time()))
+            headers["Cache-Control"] = f"private, max-age={remaining}"
+        return StarletteFileResponse(
+            path=file_result.path,
+            media_type=file_result.content_type,
+            filename=file_result.filename,
+            headers=headers,
+        )
 
 
 def _provider_for_workspace(
