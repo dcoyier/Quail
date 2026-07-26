@@ -3,6 +3,8 @@ There is a private locked-user instructions addendum.
 There is a private session-rules string (workspace-scoped sessions; after switch
 call quail_setup or quail_start_session again; one quail_exec in flight per
 session_id; overlap fails with session_busy).
+There is a private Clerk session-rules string (same, plus sessions are owned by
+the creating user; do not use another user's session_id).
 
 unrestricted_instructions(workspace_id):
   Give back fixed-workspace connect-time instructions (unrestricted; no sign-in)
@@ -10,6 +12,8 @@ unrestricted_instructions(workspace_id):
   skip-get_dataset_info-when-docs-already-in-setup note.
 
 clerk_instructions(locked default false):
-  Give back Clerk bind-then-quail_setup instructions including session rules and
-  the same dataset-docs note.
+  Give back Clerk identity-mode bind-then-quail_setup instructions: token proves
+  identity, TOML allowlist gates access, authorized parties bind the app; scopes
+  are advertised for clients but not enforced from the token. Include Clerk
+  session ownership rules and the dataset-docs note.
   When locked is true, append the locked-user addendum.

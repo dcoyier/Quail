@@ -6,6 +6,7 @@ Import and expose:
   models Session, Scope, AnalysisField, CatalogField
   mutations FieldCreate, ValueWrite, ValueDelete
   create_session, get_session, close_session
+  require_active_session, require_owned_active_session, require_session_owner
   resolve_scope, ensure_scope
   analysis_fields, analysis_values, catalog_fields, commit_overlay
 

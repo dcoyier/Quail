@@ -1,10 +1,12 @@
-create_session(db, workspace_id):
+create_session(db, workspace_id, owner_user_id default None):
   Require a workspace id and ensure the workspace exists.
-  Create an active session with a new ses_ id and state_revision 0.
+  Optional owner_user_id is the TOML [[users]].id (Clerk); None for unrestricted.
+  Empty owner_user_id raises.
+  Create an active session with a new ses_ id, state_revision 0, and the owner.
   Commit and give back a Session.
 
 get_session(db, session_id):
-  Give back the Session row, or None if missing.
+  Give back the Session row (including owner_user_id), or None if missing.
 
 close_session(db, session_id):
   If missing, raise.
@@ -16,3 +18,16 @@ require_active_session(db, session_id):
   If missing, raise a syntax error.
   If closed, raise SessionClosedError.
   Give back the active Session.
+
+require_owned_active_session(db, session_id, owner_user_id):
+  Require an active session.
+  If owner_user_id is empty, raise.
+  If the session has no owner or a different owner, raise a syntax error telling
+  the caller to create their own session.
+  Give back the active Session.
+
+require_session_owner(db, session_id, owner_user_id):
+  Load the session (any status).
+  If missing, raise.
+  Enforce the same owner rule as require_owned_active_session.
+  Give back the Session.

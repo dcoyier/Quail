@@ -1,4 +1,6 @@
-MCP_OAUTH_SCOPES is the openid/profile/email tuple advertised for Clerk MCP OAuth.
+MCP_OAUTH_SCOPES is the openid/profile/email tuple advertised for Clerk MCP OAuth
+client compatibility. Quail identity mode does not enforce these scopes from the
+token; allowlist + authorized parties do.
 
 normalize_public_base_url / default_public_base_url:
   Re-exported from quail.config.hosting_url.

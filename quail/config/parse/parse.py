@@ -38,7 +38,7 @@ _ALLOWED_ROOT_CLERK = frozenset(
 )
 _ALLOWED_CORE = frozenset({"database", "feedback", "search_database"})
 _ALLOWED_AUTH_UNRESTRICTED = frozenset({"mode", "workspace"})
-_ALLOWED_AUTH_CLERK = frozenset({"mode", "clerk_domain"})
+_ALLOWED_AUTH_CLERK = frozenset({"mode", "clerk_domain", "clerk_authorized_parties"})
 _ALLOWED_HOSTING = frozenset(
     {
         "bind",
@@ -233,6 +233,7 @@ def _parse_unrestricted(
         public_base_url=public_base_url,
         workspace_id=workspace_id,
         clerk_domain=None,
+        clerk_authorized_parties=(),
         workspaces=(workspace,),
         users=(),
         datasets=datasets,
@@ -269,6 +270,7 @@ def _parse_clerk(
     if "datasets" in data:
         raise ConfigError("root [[datasets]] is not allowed when auth.mode is clerk")
     clerk_domain = _require_string(auth, "clerk_domain", label="auth.clerk_domain")
+    clerk_authorized_parties = _parse_clerk_authorized_parties(auth)
     extensions = _parse_extensions(data.get("extensions", []))
     extension_ids = {pin.extension_id for pin in extensions}
 
@@ -379,6 +381,7 @@ def _parse_clerk(
         public_base_url=public_base_url,
         workspace_id=None,
         clerk_domain=clerk_domain,
+        clerk_authorized_parties=clerk_authorized_parties,
         workspaces=tuple(workspaces),
         users=tuple(users),
         datasets=tuple(flat_datasets),
@@ -389,6 +392,26 @@ def _parse_clerk(
         extensions=extensions,
         include_dataset_docs_in_setup=include_dataset_docs_in_setup,
     )
+
+
+def _parse_clerk_authorized_parties(auth: dict[str, Any]) -> tuple[str, ...]:
+    if "clerk_authorized_parties" not in auth:
+        raise ConfigError("auth.clerk_authorized_parties is required when auth.mode is clerk")
+    raw = auth["clerk_authorized_parties"]
+    if not isinstance(raw, list) or not raw:
+        raise ConfigError("auth.clerk_authorized_parties must be a non-empty array of strings")
+    parties: list[str] = []
+    seen: set[str] = set()
+    for index, item in enumerate(raw):
+        label = f"auth.clerk_authorized_parties[{index}]"
+        if not isinstance(item, str) or not item.strip():
+            raise ConfigError(f"{label} must be a non-empty string")
+        party = item.strip()
+        if party in seen:
+            raise ConfigError(f"Duplicate auth.clerk_authorized_parties value: {party}")
+        seen.add(party)
+        parties.append(party)
+    return tuple(parties)
 
 
 def _parse_public_base_url(hosting: dict[str, Any], *, bind: str, port: int) -> str:

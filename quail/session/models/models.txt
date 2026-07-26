@@ -1,5 +1,6 @@
 Session is a workspace-bound analysis context for the host.
-It remembers id, workspace_id, status, and state_revision.
+It remembers id, workspace_id, status, state_revision, and optional
+owner_user_id (TOML [[users]].id in Clerk; None when unrestricted).
 
 Scope pins one session to one immutable dataset version.
 It remembers session_id, workspace_id, dataset_id, and dataset_version_id.

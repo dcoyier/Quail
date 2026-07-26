@@ -206,6 +206,7 @@ def _config(
         public_base_url="http://127.0.0.1:8765",
         workspace_id=workspace_id,
         clerk_domain=None,
+        clerk_authorized_parties=(),
         workspaces=(
             WorkspaceSpec(
                 workspace_id=workspace_id,
@@ -375,6 +376,7 @@ def test_workspace_isolation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
         public_base_url="http://127.0.0.1:8765",
         workspace_id=None,
         clerk_domain="example.clerk.accounts.dev",
+        clerk_authorized_parties=("test_clerk_app",),
         workspaces=(
             WorkspaceSpec(
                 workspace_id="ws-a",

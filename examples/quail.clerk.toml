@@ -12,6 +12,9 @@ feedback = "data/clerk-feedback.jsonl"
 [auth]
 mode = "clerk"
 clerk_domain = "your-instance.clerk.accounts.dev"
+# Clerk application party id(s) allowed to present JWTs (azp and/or aud).
+# Find the application id in the Clerk dashboard (OAuth / application settings).
+clerk_authorized_parties = ["your_clerk_application_id"]
 
 [hosting]
 bind = "127.0.0.1"
@@ -21,13 +24,15 @@ port = 8000
 # public_base_url = "https://your-tunnel.example"
 # max_concurrent_executions = 2
 
-# Clerk operator notes:
+# Clerk operator notes (identity mode):
 # 1. Create a Clerk application and enable Dynamic client registration
 #    (Dashboard → OAuth applications).
-# 2. Set default OAuth scopes to include openid, profile, email.
-# 3. Invite users in Clerk; copy each user_… id into [[users]] below.
-# 4. Point MCP clients at {public_base_url}/mcp (or http://127.0.0.1:8000/mcp locally).
-# 5. Restart quail run after TOML edits.
+# 2. Put this app's party id in auth.clerk_authorized_parties (JWT azp/aud).
+# 3. Set default OAuth scopes to include openid, profile, email (client UX;
+#    Quail does not enforce token scopes — allowlist + party binding do).
+# 4. Invite users in Clerk; copy each user_… id into [[users]] below.
+# 5. Point MCP clients at {public_base_url}/mcp (or http://127.0.0.1:8000/mcp locally).
+# 6. Restart quail run after TOML edits. Sessions are owned by the creating user.
 
 [[workspaces]]
 id = "acme"

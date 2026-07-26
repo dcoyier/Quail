@@ -31,15 +31,30 @@ class TokenVerifier(Protocol):
 
 
 class ClerkJwtVerifier:
-    """Verify Clerk-issued tokens via JWKS JWT, with OAuth userinfo fallback."""
+    """Verify Clerk-issued tokens via JWKS JWT, with OAuth userinfo fallback.
 
-    def __init__(self, clerk_domain: str) -> None:
+    Identity mode: signature + issuer + sub, then TOML allowlist (elsewhere).
+    App binding: JWT must present azp or aud in authorized_parties. Opaque
+    tokens verified only via userinfo skip that claim check (Clerk issuer still
+    vouches for the token).
+    """
+
+    def __init__(
+        self,
+        clerk_domain: str,
+        *,
+        authorized_parties: tuple[str, ...] = (),
+    ) -> None:
         domain = clerk_domain.strip().removeprefix("https://").removesuffix("/")
         if not domain:
             raise ValueError("clerk_domain cannot be empty")
+        parties = tuple(party.strip() for party in authorized_parties if party.strip())
+        if not parties:
+            raise ValueError("authorized_parties must be a non-empty tuple of party ids")
         self._issuer = f"https://{domain}"
         self._jwks = PyJWKClient(f"{self._issuer}/.well-known/jwks.json")
         self._userinfo_url = f"{self._issuer}/oauth/userinfo"
+        self._authorized_parties = frozenset(parties)
 
     def verify(self, token: str) -> str:
         try:
@@ -59,6 +74,7 @@ class ClerkJwtVerifier:
             )
         except jwt.PyJWTError as error:
             raise UnauthorizedError("Invalid bearer token") from error
+        _require_authorized_party(payload, self._authorized_parties)
         sub = payload.get("sub")
         if not isinstance(sub, str) or not sub.strip():
             raise UnauthorizedError("Bearer token missing sub")
@@ -91,6 +107,26 @@ class ClerkJwtVerifier:
             if isinstance(value, str) and value.strip():
                 return value.strip()
         raise UnauthorizedError("Bearer token missing sub")
+
+
+def _require_authorized_party(payload: dict[str, object], parties: frozenset[str]) -> None:
+    """Require JWT azp or aud to match a configured Clerk application party."""
+
+    candidates: list[str] = []
+    azp = payload.get("azp")
+    if isinstance(azp, str) and azp.strip():
+        candidates.append(azp.strip())
+    aud = payload.get("aud")
+    if isinstance(aud, str) and aud.strip():
+        candidates.append(aud.strip())
+    elif isinstance(aud, list):
+        for item in aud:
+            if isinstance(item, str) and item.strip():
+                candidates.append(item.strip())
+    if not candidates:
+        raise UnauthorizedError("Bearer token missing authorized party (azp/aud)")
+    if not parties.intersection(candidates):
+        raise UnauthorizedError("Bearer token is not for this Quail application")
 
 
 @dataclass(frozen=True, slots=True)

@@ -25,7 +25,8 @@ parse_config(raw_text, manifest_path):
   Unless allow_public_unrestricted is true, require bind and public_base_url host to be
   loopback (127.0.0.1, localhost, or ::1).
   Parse optional root [[connectors]] against pinned extension ids and workspace dataset ids.
-  If clerk: require auth.clerk_domain, [[workspaces]] with nested datasets, and [[users]];
+  If clerk: require auth.clerk_domain, auth.clerk_authorized_parties (non-empty
+  azp/aud party ids), [[workspaces]] with nested datasets, and [[users]];
   reject auth.workspace, root [[datasets]], and allow_public_unrestricted.
   Parse optional workspaces[].connectors against pinned extension ids and that workspace's
   dataset ids.

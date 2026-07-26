@@ -23,7 +23,14 @@ from quail.session.overlay import (
     ensure_scope,
     resolve_scope,
 )
-from quail.session.sessions import close_session, create_session, get_session
+from quail.session.sessions import (
+    close_session,
+    create_session,
+    get_session,
+    require_active_session,
+    require_owned_active_session,
+    require_session_owner,
+)
 
 __all__ = [
     "AnalysisField",
@@ -45,5 +52,8 @@ __all__ = [
     "create_session",
     "ensure_scope",
     "get_session",
+    "require_active_session",
+    "require_owned_active_session",
+    "require_session_owner",
     "resolve_scope",
 ]

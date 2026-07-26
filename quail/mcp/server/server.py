@@ -47,7 +47,11 @@ from quail.mcp.results import (
 from quail.mcp.sticky import StickyWorkspaceStore
 from quail.search.runtime import SearchRuntime, search_runtime_from_config
 from quail.session import create_session, get_session
-from quail.session.sessions import require_active_session
+from quail.session.sessions import (
+    require_active_session,
+    require_owned_active_session,
+    require_session_owner,
+)
 
 _API_DOCS_REPAIR = (
     "Ensure the packaged analysis docs are installed, or pass a readable api_docs_path."
@@ -155,7 +159,11 @@ def create_mcp_server_from_config(
     return create_clerk_mcp_server(
         config,
         api_docs_path=api_docs_path,
-        verifier=verifier or ClerkJwtVerifier(config.clerk_domain),
+        verifier=verifier
+        or ClerkJwtVerifier(
+            config.clerk_domain,
+            authorized_parties=config.clerk_authorized_parties,
+        ),
         search_runtime=runtime,
         connector_catalog=connector_catalog,
     )
@@ -588,7 +596,7 @@ def _register_clerk_tools(
                         db_path=runtime.db_path,
                         api_docs_path=runtime.api_docs_path,
                         workspace_id=workspace_id,
-                        user_id=principal.user_id,
+                        user_id=principal.user.user_id,
                         connector_catalog=connector_catalog,
                         include_dataset_docs=runtime.include_dataset_docs_in_setup,
                     )
@@ -666,7 +674,11 @@ def _register_clerk_tools(
                 return workspace_id
             try:
                 with open_core_db(runtime.db_path) as db:
-                    session = create_session(db, workspace_id)
+                    session = create_session(
+                        db,
+                        workspace_id,
+                        owner_user_id=principal.user.user_id,
+                    )
             except Exception as error:
                 return error_result(error=error)
             return success_result(
@@ -742,7 +754,11 @@ def _register_clerk_tools(
             try:
                 validate_time_window(time_window)
                 with open_core_db(runtime.db_path) as db:
-                    session = require_active_session(db, session_id)
+                    session = require_owned_active_session(
+                        db,
+                        session_id,
+                        owner_user_id=principal.user.user_id,
+                    )
                     if session.workspace_id != workspace_id:
                         raise ValueError("Session does not belong to the active workspace")
                     outcome = exec_script(
@@ -784,9 +800,11 @@ def _register_clerk_tools(
             try:
                 with open_core_db(runtime.db_path) as db:
                     if session_id is not None:
-                        session = get_session(db, session_id)
-                        if session is None:
-                            raise ValueError(f"Session not found: {session_id}")
+                        require_session_owner(
+                            db,
+                            session_id,
+                            owner_user_id=principal.user.user_id,
+                        )
                     if dataset_id is not None:
                         ref = get_dataset(db, workspace_id, dataset_id)
                         if ref is None:
@@ -858,7 +876,7 @@ def _build_setup_payload(
 
     documentation = load_api_docs(api_docs_path)
     with open_core_db(db_path) as db:
-        session = create_session(db, workspace_id)
+        session = create_session(db, workspace_id, owner_user_id=user_id)
         datasets: list[dict[str, Any]] = []
         for ref in list_datasets(db, workspace_id):
             row: dict[str, Any] = {

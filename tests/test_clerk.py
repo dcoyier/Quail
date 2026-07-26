@@ -56,6 +56,7 @@ feedback = "data/feedback.jsonl"
 [auth]
 mode = "clerk"
 clerk_domain = "example.clerk.accounts.dev"
+clerk_authorized_parties = ["test_clerk_app"]
 
 [hosting]
 bind = "127.0.0.1"
@@ -96,6 +97,7 @@ feedback = "f.jsonl"
 [auth]
 mode = "clerk"
 clerk_domain = "example.clerk.accounts.dev"
+clerk_authorized_parties = ["test_clerk_app"]
 workspace = "local"
 [hosting]
 bind = "127.0.0.1"
@@ -134,6 +136,7 @@ feedback = "f.jsonl"
 [auth]
 mode = "clerk"
 clerk_domain = "example.clerk.accounts.dev"
+clerk_authorized_parties = ["test_clerk_app"]
 [hosting]
 bind = "127.0.0.1"
 port = 8000
@@ -288,7 +291,109 @@ def test_parse_clerk_example_shape(tmp_path: Path) -> None:
     config = parse_config(manifest.read_text(encoding="utf-8"), manifest_path=manifest.resolve())
     assert config.auth_mode == "clerk"
     assert config.clerk_domain == "example.clerk.accounts.dev"
+    assert config.clerk_authorized_parties == ("test_clerk_app",)
     assert config.workspace_id is None
     assert len(config.workspaces) == 2
     assert len(config.users) == 1
     assert config.users[0].default_workspace == "acme"
+
+
+def test_clerk_parse_requires_authorized_parties(tmp_path: Path) -> None:
+    manifest = _write_clerk_manifest(tmp_path)
+    text = manifest.read_text(encoding="utf-8").replace(
+        'clerk_authorized_parties = ["test_clerk_app"]\n',
+        "",
+    )
+    manifest.write_text(text, encoding="utf-8")
+    with pytest.raises(ConfigError, match="clerk_authorized_parties"):
+        load_config(manifest)
+
+
+def test_authorized_party_claim_matching() -> None:
+    from quail.auth.clerk.clerk import _require_authorized_party
+
+    parties = frozenset({"app_a", "app_b"})
+    _require_authorized_party({"azp": "app_a", "sub": "u"}, parties)
+    _require_authorized_party({"aud": "app_b", "sub": "u"}, parties)
+    _require_authorized_party({"aud": ["other", "app_a"], "sub": "u"}, parties)
+    with pytest.raises(UnauthorizedError, match="authorized party"):
+        _require_authorized_party({"sub": "u"}, parties)
+    with pytest.raises(UnauthorizedError, match="not for this Quail"):
+        _require_authorized_party({"azp": "app_other", "sub": "u"}, parties)
+
+
+def test_clerk_session_owner_blocks_other_user(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    data.mkdir(parents=True, exist_ok=True)
+    (data / "notes.csv").write_text("id,title\ne1,Hello\n", encoding="utf-8")
+    manifest = tmp_path / "quail.toml"
+    manifest.write_text(
+        """
+[core]
+database = "data/quail.turso"
+feedback = "data/feedback.jsonl"
+
+[auth]
+mode = "clerk"
+clerk_domain = "example.clerk.accounts.dev"
+clerk_authorized_parties = ["test_clerk_app"]
+
+[hosting]
+bind = "127.0.0.1"
+port = 8765
+
+[[workspaces]]
+id = "acme"
+
+[[workspaces.datasets]]
+id = "notes"
+source = "data/notes.csv"
+
+[[users]]
+id = "alice"
+clerk_user_id = "user_alice"
+workspaces = ["acme"]
+default_workspace = "acme"
+
+[[users]]
+id = "bob"
+clerk_user_id = "user_bob"
+workspaces = ["acme"]
+default_workspace = "acme"
+""",
+        encoding="utf-8",
+    )
+    config = load_config(manifest)
+    apply_config(config).close()
+    server = create_mcp_server_from_config(
+        config,
+        verifier=StaticTokenVerifier(
+            {"alice-token": "user_alice", "bob-token": "user_bob"}
+        ),
+    )
+
+    async def run() -> None:
+        with bearer_token("alice-token"):
+            started = _as_dict(await server.call_tool("quail_start_session", {}))
+            session_id = started["session_id"]
+            ok = await server.call_tool(
+                "quail_exec",
+                {
+                    "session_id": session_id,
+                    "dataset_id": "notes",
+                    "code": "print(1)",
+                },
+            )
+            assert not _is_error(ok)
+        with bearer_token("bob-token"):
+            stolen = await server.call_tool(
+                "quail_exec",
+                {
+                    "session_id": session_id,
+                    "dataset_id": "notes",
+                    "code": "print(2)",
+                },
+            )
+            assert _is_error(stolen)
+
+    asyncio.run(run())

@@ -59,13 +59,19 @@ concurrency. Restart `quail run` after changing it.
 
 ### Clerk / MCP clients
 
+Identity mode: Clerk proves who you are; `auth.clerk_authorized_parties` binds
+tokens to your Clerk application (`azp`/`aud`); TOML `[[users]]` is the tool
+gate. Advertised OAuth scopes are for client UX — Quail does not enforce them
+from the token. Sessions are owned by the creating user.
+
 1. In the Clerk Dashboard, enable **Dynamic client registration** under OAuth
    applications and set default scopes to `openid`, `profile`, and `email`.
-2. Invite people in Clerk; copy each `user_…` id into `[[users]]` in
+2. Put this application's party id in `auth.clerk_authorized_parties`.
+3. Invite people in Clerk; copy each `user_…` id into `[[users]]` in
    `quail.toml` with workspace memberships.
-3. Set `hosting.public_base_url` to the origin clients will use (defaults to
+4. Set `hosting.public_base_url` to the origin clients will use (defaults to
    `http://{bind}:{port}`). Expose that origin (and `/mcp`) via reverse proxy or
    ngrok as needed.
-4. `quail process` then `quail run`, and add `{public_base_url}/mcp` in Cursor /
+5. `quail process` then `quail run`, and add `{public_base_url}/mcp` in Cursor /
    Claude. The client should open Clerk sign-in; Quail still enforces the TOML
    allowlist after token verification.

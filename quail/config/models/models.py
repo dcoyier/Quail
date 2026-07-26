@@ -131,6 +131,8 @@ class QuailConfig:
     # Unrestricted: fixed workspace. Clerk: None.
     workspace_id: str | None
     clerk_domain: str | None
+    # Clerk: JWT azp/aud values that may present tokens (empty when unrestricted).
+    clerk_authorized_parties: tuple[str, ...]
     workspaces: tuple[WorkspaceSpec, ...]
     users: tuple[UserSpec, ...]
     # Flattened datasets for apply (every mode).

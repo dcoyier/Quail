@@ -43,6 +43,7 @@ feedback = "data/feedback.jsonl"
 [auth]
 mode = "clerk"
 clerk_domain = "example.clerk.accounts.dev"
+clerk_authorized_parties = ["test_clerk_app"]
 
 [hosting]
 bind = "127.0.0.1"
@@ -201,7 +202,10 @@ def test_authorization_server_metadata_proxy(tmp_path: Path) -> None:
 def test_userinfo_fallback_on_clerk_verifier(monkeypatch: pytest.MonkeyPatch) -> None:
     from quail.auth.clerk import ClerkJwtVerifier
 
-    verifier = ClerkJwtVerifier("example.clerk.accounts.dev")
+    verifier = ClerkJwtVerifier(
+        "example.clerk.accounts.dev",
+        authorized_parties=("test_clerk_app",),
+    )
 
     def _boom(_token: str) -> str:
         raise UnauthorizedError("Invalid bearer token")

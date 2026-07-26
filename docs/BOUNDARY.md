@@ -122,11 +122,21 @@ simultaneous `quail_exec` slots for the whole process. Independent of
 - Overlapping `quail_exec` on the same `session_id` fails fast with
   `session_busy` (enforced in-process lock).
 
+Clerk mode is **identity + allowlist**, not full OAuth resource-server scope
+enforcement. A Clerk token proves `sub`; `auth.clerk_authorized_parties` must
+match JWT `azp` or `aud` (application binding). TOML `[[users]]` is the tool
+gate. MCP still advertises openid/profile/email for client compatibility;
+Quail does not read or enforce those scopes from the token. Opaque tokens
+verified via Clerk userinfo skip the azp/aud claim check (issuer still
+vouches). Sessions store `owner_user_id` (TOML user id); only that user may
+exec or attach feedback to the session.
+
 Clerk mode also serves MCP OAuth discovery so clients can sign in via Clerk:
 protected-resource metadata for `{public_base_url}/mcp` and a proxied
 `/.well-known/oauth-authorization-server`. Optional
 `hosting.public_base_url` defaults from `bind`/`port`. Operators allowlist users
-by pasting Clerk `user_…` ids into `[[users]]`.
+by pasting Clerk `user_…` ids into `[[users]]` and set
+`auth.clerk_authorized_parties` to the Clerk application party id(s).
 
 ### Connectors (operator)
 

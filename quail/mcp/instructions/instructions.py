@@ -25,6 +25,14 @@ _SESSION_RULES = (
     "parallel execs on the same session fail with session_busy)."
 )
 
+_CLERK_SESSION_RULES = (
+    "Sessions are workspace-scoped and owned by the user who created them: after "
+    "quail_switch_workspace, call quail_setup again (or quail_start_session) and "
+    "do not reuse a prior session_id. Do not use another user's session_id. "
+    "Run only one quail_exec in flight per session_id (serial chaining is fine; "
+    "parallel execs on the same session fail with session_busy)."
+)
+
 
 def unrestricted_instructions(workspace_id: str) -> str:
     return (
@@ -57,7 +65,11 @@ def unrestricted_instructions(workspace_id: str) -> str:
 
 def clerk_instructions(*, locked: bool = False) -> str:
     base = (
-        "This Quail deployment uses Clerk auth on one MCP URL.\n"
+        "This Quail deployment uses Clerk identity on one MCP URL. A valid Clerk "
+        "token proves who you are; the operator TOML allowlist decides whether you "
+        "may call tools. Tokens must be for this Clerk application "
+        "(authorized parties). Advertised OAuth scopes are for client compatibility; "
+        "Quail does not enforce per-scope grants from the token.\n"
         "Workspaces contain datasets. Bind a workspace before dataset, session, or exec "
         "tools: call quail_list_workspaces, then quail_switch_workspace (or rely on a "
         "bound default when the connection is already bound). After binding, call "
@@ -67,7 +79,7 @@ def clerk_instructions(*, locked: bool = False) -> str:
         "only one of those pieces. If a workspace is already bound "
         "(including via default_workspace), keep it unless the user asks to change "
         "workspace or the task clearly requires another one.\n"
-        f"{_SESSION_RULES}\n"
+        f"{_CLERK_SESSION_RULES}\n"
         "Dataset-specific guidance comes from quail_get_dataset_info, unless "
         "quail_setup already included documentation for that dataset_id — then "
         "do not call quail_get_dataset_info again for those docs. "

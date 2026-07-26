@@ -64,6 +64,7 @@ QuailConfig remembers:
   public_base_url (http(s) origin for MCP OAuth resource metadata; defaults from bind/port)
   workspace_id (unrestricted only; None for clerk)
   clerk_domain (clerk only; None for unrestricted)
+  clerk_authorized_parties (clerk: non-empty azp/aud party ids; empty when unrestricted)
   workspaces
   users
   datasets (flattened for apply)

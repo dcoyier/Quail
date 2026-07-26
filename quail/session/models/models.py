@@ -12,6 +12,7 @@ class Session:
     workspace_id: str
     status: str
     state_revision: int
+    owner_user_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
