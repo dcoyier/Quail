@@ -5,7 +5,7 @@ McpContext remembers:
   db_path
   workspace_id
   feedback_path
-  api_docs_path
+  api_docs_path (optional override; default uses packaged docs/api.md)
   search_runtime (optional SearchRuntime with pooled SearchDb)
   include_dataset_docs_in_setup (default false)
 Tools open CoreDb per call from db_path; exec checks out SearchDb from the pool.

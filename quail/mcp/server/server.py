@@ -22,6 +22,7 @@ from quail.auth import (
 from quail.auth.clerk import TokenVerifier
 from quail.config.models import QuailConfig, UserSpec
 from quail.datasets import get_dataset, list_datasets, open_core_db
+from quail.mcp.api_docs import load_api_docs
 from quail.mcp.bearer import get_bearer_override
 from quail.mcp.context import DEFAULT_WORKSPACE_ID, McpContext
 from quail.mcp.feedback import append_feedback
@@ -48,8 +49,9 @@ from quail.search.runtime import SearchRuntime, search_runtime_from_config
 from quail.session import create_session, get_session
 from quail.session.sessions import require_active_session
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-_DEFAULT_API_DOCS = _REPO_ROOT / "docs" / "api.md"
+_API_DOCS_REPAIR = (
+    "Ensure the packaged analysis docs are installed, or pass a readable api_docs_path."
+)
 
 _DATASET_INFO_FALLBACK = (
     "No connector documentation is installed for this dataset. "
@@ -69,7 +71,7 @@ class ClerkMcpRuntime:
 
     db_path: Path
     feedback_path: Path
-    api_docs_path: Path
+    api_docs_path: Path | None
     users: tuple[UserSpec, ...]
     verifier: TokenVerifier
     sticky: StickyWorkspaceStore
@@ -93,7 +95,7 @@ def create_mcp_server(
 ) -> FastMCP:
     """Build an unrestricted loopback FastMCP app with the core tools."""
 
-    docs_path = Path(api_docs_path) if api_docs_path is not None else _DEFAULT_API_DOCS
+    docs_path = Path(api_docs_path).expanduser().resolve() if api_docs_path is not None else None
     context = McpContext(
         db_path=Path(db_path).expanduser().resolve(),
         workspace_id=workspace_id,
@@ -169,7 +171,7 @@ def create_clerk_mcp_server(
 ) -> FastMCP:
     """Build Clerk-authenticated MCP with list/switch workspace tools."""
 
-    docs_path = Path(api_docs_path) if api_docs_path is not None else _DEFAULT_API_DOCS
+    docs_path = Path(api_docs_path).expanduser().resolve() if api_docs_path is not None else None
     if search_runtime is None:
         search_runtime = search_runtime_from_config(config)
     runtime = ClerkMcpRuntime(
@@ -271,7 +273,7 @@ def _register_unrestricted_tools(
             except Exception as error:
                 return error_result(
                     error=error,
-                    repair_hint="Ensure docs/api.md is readable and the core DB is available.",
+                    repair_hint=f"{_API_DOCS_REPAIR} Also ensure the core DB is available.",
                 )
 
         return await run_blocking(work)
@@ -287,9 +289,9 @@ def _register_unrestricted_tools(
 
         def work() -> CallToolResult:
             try:
-                documentation = context.api_docs_path.read_text(encoding="utf-8")
+                documentation = load_api_docs(context.api_docs_path)
             except Exception as error:
-                return error_result(error=error, repair_hint="Ensure docs/api.md is readable.")
+                return error_result(error=error, repair_hint=_API_DOCS_REPAIR)
             return success_result({"documentation": documentation})
 
         return await run_blocking(work)
@@ -594,7 +596,7 @@ def _register_clerk_tools(
             except Exception as error:
                 return error_result(
                     error=error,
-                    repair_hint="Ensure docs/api.md is readable and the core DB is available.",
+                    repair_hint=f"{_API_DOCS_REPAIR} Also ensure the core DB is available.",
                 )
 
         return await run_blocking(work)
@@ -612,9 +614,9 @@ def _register_clerk_tools(
                 return principal
             del principal
             try:
-                documentation = runtime.api_docs_path.read_text(encoding="utf-8")
+                documentation = load_api_docs(runtime.api_docs_path)
             except Exception as error:
-                return error_result(error=error, repair_hint="Ensure docs/api.md is readable.")
+                return error_result(error=error, repair_hint=_API_DOCS_REPAIR)
             return success_result({"documentation": documentation})
 
         return await run_blocking(work)
@@ -846,7 +848,7 @@ def _exec_repair_hint(error: BaseException) -> str | None:
 def _build_setup_payload(
     *,
     db_path: Path,
-    api_docs_path: Path,
+    api_docs_path: Path | None,
     workspace_id: str,
     user_id: str | None,
     connector_catalog: Any | None,
@@ -854,7 +856,7 @@ def _build_setup_payload(
 ) -> dict[str, Any]:
     """Build the quail_setup success payload for one workspace."""
 
-    documentation = api_docs_path.read_text(encoding="utf-8")
+    documentation = load_api_docs(api_docs_path)
     with open_core_db(db_path) as db:
         session = create_session(db, workspace_id)
         datasets: list[dict[str, Any]] = []

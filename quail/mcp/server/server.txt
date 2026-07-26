@@ -6,7 +6,8 @@ create_mcp_server(db_path, feedback_path, workspace_id default local, api_docs_p
                   host default 127.0.0.1, port default 8000,
                   search_runtime default None, connector_catalog default None,
                   include_dataset_docs_in_setup default false):
-  Remember unrestricted McpContext with db_path (not a live CoreDb) and optional
+  Remember unrestricted McpContext with db_path (not a live CoreDb), optional
+  api_docs_path override (None uses packaged docs via load_api_docs), and optional
   SearchRuntime.
   Build FastMCP with unrestricted instructions.
   Register the core unrestricted async tools (including quail_setup; bodies via

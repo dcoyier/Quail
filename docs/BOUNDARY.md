@@ -6,7 +6,7 @@ Familiarity-first rebuild. v0.10 at `../Quail v0.10` is a **reference and test o
 
 Rebuild Quail so the author can understand and extend it. Keep load-bearing invariants; redesign anything hard to explain or ceremonial.
 
-**Analysis contract:** [`docs/api.md`](api.md) is the model-facing API (facade types, `retrieve`/`tag`/…, regex, ranking, lexical/semantic). Grow code to match that document.
+**Analysis contract:** [`docs/api.md`](api.md) is the model-facing API (facade types, `retrieve`/`tag`/…, regex, ranking, lexical/semantic). Grow code to match that document. The wheel force-includes it as `quail/data/api.md` so installed servers can serve it without the repo tree.
 
 **Change routing:** [`docs/development.md`](development.md).
 
@@ -35,7 +35,7 @@ Unrestricted loopback FastMCP (`create_mcp_server`) exposes:
 | Tool | Role |
 | --- | --- |
 | `quail_setup` | Cold-start: analysis docs + dataset catalog + fresh session |
-| `quail_get_api_docs` | Analysis language text from `docs/api.md` |
+| `quail_get_api_docs` | Analysis language text from packaged `docs/api.md` |
 | `quail_list_datasets` | Workspace dataset catalog |
 | `quail_start_session` | Create an active session |
 | `quail_get_dataset_info` | Name/id plus guidance (`dataset_document` from connectors when present) |

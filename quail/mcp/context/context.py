@@ -18,6 +18,6 @@ class McpContext:
     db_path: Path
     workspace_id: str
     feedback_path: Path
-    api_docs_path: Path
+    api_docs_path: Path | None = None
     search_runtime: SearchRuntime | None = None
     include_dataset_docs_in_setup: bool = False
