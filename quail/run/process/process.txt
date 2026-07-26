@@ -10,5 +10,6 @@ process_config(config, clear=False, embedder_factory=None):
 
 assert_search_warm(db, config):
   When search_database is set, require a matching warm receipt for every
-  declared dataset's active version.
+  declared dataset's active version (search-build fingerprint covers lexical
+  fields and embedding profile).
   Used by quail run before MCP starts.

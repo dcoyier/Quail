@@ -32,6 +32,22 @@ from quail.mcp.results import error_result, success_result
 _PARAM = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
+def _claim_resource_uri(
+    uri: str,
+    extension_id: str,
+    *,
+    resource_extension: dict[str, str],
+) -> None:
+    owner = resource_extension.get(uri)
+    if owner is not None and owner != extension_id:
+        raise ConnectorError(
+            "RESOURCE_URI_CONFLICT",
+            f"Resource URI {uri!r} is claimed by connectors {owner!r} and {extension_id!r}.",
+            "Use distinct resource URIs per connector.",
+        )
+    resource_extension[uri] = extension_id
+
+
 def register_connectors(
     server: FastMCP,
     catalog: ConnectorCatalog,
@@ -41,6 +57,8 @@ def register_connectors(
     """Attach connector surfaces; resolver receives FastMCP Context or None."""
 
     providers_by_tool: dict[str, list[tuple[str, ConnectedProvider]]] = {}
+    tool_extension: dict[str, str] = {}
+    resource_extension: dict[str, str] = {}
     seen_resource_uris: set[str] = set()
     tool_specs: dict[str, ToolSpec] = {}
     route_owners: dict[tuple[str, str], list[tuple[str, ConnectedProvider, RouteSpec]]] = {}
@@ -48,9 +66,23 @@ def register_connectors(
     for workspace_id, bundle in catalog.by_workspace.items():
         for connected in bundle.providers:
             for tool in connected.manifest.tools:
+                owner = tool_extension.get(tool.name)
+                if owner is not None and owner != connected.extension_id:
+                    raise ConnectorError(
+                        "TOOL_NAME_CONFLICT",
+                        f"Tool {tool.name!r} is claimed by connectors "
+                        f"{owner!r} and {connected.extension_id!r}.",
+                        "Rename one tool or remove the duplicate connector binding.",
+                    )
+                tool_extension[tool.name] = connected.extension_id
                 providers_by_tool.setdefault(tool.name, []).append((workspace_id, connected))
                 tool_specs.setdefault(tool.name, tool)
             for resource in connected.manifest.resources:
+                _claim_resource_uri(
+                    resource.uri,
+                    connected.extension_id,
+                    resource_extension=resource_extension,
+                )
                 if resource.uri in seen_resource_uris:
                     continue
                 seen_resource_uris.add(resource.uri)
@@ -64,6 +96,11 @@ def register_connectors(
                 )
             for widget in connected.manifest.widgets:
                 for uri in (widget.uri, *widget.compatibility_uris):
+                    _claim_resource_uri(
+                        uri,
+                        connected.extension_id,
+                        resource_extension=resource_extension,
+                    )
                     if uri in seen_resource_uris:
                         continue
                     seen_resource_uris.add(uri)
@@ -152,9 +189,7 @@ def _register_tool(
                 result = connected.provider.call_tool(context, spec.name, kwargs)
                 if isinstance(result, ToolResult):
                     payload = dict(result.structured_content)
-                    if result.text is not None:
-                        payload.setdefault("text", result.text)
-                    return success_result(payload)
+                    return success_result(payload, text=result.text)
                 if isinstance(result, dict):
                     return success_result(dict(result))
                 raise ConnectorError(

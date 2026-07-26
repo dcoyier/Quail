@@ -170,13 +170,12 @@ def _connect_workspace(
 
     for binding in workspace.connectors:
         connector, manifest = connectors[binding.extension_id]
-        if manifest.config_keys:
-            unknown = set(binding.config) - set(manifest.config_keys)
-            if unknown:
-                raise ConnectorLoadError(
-                    f"Connector {binding.extension_id!r} rejected unknown config keys: "
-                    f"{sorted(unknown)}"
-                )
+        unknown = set(binding.config) - set(manifest.config_keys)
+        if unknown:
+            raise ConnectorLoadError(
+                f"Connector {binding.extension_id!r} rejected unknown config keys: "
+                f"{sorted(unknown)}"
+            )
         runtime = WorkspaceConnectorRuntime(
             workspace_id=workspace.workspace_id,
             config=MappingProxyType(dict(binding.config)),

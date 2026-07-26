@@ -197,3 +197,50 @@ def test_field_kind_mismatch_raises(tmp_path: Path) -> None:
             expected_revision=0,
             driver=driver,
         )
+
+
+def test_foreign_entry_rejected_across_datasets(tmp_path: Path) -> None:
+    from quail.analysis.entry import make_entry
+    from quail.analysis.errors import QuailScopeError
+    from quail.session import resolve_scope
+
+    csv_a = tmp_path / "a.csv"
+    csv_b = tmp_path / "b.csv"
+    csv_a.write_text("id,title,body\ne1,A,alpha\n", encoding="utf-8")
+    csv_b.write_text("id,title,body\ne1,B,beta\n", encoding="utf-8")
+    db = open_core_db(tmp_path / "core.turso")
+    with db:
+        import_csv_dataset(db, "ws", "a", csv_a, activate=True)
+        import_csv_dataset(db, "ws", "b", csv_b, activate=True)
+        session = create_session(db, "ws")
+        scope_a = resolve_scope(db, session.id, "a")
+        foreign = make_entry(
+            "e1",
+            dataset_id="a",
+            dataset_version_id=scope_a.dataset_version_id,
+            dataset="a",
+        )
+
+        def use_on_b(engine: QueryEngine, _prints) -> None:
+            topic = dispatch_call(engine, "create_field", ("topic",))
+            with pytest.raises(QuailScopeError, match="does not belong"):
+                dispatch_call(engine, "tag", ([foreign], topic, "leak"))
+            with pytest.raises(QuailScopeError, match="does not belong"):
+                dispatch_call(engine, "entry_value", (foreign, Field("title")))
+            with pytest.raises(QuailScopeError, match="does not belong"):
+                dispatch_call(engine, "entry_fields", (foreign,))
+            with pytest.raises(QuailScopeError, match="does not belong"):
+                dispatch_call(engine, "untag", ([foreign], topic))
+            local = dispatch_call(engine, "retrieve", (), {"limit": 1})[0]
+            dispatch_call(engine, "tag", ([local], topic, "ok"))
+            assert dispatch_call(engine, "entry_value", (local, topic)) == "ok"
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="b",
+            expected_revision=0,
+            driver=use_on_b,
+        )
+        scope_b = resolve_scope(db, session.id, "b")
+        assert analysis_values(db, scope_b, "topic") == ["ok"]

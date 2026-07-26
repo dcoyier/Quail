@@ -14,7 +14,8 @@ ConnectorLoadError is a ConfigError for fail-closed quail run failures.
 load_connector_catalog(config, db):
   Discover pinned entry points, construct connectors with a CoreHost that reopens
   CoreDb by path per dataset read, connect each workspace binding, and fail closed
-  on version mismatch or competing dataset docs.
+  on version mismatch, unknown config keys (always: empty config_keys allows none),
+  or competing dataset docs.
   Ownership is per dataset_id where dataset_document returns non-empty text.
 
 make_request_context / resolve_dataset_documentation:

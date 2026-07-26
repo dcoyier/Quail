@@ -1,7 +1,9 @@
 QueryEngine evaluates plans for one Scope against catalog data and an in-memory overlay.
 
 It remembers db, scope, optional SimilarityService, optional LexicalService, staged
-mutations, created fields, value overlay, and a per-exec Lexical/Semantic score cache.
+mutations, created fields, value overlay, a per-exec Lexical/Semantic score cache,
+and an execution snapshot (ordered entry ids, positions, lazy per-field value maps,
+catalog cache).
 
 mutations:
   Give back the staged FieldCreate, ValueWrite, and ValueDelete tuple.
@@ -29,20 +31,31 @@ count(plan):
 create_field(plan):
   Reject source-name collision.
   Stage FieldCreate when new and remember the analysis Field.
+  Clear catalog and field-snapshot caches for that name.
 
 tag(plan):
   Require an analysis field (via resolve_field).
+  Require each Entry handle in a tuple group to belong to this scope.
   For each selected entry, stage ValueWrite and update the overlay.
 
 untag(plan):
+  Same scope checks as tag.
   Clear matching overlay cells and stage ValueDelete.
 
 entry_value / entry_fields:
-  Read through overlay then durable source or analysis values (kind-checked).
+  Require the Entry handle to belong to this scope.
+  Read through overlay then the field snapshot (bulk-loaded once per field).
+
+_require_entry_in_scope(entry):
+  When dataset_id or dataset_version_id is stamped and differs from scope,
+  raise QuailScopeError.
 
 Helpers evaluate groups and predicates, run expression pipelines (Value, AsText,
 AsNumber, regex, Slice, Length, Lexical via LexicalService, Semantic via
-SimilarityService). Before Lexical/Semantic scoring, resolve query targets from
+SimilarityService). Member entry groups validate each member's scope.
+Field reads bulk-load each referenced field once into an entry_id map; overlay
+wins. Ranking tie-breaks with a precomputed position map.
+Before Lexical/Semantic scoring, resolve query targets from
 LiteralText, LiteralTextList, EntryGroup, or EntryList using the expression root
 field; Lexical Entry* targets are term-quoted. Predicates and rankings that end in
 Lexical/Semantic share one per-exec score cache keyed by Expression.to_record():

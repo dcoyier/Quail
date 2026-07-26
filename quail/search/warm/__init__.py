@@ -8,6 +8,7 @@ from .warm import (
     get_warm_receipt,
     put_warm_receipt,
     require_warm_ready,
+    search_build_fingerprint,
     warm_dataset,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "get_warm_receipt",
     "put_warm_receipt",
     "require_warm_ready",
+    "search_build_fingerprint",
     "warm_dataset",
 ]

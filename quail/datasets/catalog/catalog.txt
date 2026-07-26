@@ -37,7 +37,8 @@ source_entries(db, workspace_id, dataset_id, version_id):
 
 source_values(db, workspace_id, dataset_id, version_id, field, entry_ids default None):
   Require a ready version and a known source field.
-  If entry_ids is missing, use all entries in import order.
+  If entry_ids is missing, load the whole field (no IN list) in import order.
+  If entry_ids is set, read in chunks of 500 ids.
   Give back one decoded value or None per requested entry id.
   Missing cells are None.
 

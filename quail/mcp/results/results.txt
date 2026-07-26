@@ -1,8 +1,10 @@
 success_printed_output(printed_output):
   Give back a success CallToolResult with {"printed_output": printed_output}.
 
-success_result(payload):
+success_result(payload, text default None):
   Give back a CallToolResult with isError false and the payload as structuredContent.
+  When text is set, use it for the text content block; otherwise JSON-dump payload.
+  Never merge text into structuredContent.
 
 validate_time_window(time_window):
   Delegate to quail.analysis.limits.validate_time_window.

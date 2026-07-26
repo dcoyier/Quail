@@ -13,6 +13,8 @@ bind = "127.0.0.1"
 port = 8000
 # Optional process-wide quail_exec slot ceiling (default 2, range 1–100):
 # max_concurrent_executions = 2
+# Dangerous: allow unrestricted MCP on a non-loopback bind / public_base_url:
+# allow_public_unrestricted = true
 
 # Optional warm knobs for `quail process` (defaults: batch 32, concurrency 2):
 # [search.warm]

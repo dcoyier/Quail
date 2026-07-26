@@ -72,3 +72,5 @@ QuailConfig remembers:
   search_warm
   max_concurrent_executions
   extensions (deployment-wide ExtensionPin tuple)
+  allow_public_unrestricted (default false; unrestricted may bind/advertise
+    non-loopback only when true)

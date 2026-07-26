@@ -70,8 +70,8 @@ id = "notes"
 ```
 
 Unknown keys in `config` must be listed on `ConnectorManifest.config_keys` or
-`quail run` fails. Secrets ceremony is deferred; keep config JSON-shaped and
-small.
+`quail run` fails. An empty `config_keys` allowlist permits no config keys.
+Secrets ceremony is deferred; keep config JSON-shaped and small.
 
 ## Dataset documentation
 

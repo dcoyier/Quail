@@ -87,6 +87,7 @@ def assert_search_warm(db: CoreDb, config: QuailConfig) -> None:
                 dataset_id=spec.dataset_id,
                 version_id=version,
                 profile=spec.embedding,
+                lexical_fields=spec.lexical_fields,
             )
     finally:
         search.close()

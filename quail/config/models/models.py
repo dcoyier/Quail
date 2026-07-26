@@ -140,3 +140,5 @@ class QuailConfig:
     search_warm: SearchWarmConfig = SearchWarmConfig()
     max_concurrent_executions: int = 2
     extensions: tuple[ExtensionPin, ...] = ()
+    # Unrestricted only: allow non-loopback bind / public_base_url (dangerous).
+    allow_public_unrestricted: bool = False

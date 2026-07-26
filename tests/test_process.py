@@ -16,7 +16,7 @@ from quail.run import apply_config, assert_search_warm, process_config
 from quail.search import open_search_db
 from quail.search.cache import get_cached_vector_blob
 from quail.search.vectors import text_hash
-from quail.search.warm import get_warm_receipt
+from quail.search.warm import get_warm_receipt, search_build_fingerprint
 
 
 class RecordingEmbedder:
@@ -134,7 +134,10 @@ def test_process_warms_lexical_and_embeddings(tmp_path: Path) -> None:
         assert receipt is not None
         assert receipt.lexical_ready is True
         assert receipt.embedding_ready is True
-        assert receipt.profile_hash == config.datasets[0].embedding.profile_hash()  # type: ignore[union-attr]
+        assert receipt.build_fingerprint == search_build_fingerprint(
+            lexical_fields=config.datasets[0].lexical_fields,
+            profile=config.datasets[0].embedding,
+        )
         profile = config.datasets[0].embedding
         assert profile is not None
         for text in ("Hello", "hydrangea care", "Other", "climate notes"):
@@ -196,7 +199,7 @@ def test_revision_change_fails_gate_until_reprocess(tmp_path: Path) -> None:
     config2 = load_config(manifest)
     db = apply_config(config2)
     try:
-        with pytest.raises(QuailRuntimeError, match="warm profile does not match"):
+        with pytest.raises(QuailRuntimeError, match="fingerprint|warm profile|does not match"):
             assert_search_warm(db, config2)
     finally:
         db.close()
@@ -517,3 +520,19 @@ def test_embedding_fields_change_profile_hash() -> None:
         fields=("content",),
     )
     assert base.profile_hash() != limited.profile_hash()
+
+
+def test_lexical_fields_change_search_build_fingerprint(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, embedding=False, lexical_fields='["body"]')
+    config = load_config(manifest)
+    process_config(config)
+    # Edit TOML lexical fields without re-process: run gate must fail.
+    edited = load_config(
+        _write_manifest(tmp_path, embedding=False, lexical_fields='["title", "body"]')
+    )
+    db = apply_config(edited)
+    try:
+        with pytest.raises(QuailRuntimeError, match="fingerprint|lexical"):
+            assert_search_warm(db, edited)
+    finally:
+        db.close()

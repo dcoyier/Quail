@@ -1,3 +1,14 @@
+There is a private loopback host set: 127.0.0.1, localhost, and ::1.
+
+is_loopback_host(host):
+  Strip and lower the host.
+  Drop surrounding brackets when present.
+  Give back whether it is in the loopback host set.
+
+is_loopback_public_base_url(url):
+  Parse the origin hostname.
+  Give back whether that host is loopback.
+
 normalize_public_base_url(value):
   Require an absolute http(s) origin with no path, query, or fragment.
   Strip a trailing slash / empty path.

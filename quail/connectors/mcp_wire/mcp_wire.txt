@@ -2,9 +2,13 @@ Register connected connector tools, resources, widgets, and HTTP routes on FastM
 
 register_connectors(server, catalog, resolve_workspace):
   Attach tools/resources/widgets/routes. resolve_workspace receives FastMCP
-  Context (or None) and returns workspace_id and optional user_id. Tool handlers
-  fail when the tool is not active in that workspace. Required tool parameters
-  are bound before optional ones and Context.
+  Context (or None) and returns workspace_id and optional user_id.
+  Reject when two different connectors claim the same tool name or resource URI.
+  The same connector may expose the same tool/URI across workspaces.
+  Tool handlers fail when the tool is not active in that workspace. Required tool
+  parameters are bound before optional ones and Context.
+  ToolResult structured_content becomes structuredContent; optional text becomes
+  the MCP text content block (not merged into structured content).
 
 Routes mount at /extensions/{extension_id}/{workspace_id}/{path_suffix} for each
 RouteSpec. GET only. The handler resolves the workspace-bound provider, calls

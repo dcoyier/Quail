@@ -28,7 +28,7 @@ _SESSION_RULES = (
 
 def unrestricted_instructions(workspace_id: str) -> str:
     return (
-        f"Quail MCP for fixed workspace `{workspace_id}` (unrestricted loopback).\n"
+        f"Quail MCP for fixed workspace `{workspace_id}` (unrestricted; no sign-in).\n"
         "\n"
         "Workflow: quail_get_api_docs → quail_list_datasets → "
         "quail_start_session → quail_get_dataset_info(dataset_id) → "

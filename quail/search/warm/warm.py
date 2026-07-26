@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -21,6 +23,26 @@ from quail.search.lexical.corpus import (
 from quail.search.pin import get_pinned_profile_hash
 from quail.search.vectors import text_hash, unit_vector
 
+# Bump when warm artifact semantics change (not batch/concurrency knobs).
+_SEARCH_BUILD_SCHEMA_VERSION = 1
+
+
+def search_build_fingerprint(
+    *,
+    lexical_fields: Sequence[str] | None,
+    profile: EmbeddingProfile | None,
+) -> str:
+    """Fingerprint of search artifacts for one dataset version warm."""
+
+    payload = {
+        "schema": _SEARCH_BUILD_SCHEMA_VERSION,
+        "lexical_fields": list(lexical_fields) if lexical_fields is not None else None,
+        "embedding": profile.profile_hash() if profile is not None else None,
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
 
 @dataclass(frozen=True, slots=True)
 class WarmReceipt:
@@ -29,7 +51,8 @@ class WarmReceipt:
     workspace_id: str
     dataset_id: str
     version_id: str
-    profile_hash: str
+    # Stored in quail_search_warm.profile_hash (column name kept for compatibility).
+    build_fingerprint: str
     lexical_ready: bool
     embedding_ready: bool
     text_count: int
@@ -48,7 +71,7 @@ class WarmDatasetResult:
     embedded_batches: int
     lexical_ready: bool
     embedding_ready: bool
-    profile_hash: str
+    build_fingerprint: str
 
 
 def get_warm_receipt(
@@ -72,7 +95,7 @@ def get_warm_receipt(
         workspace_id=workspace_id,
         dataset_id=dataset_id,
         version_id=version_id,
-        profile_hash=str(row[0]),
+        build_fingerprint=str(row[0]),
         lexical_ready=bool(int(row[1])),
         embedding_ready=bool(int(row[2])),
         text_count=int(row[3]),
@@ -86,7 +109,7 @@ def put_warm_receipt(
     workspace_id: str,
     dataset_id: str,
     version_id: str,
-    profile_hash: str,
+    build_fingerprint: str,
     lexical_ready: bool,
     embedding_ready: bool,
     text_count: int,
@@ -108,7 +131,7 @@ def put_warm_receipt(
             workspace_id,
             dataset_id,
             version_id,
-            profile_hash,
+            build_fingerprint,
             1 if lexical_ready else 0,
             1 if embedding_ready else 0,
             text_count,
@@ -167,27 +190,6 @@ def clear_search_version(
     except Exception:
         connection.rollback()
         raise
-
-
-def delete_vectors_for_profile(
-    search: SearchDb,
-    *,
-    workspace_id: str,
-    dataset_id: str,
-    version_id: str,
-    profile_hash: str,
-) -> None:
-    search.connection.execute(
-        """
-        DELETE FROM quail_embedding_vectors
-        WHERE workspace_id = ?
-          AND dataset_id = ?
-          AND version_id = ?
-          AND profile_hash = ?
-        """,
-        (workspace_id, dataset_id, version_id, profile_hash),
-    )
-    search.connection.commit()
 
 
 def collect_corpus_texts(
@@ -262,26 +264,24 @@ def warm_dataset(
             version_id=version_id,
         )
 
-    desired_hash = profile.profile_hash() if profile is not None else ""
+    desired_hash = search_build_fingerprint(lexical_fields=lexical_fields, profile=profile)
     existing = get_warm_receipt(
         search,
         workspace_id=workspace_id,
         dataset_id=dataset_id,
         version_id=version_id,
     )
-    if (
-        not clear
-        and existing is not None
-        and existing.profile_hash
-        and existing.profile_hash != desired_hash
-    ):
-        delete_vectors_for_profile(
-            search,
-            workspace_id=workspace_id,
-            dataset_id=dataset_id,
-            version_id=version_id,
-            profile_hash=existing.profile_hash,
+    if not clear and existing is not None and existing.build_fingerprint != desired_hash:
+        # Build identity changed (lexical and/or embedding). Drop all vectors for
+        # this version; embedding cache keys use profile.profile_hash() separately.
+        search.connection.execute(
+            """
+            DELETE FROM quail_embedding_vectors
+            WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+            """,
+            (workspace_id, dataset_id, version_id),
         )
+        search.connection.commit()
 
     texts, entry_segments = collect_corpus_texts(
         db,
@@ -303,7 +303,7 @@ def warm_dataset(
         workspace_id=workspace_id,
         dataset_id=dataset_id,
         version_id=version_id,
-        profile_hash=desired_hash,
+        build_fingerprint=desired_hash,
         lexical_ready=False,
         embedding_ready=False,
         text_count=0,
@@ -342,7 +342,7 @@ def warm_dataset(
         workspace_id=workspace_id,
         dataset_id=dataset_id,
         version_id=version_id,
-        profile_hash=desired_hash,
+        build_fingerprint=desired_hash,
         lexical_ready=True,
         embedding_ready=embedding_ready,
         text_count=len(texts),
@@ -356,7 +356,7 @@ def warm_dataset(
         embedded_batches=embedded_batches,
         lexical_ready=True,
         embedding_ready=embedding_ready,
-        profile_hash=desired_hash,
+        build_fingerprint=desired_hash,
     )
 
 
@@ -367,6 +367,7 @@ def require_warm_ready(
     dataset_id: str,
     version_id: str,
     profile: EmbeddingProfile | None,
+    lexical_fields: Sequence[str] | None = None,
 ) -> None:
     """Raise QuailRuntimeError when warm receipt does not match TOML expectations."""
 
@@ -376,7 +377,8 @@ def require_warm_ready(
         dataset_id=dataset_id,
         version_id=version_id,
     )
-    desired_hash = profile.profile_hash() if profile is not None else ""
+    desired_hash = search_build_fingerprint(lexical_fields=lexical_fields, profile=profile)
+    embedding_hash = profile.profile_hash() if profile is not None else ""
     hint = "Run `quail process --config <path>` then retry quail run."
     if receipt is None:
         raise QuailRuntimeError(
@@ -388,9 +390,10 @@ def require_warm_ready(
             f"Dataset {dataset_id!r} Lexical warm is incomplete",
             repair_hint=hint,
         )
-    if receipt.profile_hash != desired_hash:
+    if receipt.build_fingerprint != desired_hash:
         raise QuailRuntimeError(
-            f"Dataset {dataset_id!r} warm profile does not match quail.toml embedding",
+            f"Dataset {dataset_id!r} warm fingerprint does not match quail.toml "
+            "(lexical fields and/or embedding profile)",
             repair_hint=hint,
         )
     if profile is not None:
@@ -405,7 +408,7 @@ def require_warm_ready(
             dataset_id=dataset_id,
             version_id=version_id,
         )
-        if pin_hash is None or pin_hash != desired_hash:
+        if pin_hash is None or pin_hash != embedding_hash:
             raise QuailRuntimeError(
                 f"Dataset {dataset_id!r} embedding pin does not match quail.toml",
                 repair_hint=hint,

@@ -173,3 +173,106 @@ port = 8000
     assert config.datasets == ()
     with open_core_db(config.database) as db:
         assert list_datasets(db, "local") == []
+
+
+def _write_unrestricted_hosting(
+    tmp_path: Path,
+    *,
+    bind: str = "127.0.0.1",
+    hosting_extra: str = "",
+) -> Path:
+    data = tmp_path / "data"
+    data.mkdir(parents=True, exist_ok=True)
+    (data / "notes.csv").write_text("id,title\ne1,Hello\n", encoding="utf-8")
+    manifest = tmp_path / "quail.toml"
+    manifest.write_text(
+        f"""
+[core]
+database = "data/quail.turso"
+feedback = "data/feedback.jsonl"
+
+[auth]
+mode = "unrestricted"
+workspace = "local"
+
+[hosting]
+bind = "{bind}"
+port = 8765
+{hosting_extra}
+[[datasets]]
+id = "notes"
+source = "data/notes.csv"
+""",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def test_unrestricted_rejects_non_loopback_bind(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="allow_public_unrestricted"):
+        load_config(_write_unrestricted_hosting(tmp_path, bind="0.0.0.0"))
+
+
+def test_unrestricted_rejects_public_base_url_even_on_loopback_bind(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="public_base_url|allow_public_unrestricted"):
+        load_config(
+            _write_unrestricted_hosting(
+                tmp_path,
+                bind="127.0.0.1",
+                hosting_extra='public_base_url = "https://example.trycloudflare.com"\n',
+            )
+        )
+
+
+def test_unrestricted_allows_public_with_override(tmp_path: Path) -> None:
+    config = load_config(
+        _write_unrestricted_hosting(
+            tmp_path,
+            bind="0.0.0.0",
+            hosting_extra=(
+                'public_base_url = "https://example.trycloudflare.com"\n'
+                "allow_public_unrestricted = true\n"
+            ),
+        )
+    )
+    assert config.allow_public_unrestricted is True
+    assert config.bind == "0.0.0.0"
+    assert config.public_base_url == "https://example.trycloudflare.com"
+
+
+def test_clerk_rejects_allow_public_unrestricted(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    data.mkdir(parents=True, exist_ok=True)
+    (data / "notes.csv").write_text("id,title\ne1,Hello\n", encoding="utf-8")
+    manifest = tmp_path / "quail.toml"
+    manifest.write_text(
+        """
+[core]
+database = "data/quail.turso"
+feedback = "data/feedback.jsonl"
+
+[auth]
+mode = "clerk"
+clerk_domain = "example.clerk.accounts.dev"
+
+[hosting]
+bind = "127.0.0.1"
+port = 8765
+allow_public_unrestricted = true
+
+[[workspaces]]
+id = "acme"
+
+[[workspaces.datasets]]
+id = "notes"
+source = "data/notes.csv"
+
+[[users]]
+id = "alice"
+clerk_user_id = "user_alice"
+workspaces = ["acme"]
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="allow_public_unrestricted"):
+        load_config(manifest)

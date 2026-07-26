@@ -34,12 +34,17 @@ def success_printed_output(printed_output: str) -> CallToolResult:
     return success_result({"printed_output": printed_output})
 
 
-def success_result(payload: dict[str, Any]) -> CallToolResult:
-    """Wrap a success dict as an MCP CallToolResult."""
+def success_result(payload: dict[str, Any], *, text: str | None = None) -> CallToolResult:
+    """Wrap a success dict as an MCP CallToolResult.
 
-    text = json.dumps(payload, ensure_ascii=False)
+    When ``text`` is set, it becomes the human-readable content block.
+    Otherwise the payload is JSON-serialized into the content block.
+    ``structuredContent`` is always the payload alone (never merged with text).
+    """
+
+    content_text = text if text is not None else json.dumps(payload, ensure_ascii=False)
     return CallToolResult(
-        content=[TextContent(type="text", text=text)],
+        content=[TextContent(type="text", text=content_text)],
         structuredContent=payload,
         isError=False,
     )

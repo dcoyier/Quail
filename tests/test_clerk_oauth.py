@@ -12,7 +12,12 @@ from starlette.testclient import TestClient
 
 from quail.auth import StaticTokenVerifier, UnauthorizedError
 from quail.config import ConfigError, load_config
-from quail.config.hosting_url import default_public_base_url, normalize_public_base_url
+from quail.config.hosting_url import (
+    default_public_base_url,
+    is_loopback_host,
+    is_loopback_public_base_url,
+    normalize_public_base_url,
+)
 from quail.mcp import create_mcp_server_from_config
 from quail.mcp.oauth import (
     MCP_OAUTH_SCOPES,
@@ -64,6 +69,12 @@ default_workspace = "acme"
 def test_normalize_and_default_public_base_url() -> None:
     assert normalize_public_base_url("https://tunnel.example/") == "https://tunnel.example"
     assert default_public_base_url(bind="0.0.0.0", port=8000) == "http://127.0.0.1:8000"
+    assert is_loopback_host("127.0.0.1")
+    assert is_loopback_host("LOCALHOST")
+    assert is_loopback_host("[::1]")
+    assert not is_loopback_host("0.0.0.0")
+    assert is_loopback_public_base_url("http://127.0.0.1:8000")
+    assert not is_loopback_public_base_url("https://tunnel.example")
     with pytest.raises(ValueError, match="origin only"):
         normalize_public_base_url("https://tunnel.example/mcp")
 

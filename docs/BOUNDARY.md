@@ -13,6 +13,9 @@ Rebuild Quail so the author can understand and extend it. Keep load-bearing inva
 ## Deployments
 
 - **Local / research:** unrestricted loopback, no sign-in.
+- **Soak / deliberate public tunnel:** unrestricted plus
+  `hosting.allow_public_unrestricted = true` (anyone who can reach the URL can
+  call MCP; no Clerk). Fail-closed without the override.
 - **Company (~10 users):** HTTP + Clerk/OIDC, users allowlisted in TOML.
 
 ## Audiences
@@ -86,8 +89,13 @@ re-warms; core data is never deleted.
 
 `run` imports CSVs, fail-closes unless each dataset’s warm receipt matches the
 active version and current TOML embedding profile, then serves MCP
-(unrestricted loopback or Clerk allowlist on one URL). Edit TOML → process →
-run. The CLI never writes the TOML.
+(unrestricted loopback, unrestricted with `allow_public_unrestricted`, or Clerk
+allowlist on one URL). Edit TOML → process → run. The CLI never writes the TOML.
+
+Unrestricted mode rejects non-loopback `hosting.bind` and non-loopback
+`hosting.public_base_url` unless `hosting.allow_public_unrestricted = true`.
+Loopback hosts are `127.0.0.1`, `localhost`, and `::1`. A Cloudflare (or other)
+public origin fails closed even when bind is loopback.
 
 `[hosting] max_concurrent_executions` (default `2`, range `1`–`100`) caps
 simultaneous `quail_exec` slots for the whole process. Independent of

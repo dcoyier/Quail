@@ -729,3 +729,91 @@ def test_connector_file_route_serves_bytes(tmp_path: Path) -> None:
     assert ok.status_code == 200
     assert ok.headers["content-type"].startswith("image/png")
     assert ok.content.startswith(b"\x89PNG")
+
+
+def test_unknown_config_keys_rejected_even_with_empty_allowlist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class EmptyKeysConnector(_FakeConnector):
+        def __init__(self, environment: ConnectorEnvironment) -> None:
+            super().__init__(environment, extension_id="alpha", version="1.0.0")
+            object.__setattr__(
+                self,
+                "_manifest",
+                ConnectorManifest(
+                    id="alpha",
+                    version="1.0.0",
+                    config_keys=frozenset(),
+                ),
+            )
+
+    def factory(environment: ConnectorEnvironment) -> EmptyKeysConnector:
+        return EmptyKeysConnector(environment)
+
+    _install_factory(monkeypatch, extension_id="alpha", version="1.0.0", factory=factory)
+    config = _config(
+        tmp_path,
+        extensions=(ExtensionPin("alpha", "1.0.0"),),
+        connectors=(ConnectorBinding("alpha", {"stray": True}, ("sample",)),),
+    )
+    with open_core_db(_seed_db(tmp_path)) as db:
+        with pytest.raises(ConnectorLoadError, match="unknown config keys"):
+            load_connector_catalog(config, db)
+
+
+def test_tool_name_conflict_across_connectors() -> None:
+    from mcp.server.fastmcp import FastMCP
+
+    from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
+
+    env = ConnectorEnvironment(
+        host=_Host({}),
+        public_base_url="http://127.0.0.1:8765",
+        base_path=Path("/tmp"),
+    )
+    alpha = _FakeConnector(env, extension_id="alpha", version="1.0.0", with_tool=True)
+    beta = _FakeConnector(env, extension_id="beta", version="1.0.0", with_tool=True)
+    catalog = ConnectorCatalog(
+        by_workspace={
+            "local": WorkspaceConnectorBundle(
+                workspace_id="local",
+                providers=(
+                    ConnectedProvider(
+                        extension_id="alpha",
+                        version="1.0.0",
+                        manifest=alpha.manifest,
+                        connector=alpha,
+                        provider=_ToolProvider(env.host, "a"),
+                        dataset_ids=frozenset({"sample"}),
+                        provides_docs=False,
+                    ),
+                    ConnectedProvider(
+                        extension_id="beta",
+                        version="1.0.0",
+                        manifest=beta.manifest,
+                        connector=beta,
+                        provider=_ToolProvider(env.host, "b"),
+                        dataset_ids=frozenset({"sample"}),
+                        provides_docs=False,
+                    ),
+                ),
+                docs_by_dataset={},
+            )
+        }
+    )
+    server = FastMCP("conflict")
+    with pytest.raises(ConnectorError, match="TOOL_NAME_CONFLICT|claimed"):
+        register_connectors(
+            server,
+            catalog,
+            resolve_workspace=lambda _ctx: ("local", None),
+        )
+
+
+def test_tool_result_text_not_merged_into_structured() -> None:
+    from quail.mcp.results import success_result
+
+    result = success_result({"assets": [{"id": "a"}]}, text="two previews")
+    assert result.structuredContent == {"assets": [{"id": "a"}]}
+    assert result.content[0].text == "two previews"
+    assert "text" not in result.structuredContent

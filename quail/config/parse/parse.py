@@ -39,7 +39,9 @@ _ALLOWED_ROOT_CLERK = frozenset(
 _ALLOWED_CORE = frozenset({"database", "feedback", "search_database"})
 _ALLOWED_AUTH_UNRESTRICTED = frozenset({"mode", "workspace"})
 _ALLOWED_AUTH_CLERK = frozenset({"mode", "clerk_domain"})
-_ALLOWED_HOSTING = frozenset({"bind", "port", "max_concurrent_executions", "public_base_url"})
+_ALLOWED_HOSTING = frozenset(
+    {"bind", "port", "max_concurrent_executions", "public_base_url", "allow_public_unrestricted"}
+)
 _DEFAULT_MAX_CONCURRENT_EXECUTIONS = 2
 _MIN_MAX_CONCURRENT_EXECUTIONS = 1
 _MAX_MAX_CONCURRENT_EXECUTIONS = 100
@@ -125,11 +127,17 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
         raise ConfigError("hosting.port must be an integer from 1 to 65535")
     max_concurrent_executions = _parse_max_concurrent_executions(hosting)
     public_base_url = _parse_public_base_url(hosting, bind=bind, port=port)
+    allow_public_unrestricted = _parse_allow_public_unrestricted(hosting)
 
     providers = _parse_providers(data.get("providers"))
     search_warm = _parse_search_warm(data.get("search"))
 
     if mode == "unrestricted":
+        _require_unrestricted_loopback(
+            bind=bind,
+            public_base_url=public_base_url,
+            allow_public_unrestricted=allow_public_unrestricted,
+        )
         config = _parse_unrestricted(
             data,
             auth=auth,
@@ -143,8 +151,13 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
             port=port,
             public_base_url=public_base_url,
             max_concurrent_executions=max_concurrent_executions,
+            allow_public_unrestricted=allow_public_unrestricted,
         )
     else:
+        if allow_public_unrestricted:
+            raise ConfigError(
+                "hosting.allow_public_unrestricted is only valid when auth.mode is unrestricted"
+            )
         config = _parse_clerk(
             data,
             auth=auth,
@@ -177,6 +190,7 @@ def _parse_unrestricted(
     port: int,
     public_base_url: str,
     max_concurrent_executions: int,
+    allow_public_unrestricted: bool,
 ) -> QuailConfig:
     _reject_unknown(data, _ALLOWED_ROOT_UNRESTRICTED, label="root")
     _reject_unknown(auth, _ALLOWED_AUTH_UNRESTRICTED, label="auth")
@@ -216,6 +230,7 @@ def _parse_unrestricted(
         search_warm=search_warm,
         max_concurrent_executions=max_concurrent_executions,
         extensions=extensions,
+        allow_public_unrestricted=allow_public_unrestricted,
     )
 
 
@@ -374,6 +389,39 @@ def _parse_public_base_url(hosting: dict[str, Any], *, bind: str, port: int) -> 
         return normalize_public_base_url(value)
     except ValueError as error:
         raise ConfigError(f"hosting.public_base_url: {error}") from error
+
+
+def _parse_allow_public_unrestricted(hosting: dict[str, Any]) -> bool:
+    if "allow_public_unrestricted" not in hosting:
+        return False
+    value = hosting["allow_public_unrestricted"]
+    if not isinstance(value, bool):
+        raise ConfigError("hosting.allow_public_unrestricted must be a boolean")
+    return value
+
+
+def _require_unrestricted_loopback(
+    *,
+    bind: str,
+    public_base_url: str,
+    allow_public_unrestricted: bool,
+) -> None:
+    from quail.config.hosting_url import is_loopback_host, is_loopback_public_base_url
+
+    if allow_public_unrestricted:
+        return
+    if not is_loopback_host(bind):
+        raise ConfigError(
+            "unrestricted mode requires hosting.bind to be loopback "
+            "(127.0.0.1, localhost, or ::1); set hosting.allow_public_unrestricted = true "
+            "to expose an unauthenticated deployment deliberately"
+        )
+    if not is_loopback_public_base_url(public_base_url):
+        raise ConfigError(
+            "unrestricted mode requires hosting.public_base_url to be a loopback origin; "
+            "set hosting.allow_public_unrestricted = true "
+            "to expose an unauthenticated deployment deliberately"
+        )
 
 
 def _parse_max_concurrent_executions(hosting: dict[str, Any]) -> int:

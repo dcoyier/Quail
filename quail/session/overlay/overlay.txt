@@ -14,7 +14,8 @@ analysis_fields(db, scope):
 
 analysis_values(db, scope, field, entry_ids default None):
   Require a known analysis field.
-  If entry_ids is missing, use source entry order.
+  If entry_ids is missing, load the whole field (no IN list) in source entry order.
+  If entry_ids is set, read in chunks of 500 ids.
   Give back one decoded value or None per entry id.
 
 catalog_fields(db, scope):

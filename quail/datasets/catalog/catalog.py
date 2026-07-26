@@ -344,18 +344,35 @@ def source_values(
     if not ordered_ids:
         return []
 
-    placeholders = ",".join("?" for _ in ordered_ids)
-    rows = db.connection.execute(
-        f"""
-        SELECT entry_id, value_json
-        FROM quail_source_values
-        WHERE workspace_id = ? AND dataset_id = ? AND dataset_version_id = ?
-          AND field_name = ?
-          AND entry_id IN ({placeholders})
-        """,
-        (workspace_id, dataset_id, version_id, field_name, *ordered_ids),
-    ).fetchall()
-    by_entry = {str(row[0]): decode_json(str(row[1])) for row in rows}
+    by_entry: dict[str, Any] = {}
+    if entry_ids is None:
+        rows = db.connection.execute(
+            """
+            SELECT entry_id, value_json
+            FROM quail_source_values
+            WHERE workspace_id = ? AND dataset_id = ? AND dataset_version_id = ?
+              AND field_name = ?
+            """,
+            (workspace_id, dataset_id, version_id, field_name),
+        ).fetchall()
+        by_entry = {str(row[0]): decode_json(str(row[1])) for row in rows}
+    else:
+        chunk_size = 500
+        for start in range(0, len(ordered_ids), chunk_size):
+            chunk = ordered_ids[start : start + chunk_size]
+            placeholders = ",".join("?" for _ in chunk)
+            rows = db.connection.execute(
+                f"""
+                SELECT entry_id, value_json
+                FROM quail_source_values
+                WHERE workspace_id = ? AND dataset_id = ? AND dataset_version_id = ?
+                  AND field_name = ?
+                  AND entry_id IN ({placeholders})
+                """,
+                (workspace_id, dataset_id, version_id, field_name, *chunk),
+            ).fetchall()
+            for row in rows:
+                by_entry[str(row[0])] = decode_json(str(row[1]))
     return [by_entry.get(entry_id) for entry_id in ordered_ids]
 
 

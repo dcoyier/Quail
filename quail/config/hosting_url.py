@@ -4,6 +4,24 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def is_loopback_host(host: str) -> bool:
+    """True for 127.0.0.1, localhost, and ::1 (bracket form ok)."""
+
+    raw = host.strip().lower()
+    if raw.startswith("[") and raw.endswith("]"):
+        raw = raw[1:-1]
+    return raw in _LOOPBACK_HOSTS
+
+
+def is_loopback_public_base_url(url: str) -> bool:
+    """True when the origin host is loopback."""
+
+    host = urlparse(url).hostname
+    return host is not None and is_loopback_host(host)
+
 
 def normalize_public_base_url(value: str) -> str:
     """Require an absolute http(s) origin (no path, query, or fragment)."""

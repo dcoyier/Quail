@@ -8,7 +8,12 @@ from collections.abc import Sequence
 from typing import Any
 
 from quail.analysis.entry import Entry, make_entry
-from quail.analysis.errors import QuailFieldError, QuailRuntimeError, QuailSyntaxError
+from quail.analysis.errors import (
+    QuailFieldError,
+    QuailRuntimeError,
+    QuailScopeError,
+    QuailSyntaxError,
+)
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
 from quail.analysis.group import GroupExpr
@@ -60,6 +65,11 @@ class QueryEngine:
         self._absent = object()
         # Structural Expression key -> entry_id -> Lexical/Semantic score (one exec).
         self._search_scores: dict[str, dict[str, float | None]] = {}
+        # Execution snapshot: ordered ids, positions, and per-field value maps.
+        self._ordered_entry_ids: list[str] | None = None
+        self._entry_positions: dict[str, int] | None = None
+        self._field_value_maps: dict[str, dict[str, Any]] = {}
+        self._catalog_cache: list[Any] | None = None
 
     @property
     def scope(self) -> Scope:
@@ -155,6 +165,8 @@ class QueryEngine:
             return Field(name, kind="analysis")
         self._created_fields[name] = Field(name, kind="analysis")
         self._mutations.append(FieldCreate(name))
+        self._catalog_cache = None
+        self._field_value_maps.pop(name, None)
         return self._created_fields[name]
 
     def tag(self, plan: TagPlan) -> None:
@@ -182,6 +194,7 @@ class QueryEngine:
         field: Field | str,
         default: Any = None,
     ) -> Any:
+        self._require_entry_in_scope(entry)
         if not isinstance(field, Field | str):
             raise QuailSyntaxError("field must be a Field or non-empty string")
         if isinstance(field, str) and not field:
@@ -190,6 +203,7 @@ class QueryEngine:
         return default if value is None else value
 
     def entry_fields(self, entry: Entry) -> list[Field]:
+        self._require_entry_in_scope(entry)
         present: list[Field] = []
         for field in self._catalog():
             if self._read_field_value(Field(field.name, kind=field.kind), entry.id) is not None:
@@ -199,12 +213,24 @@ class QueryEngine:
     def _catalog(self) -> list[Any]:
         from quail.session.models import CatalogField
 
+        if self._catalog_cache is not None:
+            return self._catalog_cache
         result: list[CatalogField] = list(catalog_fields(self._db, self._scope))
         seen = {field.name for field in result}
         for name in self._created_fields:
             if name not in seen:
                 result.append(CatalogField(name=name, kind="analysis", position=len(result)))
+        self._catalog_cache = result
         return result
+
+    def _require_entry_in_scope(self, entry: Entry, *, operation_kind: str | None = None) -> None:
+        """Fail when a stamped Entry handle belongs to another dataset/version."""
+
+        label = operation_kind or "Entry"
+        if entry.dataset_id and entry.dataset_id != self._scope.dataset_id:
+            raise QuailScopeError(f"{label} does not belong to this dataset")
+        if entry.dataset_version_id and entry.dataset_version_id != self._scope.dataset_version_id:
+            raise QuailScopeError(f"{label} does not belong to this dataset version")
 
     def _make_entry(self, entry_id: str) -> Entry:
         return make_entry(
@@ -216,7 +242,11 @@ class QueryEngine:
 
     def _tag_entry_ids(self, group: GroupExpr | tuple[Entry, ...]) -> list[str]:
         if isinstance(group, tuple):
-            return [entry.id for entry in group]
+            ids: list[str] = []
+            for entry in group:
+                self._require_entry_in_scope(entry)
+                ids.append(entry.id)
+            return ids
         return self._evaluate_entry_group(group, search_scores=self._search_scores)
 
     def resolve_field(self, field: Field | str) -> Field:
@@ -272,15 +302,25 @@ class QueryEngine:
         return resolved
 
     def _all_entry_ids(self) -> list[str]:
-        return [
-            entry.id
-            for entry in source_entries(
-                self._db,
-                self._scope.workspace_id,
-                self._scope.dataset_id,
-                self._scope.dataset_version_id,
-            )
-        ]
+        if self._ordered_entry_ids is None:
+            self._ordered_entry_ids = [
+                entry.id
+                for entry in source_entries(
+                    self._db,
+                    self._scope.workspace_id,
+                    self._scope.dataset_id,
+                    self._scope.dataset_version_id,
+                )
+            ]
+            self._entry_positions = {
+                entry_id: index for index, entry_id in enumerate(self._ordered_entry_ids)
+            }
+        return self._ordered_entry_ids
+
+    def _entry_position(self, entry_id: str) -> int:
+        self._all_entry_ids()
+        assert self._entry_positions is not None
+        return self._entry_positions.get(entry_id, len(self._entry_positions))
 
     def _evaluate_entry_group(
         self,
@@ -293,7 +333,11 @@ class QueryEngine:
         if group.name == "G0":
             return self._all_entry_ids()
         if group.members is not None:
-            return [member.id for member in group.members]
+            ids: list[str] = []
+            for member in group.members:
+                self._require_entry_in_scope(member)
+                ids.append(member.id)
+            return ids
         if group.predicate is not None:
             candidate_ids = self._all_entry_ids()
             self._ensure_search_expression_scores(
@@ -616,14 +660,7 @@ class QueryEngine:
         return list(targets)
 
     def _validate_search_entry(self, entry: Entry, *, operation_kind: str) -> None:
-        if entry.dataset_id and entry.dataset_id != self._scope.dataset_id:
-            raise QuailRuntimeError(
-                f"{operation_kind} Entry target does not belong to this dataset"
-            )
-        if entry.dataset_version_id and entry.dataset_version_id != self._scope.dataset_version_id:
-            raise QuailRuntimeError(
-                f"{operation_kind} Entry target does not belong to this dataset version"
-            )
+        self._require_entry_in_scope(entry, operation_kind=f"{operation_kind} Entry target")
 
     def _apply_regex(self, operation: Operation, value: Any) -> Any:
         pattern = str(operation.params["pattern"])
@@ -660,7 +697,17 @@ class QueryEngine:
             value = self._value_overlay[key]
             return None if value is self._absent else value
 
-        kind = resolved.kind
+        self._ensure_field_snapshot(resolved)
+        return self._field_value_maps[field_name].get(entry_id)
+
+    def _ensure_field_snapshot(self, field: Field) -> None:
+        """Bulk-load one field into the exec snapshot (lazy, once per field)."""
+
+        field_name = field.name
+        if field_name in self._field_value_maps:
+            return
+        ordered_ids = self._all_entry_ids()
+        kind = field.kind
         if kind == "source":
             values = source_values(
                 self._db,
@@ -668,22 +715,25 @@ class QueryEngine:
                 self._scope.dataset_id,
                 self._scope.dataset_version_id,
                 field_name,
-                entry_ids=[entry_id],
+                entry_ids=None,
             )
-            return values[0] if values else None
-        if kind == "analysis":
+        elif kind == "analysis":
             if field_name in self._created_fields and not any(
                 catalog.name == field_name for catalog in analysis_fields(self._db, self._scope)
             ):
-                return None
-            values = analysis_values(
-                self._db,
-                self._scope,
-                field_name,
-                entry_ids=[entry_id],
-            )
-            return values[0] if values else None
-        raise QuailFieldError(f"Unknown field: {field_name}")
+                values = [None] * len(ordered_ids)
+            else:
+                values = analysis_values(
+                    self._db,
+                    self._scope,
+                    field_name,
+                    entry_ids=None,
+                )
+        else:
+            raise QuailFieldError(f"Unknown field: {field_name}")
+        self._field_value_maps[field_name] = {
+            entry_id: value for entry_id, value in zip(ordered_ids, values, strict=True)
+        }
 
     def _apply_ranking(
         self,
@@ -708,7 +758,7 @@ class QueryEngine:
             (self._score_ranking(ranking, entry_id, search_scores), entry_id)
             for entry_id in entry_ids
         ]
-        scored.sort(key=lambda item: (-item[0], entry_ids.index(item[1])))
+        scored.sort(key=lambda item: (-item[0], self._entry_position(item[1])))
         return [entry_id for _, entry_id in scored]
 
     def _ensure_search_expression_scores(

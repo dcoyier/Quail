@@ -1,17 +1,23 @@
-WarmReceipt remembers workspace_id, dataset_id, version_id, profile_hash,
-lexical_ready, embedding_ready, text_count, and warmed_at.
+WarmReceipt remembers workspace_id, dataset_id, version_id, build_fingerprint
+(search-build fingerprint; DB column remains profile_hash), lexical_ready,
+embedding_ready, text_count, and warmed_at.
 
-WarmDatasetResult remembers one process summary for a dataset version.
+WarmDatasetResult remembers one process summary for a dataset version, including
+build_fingerprint.
+
+There is a private search-build schema version constant.
+
+search_build_fingerprint(lexical_fields, profile):
+  SHA-256 of canonical JSON covering schema version, lexical field list
+  (null when unrestricted), and embedding profile_hash (null when none).
 
 get_warm_receipt / put_warm_receipt:
   Load or upsert the quail_search_warm row.
+  put_warm_receipt takes build_fingerprint and stores it in the profile_hash column.
 
 clear_search_version:
   Drop Lexical FTS tables and registry row, all vectors for the version, and
   the warm receipt.
-
-delete_vectors_for_profile:
-  Delete cached vectors for one profile_hash on a version.
 
 collect_corpus_texts:
   Read source fields for every entry (all fields, or field_names when set).
@@ -21,7 +27,9 @@ collect_corpus_texts:
 
 warm_dataset:
   Optionally clear the version.
-  If an existing receipt has a different profile_hash, delete those vectors.
+  Compute the search-build fingerprint from lexical_fields and profile.
+  If an existing receipt has a different fingerprint, delete all vectors for
+  the version.
   Collect texts for Lexical using lexical_fields when set (else all fields).
   Resolve the Lexical corpus.
   Write a not-ready warm receipt before Lexical rebuild so a mid-pass failure
@@ -32,10 +40,11 @@ warm_dataset:
   then embed unique missing texts in batches with at most
   max_concurrent_embed_requests in flight (provider calls only; cache writes
   stay on the main thread).
-  Write a ready warm receipt.
+  Write a ready warm receipt storing the search-build fingerprint.
   Give back WarmDatasetResult.
 
-require_warm_ready:
-  Fail closed when the receipt is missing, Lexical is not ready, profile_hash
-  does not match TOML, embedding readiness disagrees, or the stored pin hash
-  mismatches.
+require_warm_ready(search, workspace_id, dataset_id, version_id, profile,
+  lexical_fields default None):
+  Fail closed when the receipt is missing, Lexical is not ready, search-build
+  fingerprint does not match TOML lexical+embedding, embedding readiness
+  disagrees, or the stored pin hash mismatches the embedding profile_hash.
