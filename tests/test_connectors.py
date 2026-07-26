@@ -651,6 +651,103 @@ def test_register_connectors_noop_catalog() -> None:
     )
 
 
+def test_connector_tools_list_publishes_input_schema_and_hides_context() -> None:
+    from mcp.server.fastmcp import FastMCP
+
+    from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
+
+    input_schema = {
+        "type": "object",
+        "properties": {
+            "asset_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "maxItems": 8,
+                "uniqueItems": True,
+            },
+        },
+        "required": ["asset_ids"],
+        "additionalProperties": False,
+    }
+
+    class _SchemaProvider:
+        def call_tool(self, context, name, arguments):
+            del context, name, arguments
+            return ToolResult(structured_content={"ok": True})
+
+        def dataset_document(self, context, dataset_id):
+            del context, dataset_id
+            return None
+
+        def handle_route(self, context, route_id, path_params):
+            del context, route_id, path_params
+            return None
+
+    class _SchemaConnector:
+        def __init__(self) -> None:
+            self._manifest = ConnectorManifest(
+                id="schema_demo",
+                version="1.0.0",
+                tools=(
+                    ToolSpec(
+                        name="schema_demo_show",
+                        title="Show",
+                        description="Demo tool with a rich input schema.",
+                        input_schema=input_schema,
+                    ),
+                ),
+            )
+
+        @property
+        def manifest(self):
+            return self._manifest
+
+        def read_resource(self, uri: str) -> str:
+            raise ValueError(uri)
+
+        def connect(self, runtime):
+            del runtime
+            return _SchemaProvider()
+
+    connector = _SchemaConnector()
+    connected = ConnectedProvider(
+        extension_id="schema_demo",
+        version="1.0.0",
+        manifest=connector.manifest,
+        connector=connector,
+        provider=_SchemaProvider(),
+        dataset_ids=frozenset({"sample"}),
+        provides_docs=False,
+    )
+    catalog = ConnectorCatalog(
+        by_workspace={
+            "local": WorkspaceConnectorBundle(
+                workspace_id="local",
+                providers=(connected,),
+                docs_by_dataset={},
+            )
+        }
+    )
+    server = FastMCP("t")
+    register_connectors(
+        server,
+        catalog,
+        resolve_workspace=lambda _ctx: ("local", None),
+    )
+
+    async def run() -> None:
+        tools = {tool.name: tool for tool in await server.list_tools()}
+        tool = tools["schema_demo_show"]
+        assert tool.inputSchema == input_schema
+        assert "ctx" not in tool.inputSchema.get("properties", {})
+        registered = server._tool_manager.get_tool("schema_demo_show")
+        assert registered is not None
+        assert registered.context_kwarg == "ctx"
+
+    asyncio.run(run())
+
+
 def test_connector_file_route_serves_bytes(tmp_path: Path) -> None:
     from mcp.server.fastmcp import FastMCP
     from starlette.testclient import TestClient

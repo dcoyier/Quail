@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import copy
 import re
 import time
 from collections.abc import Callable, Mapping
 from typing import Any
 from urllib.parse import unquote
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import CallToolResult, ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import FileResponse as StarletteFileResponse
@@ -52,7 +53,7 @@ def register_connectors(
     server: FastMCP,
     catalog: ConnectorCatalog,
     *,
-    resolve_workspace: Callable[[Any], tuple[str, str | None]],
+    resolve_workspace: Callable[[Context | None], tuple[str, str | None]],
 ) -> None:
     """Attach connector surfaces; resolver receives FastMCP Context or None."""
 
@@ -152,7 +153,7 @@ def _register_tool(
     server: FastMCP,
     spec: ToolSpec,
     owners: list[tuple[str, ConnectedProvider]],
-    resolve_workspace: Callable[[Any], tuple[str, str | None]],
+    resolve_workspace: Callable[[Context | None], tuple[str, str | None]],
 ) -> None:
     properties = spec.input_schema.get("properties", {})
     if not isinstance(properties, Mapping):
@@ -160,7 +161,7 @@ def _register_tool(
     required = set(spec.input_schema.get("required", []))
     param_names = list(properties.keys())
 
-    async def handler(ctx: Any = None, **kwargs: Any) -> CallToolResult:
+    async def handler(ctx: Context | None = None, **kwargs: Any) -> CallToolResult:
         missing = [name for name in required if name not in kwargs or kwargs[name] is None]
         if missing:
             return error_result(
@@ -208,7 +209,7 @@ def _register_tool(
         args = ", ".join(
             [f"{name}: Any" for name in required_params]
             + [f"{name}: Any = None" for name in optional_params]
-            + ["ctx: Any = None"]
+            + ["ctx: Context | None = None"]
         )
         body = ", ".join(f"{name}={name}" for name in param_names)
         glue = (
@@ -217,6 +218,7 @@ def _register_tool(
         )
         namespace: dict[str, Any] = {
             "Any": Any,
+            "Context": Context,
             "CallToolResult": CallToolResult,
             "handler": handler,
         }
@@ -224,7 +226,7 @@ def _register_tool(
         bound = namespace["_bound"]
     else:
 
-        async def bound(ctx: Any = None) -> CallToolResult:
+        async def bound(ctx: Context | None = None) -> CallToolResult:
             return await handler(ctx)
 
     server.add_tool(
@@ -240,6 +242,22 @@ def _register_tool(
         ),
         meta=dict(spec.meta) if spec.meta else None,
     )
+    # FastMCP derives tools/list schema from the Python signature (Any → useless).
+    # Publish ToolSpec.input_schema so agents see the real contract.
+    registered = server._tool_manager.get_tool(spec.name)
+    if registered is None:
+        raise ConnectorError(
+            "TOOL_REGISTRATION_FAILED",
+            f"FastMCP did not retain tool {spec.name!r} after add_tool.",
+            "Retry server startup; if it persists, report a Quail wire bug.",
+        )
+    registered.parameters = _published_input_schema(spec)
+
+
+def _published_input_schema(spec: ToolSpec) -> dict[str, Any]:
+    """Plain JSON-object copy of ToolSpec.input_schema for FastMCP Tool.parameters."""
+
+    return copy.deepcopy(dict(spec.input_schema))
 
 
 def _register_route(
