@@ -1,7 +1,5 @@
 # Quail v0.11
 
-<!-- Test comment: verify README edits show up in review/diff flows. -->
-
 Inspectable qualitative analysis over private corpora.
 
 This tree stays small. Product decisions live in
