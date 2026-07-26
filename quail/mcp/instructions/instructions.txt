@@ -1,12 +1,15 @@
 There are repair hint strings for unbound and locked workspace cases.
 There is a private locked-user instructions addendum.
-There is a private session-rules string (workspace-scoped sessions; one
-quail_exec in flight per session_id; overlap fails with session_busy).
+There is a private session-rules string (workspace-scoped sessions; after switch
+call quail_setup or quail_start_session again; one quail_exec in flight per
+session_id; overlap fails with session_busy).
 
 unrestricted_instructions(workspace_id):
   Give back fixed-workspace connect-time instructions (unrestricted; no sign-in)
-  including session rules.
+  preferring quail_setup → dataset info → exec, including session rules and the
+  skip-get_dataset_info-when-docs-already-in-setup note.
 
 clerk_instructions(locked default false):
-  Give back Clerk bind-then-analyze instructions including session rules.
+  Give back Clerk bind-then-quail_setup instructions including session rules and
+  the same dataset-docs note.
   When locked is true, append the locked-user addendum.

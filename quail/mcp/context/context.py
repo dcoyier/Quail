@@ -20,3 +20,4 @@ class McpContext:
     feedback_path: Path
     api_docs_path: Path
     search_runtime: SearchRuntime | None = None
+    include_dataset_docs_in_setup: bool = False

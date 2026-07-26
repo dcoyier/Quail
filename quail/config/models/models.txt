@@ -74,3 +74,5 @@ QuailConfig remembers:
   extensions (deployment-wide ExtensionPin tuple)
   allow_public_unrestricted (default false; unrestricted may bind/advertise
     non-loopback only when true)
+  include_dataset_docs_in_setup (default false; when true quail_setup embeds
+    connector dataset docs in each catalog row)

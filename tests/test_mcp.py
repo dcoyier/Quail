@@ -51,6 +51,7 @@ def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
     server, _, _ = _seed(tmp_path)
     assert server.instructions is not None
     assert "workspace `local`" in server.instructions
+    assert "quail_setup" in server.instructions
     assert "quail_get_dataset_info" in server.instructions
     assert "quail_get_api_docs" in server.instructions
     assert "provide_feedback" in server.instructions
@@ -59,6 +60,7 @@ def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
     async def run() -> None:
         tools = {tool.name: tool for tool in await server.list_tools()}
         assert set(tools) == {
+            "quail_setup",
             "quail_get_api_docs",
             "quail_list_datasets",
             "quail_start_session",
@@ -66,9 +68,63 @@ def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
             "quail_exec",
             "provide_feedback",
         }
+        assert "cold-start" in (tools["quail_setup"].description or "").lower()
         assert "analysis-language" in (tools["quail_get_api_docs"].description or "").lower()
         assert "dataset_id" in tools["quail_exec"].inputSchema["properties"]
         assert "message" in tools["provide_feedback"].inputSchema["properties"]
+
+    asyncio.run(run())
+
+
+def test_quail_setup_returns_docs_catalog_and_session(tmp_path: Path) -> None:
+    server, _, _ = _seed(tmp_path)
+
+    async def run() -> None:
+        setup = _as_dict(await _call(server, "quail_setup"))
+        assert setup["workspace_id"] == "local"
+        assert setup["state_revision"] == 0
+        assert setup["session_id"]
+        assert "Quail Analysis API" in setup["documentation"]
+        assert setup["datasets"][0]["dataset_id"] == "notes"
+        assert setup["datasets"][0]["active_version_id"]
+        assert "documentation" not in setup["datasets"][0]
+        outcome = _as_dict(
+            await _call(
+                server,
+                "quail_exec",
+                {
+                    "session_id": setup["session_id"],
+                    "dataset_id": "notes",
+                    "code": "print(count())\n",
+                },
+            )
+        )
+        assert "2" in outcome["printed_output"]
+
+    asyncio.run(run())
+
+
+def test_quail_setup_can_include_dataset_docs(tmp_path: Path) -> None:
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text(
+        "id,title,body\ne1,Hello,hydrangea care tips\ne2,Other,climate notes\n",
+        encoding="utf-8",
+    )
+    db_path = tmp_path / "core.turso"
+    feedback_path = tmp_path / "feedback.jsonl"
+    with open_core_db(db_path) as db:
+        import_csv_dataset(db, "local", "notes", csv_path, activate=True)
+    server = create_mcp_server(
+        db_path,
+        feedback_path,
+        workspace_id="local",
+        include_dataset_docs_in_setup=True,
+    )
+
+    async def run() -> None:
+        setup = _as_dict(await _call(server, "quail_setup"))
+        assert "documentation" in setup["datasets"][0]
+        assert "quail_exec" in setup["datasets"][0]["documentation"]
 
     asyncio.run(run())
 

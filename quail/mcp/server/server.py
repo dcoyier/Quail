@@ -76,6 +76,7 @@ class ClerkMcpRuntime:
     host: str
     port: int
     search_runtime: SearchRuntime | None = None
+    include_dataset_docs_in_setup: bool = False
 
 
 def create_mcp_server(
@@ -88,8 +89,9 @@ def create_mcp_server(
     port: int = 8000,
     search_runtime: SearchRuntime | None = None,
     connector_catalog: Any | None = None,
+    include_dataset_docs_in_setup: bool = False,
 ) -> FastMCP:
-    """Build an unrestricted loopback FastMCP app with the six core tools."""
+    """Build an unrestricted loopback FastMCP app with the core tools."""
 
     docs_path = Path(api_docs_path) if api_docs_path is not None else _DEFAULT_API_DOCS
     context = McpContext(
@@ -98,6 +100,7 @@ def create_mcp_server(
         feedback_path=Path(feedback_path),
         api_docs_path=docs_path,
         search_runtime=search_runtime,
+        include_dataset_docs_in_setup=include_dataset_docs_in_setup,
     )
     server = FastMCP(
         "quail",
@@ -144,6 +147,7 @@ def create_mcp_server_from_config(
             port=config.port,
             search_runtime=runtime,
             connector_catalog=connector_catalog,
+            include_dataset_docs_in_setup=config.include_dataset_docs_in_setup,
         )
     assert config.clerk_domain is not None
     return create_clerk_mcp_server(
@@ -178,6 +182,7 @@ def create_clerk_mcp_server(
         host=config.bind,
         port=config.port,
         search_runtime=search_runtime,
+        include_dataset_docs_in_setup=config.include_dataset_docs_in_setup,
     )
     assert config.clerk_domain is not None
     server = FastMCP(
@@ -239,12 +244,45 @@ def _register_unrestricted_tools(
     *,
     connector_catalog: Any | None = None,
 ) -> None:
+    @server.tool(title="Set up Quail workspace")
+    async def quail_setup() -> CallToolResult:
+        """Cold-start this workspace for analysis: return the analysis-language docs,
+        the dataset catalog, and a fresh session_id in one call.
+
+        Call once after connect (and again after quail_switch_workspace). Do not call
+        on every quail_exec — reuse session_id serially. Sharper tools remain:
+        quail_get_api_docs, quail_list_datasets, quail_start_session for refresh or
+        partial use; quail_get_dataset_info after you pick a dataset_id (unless the
+        operator enabled dataset docs inside this payload).
+        """
+
+        def work() -> CallToolResult:
+            try:
+                return success_result(
+                    _build_setup_payload(
+                        db_path=context.db_path,
+                        api_docs_path=context.api_docs_path,
+                        workspace_id=context.workspace_id,
+                        user_id=None,
+                        connector_catalog=connector_catalog,
+                        include_dataset_docs=context.include_dataset_docs_in_setup,
+                    )
+                )
+            except Exception as error:
+                return error_result(
+                    error=error,
+                    repair_hint="Ensure docs/api.md is readable and the core DB is available.",
+                )
+
+        return await run_blocking(work)
+
     @server.tool(title="Get Quail API docs")
     async def quail_get_api_docs() -> CallToolResult:
         """Return the analysis-language docs for code inside quail_exec.
 
         Necessary for writing quail_exec code.
         Dataset and session workflow live in the other tools.
+        Prefer quail_setup at cold start when you also need a catalog and session.
         """
 
         def work() -> CallToolResult:
@@ -524,9 +562,49 @@ def _register_clerk_tools(
 
         return await run_blocking(work)
 
+    @server.tool(title="Set up Quail workspace")
+    async def quail_setup(ctx: Context | None = None) -> CallToolResult:
+        """Cold-start the active sticky workspace for analysis: return the
+        analysis-language docs, the dataset catalog, and a fresh session_id.
+
+        Call once after workspace bind (and again after quail_switch_workspace).
+        Do not call on every quail_exec — reuse session_id serially. Sharper tools
+        remain for refresh or partial use; quail_get_dataset_info after you pick a
+        dataset_id (unless the operator enabled dataset docs inside this payload).
+        """
+
+        def work() -> CallToolResult:
+            principal = _auth(ctx)
+            if isinstance(principal, CallToolResult):
+                return principal
+            workspace_id = _require_workspace(principal, ctx)
+            if isinstance(workspace_id, CallToolResult):
+                return workspace_id
+            try:
+                return success_result(
+                    _build_setup_payload(
+                        db_path=runtime.db_path,
+                        api_docs_path=runtime.api_docs_path,
+                        workspace_id=workspace_id,
+                        user_id=principal.user_id,
+                        connector_catalog=connector_catalog,
+                        include_dataset_docs=runtime.include_dataset_docs_in_setup,
+                    )
+                )
+            except Exception as error:
+                return error_result(
+                    error=error,
+                    repair_hint="Ensure docs/api.md is readable and the core DB is available.",
+                )
+
+        return await run_blocking(work)
+
     @server.tool(title="Get Quail API docs")
     async def quail_get_api_docs(ctx: Context | None = None) -> CallToolResult:
-        """Return the analysis-language docs for code inside quail_exec."""
+        """Return the analysis-language docs for code inside quail_exec.
+
+        Prefer quail_setup at cold start when you also need a catalog and session.
+        """
 
         def work() -> CallToolResult:
             principal = _auth(ctx)
@@ -763,6 +841,45 @@ def _exec_repair_hint(error: BaseException) -> str | None:
     if isinstance(error, QuailRuntimeError) and error.repair_hint:
         return None
     return _DEFAULT_EXEC_REPAIR
+
+
+def _build_setup_payload(
+    *,
+    db_path: Path,
+    api_docs_path: Path,
+    workspace_id: str,
+    user_id: str | None,
+    connector_catalog: Any | None,
+    include_dataset_docs: bool,
+) -> dict[str, Any]:
+    """Build the quail_setup success payload for one workspace."""
+
+    documentation = api_docs_path.read_text(encoding="utf-8")
+    with open_core_db(db_path) as db:
+        session = create_session(db, workspace_id)
+        datasets: list[dict[str, Any]] = []
+        for ref in list_datasets(db, workspace_id):
+            row: dict[str, Any] = {
+                "dataset_id": ref.dataset_id,
+                "name": ref.name,
+                "active_version_id": ref.active_version_id,
+            }
+            if include_dataset_docs:
+                row["documentation"] = _dataset_documentation(
+                    connector_catalog,
+                    workspace_id=workspace_id,
+                    user_id=user_id,
+                    dataset_id=ref.dataset_id,
+                    display_name=ref.name or ref.dataset_id,
+                )
+            datasets.append(row)
+    return {
+        "workspace_id": session.workspace_id,
+        "session_id": session.id,
+        "state_revision": session.state_revision,
+        "documentation": documentation,
+        "datasets": datasets,
+    }
 
 
 def _dataset_documentation(

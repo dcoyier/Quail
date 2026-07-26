@@ -40,7 +40,14 @@ _ALLOWED_CORE = frozenset({"database", "feedback", "search_database"})
 _ALLOWED_AUTH_UNRESTRICTED = frozenset({"mode", "workspace"})
 _ALLOWED_AUTH_CLERK = frozenset({"mode", "clerk_domain"})
 _ALLOWED_HOSTING = frozenset(
-    {"bind", "port", "max_concurrent_executions", "public_base_url", "allow_public_unrestricted"}
+    {
+        "bind",
+        "port",
+        "max_concurrent_executions",
+        "public_base_url",
+        "allow_public_unrestricted",
+        "include_dataset_docs_in_setup",
+    }
 )
 _DEFAULT_MAX_CONCURRENT_EXECUTIONS = 2
 _MIN_MAX_CONCURRENT_EXECUTIONS = 1
@@ -128,6 +135,7 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
     max_concurrent_executions = _parse_max_concurrent_executions(hosting)
     public_base_url = _parse_public_base_url(hosting, bind=bind, port=port)
     allow_public_unrestricted = _parse_allow_public_unrestricted(hosting)
+    include_dataset_docs_in_setup = _parse_include_dataset_docs_in_setup(hosting)
 
     providers = _parse_providers(data.get("providers"))
     search_warm = _parse_search_warm(data.get("search"))
@@ -152,6 +160,7 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
             public_base_url=public_base_url,
             max_concurrent_executions=max_concurrent_executions,
             allow_public_unrestricted=allow_public_unrestricted,
+            include_dataset_docs_in_setup=include_dataset_docs_in_setup,
         )
     else:
         if allow_public_unrestricted:
@@ -171,6 +180,7 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
             port=port,
             public_base_url=public_base_url,
             max_concurrent_executions=max_concurrent_executions,
+            include_dataset_docs_in_setup=include_dataset_docs_in_setup,
         )
     _validate_embedding_wiring(config)
     return config
@@ -191,6 +201,7 @@ def _parse_unrestricted(
     public_base_url: str,
     max_concurrent_executions: int,
     allow_public_unrestricted: bool,
+    include_dataset_docs_in_setup: bool,
 ) -> QuailConfig:
     _reject_unknown(data, _ALLOWED_ROOT_UNRESTRICTED, label="root")
     _reject_unknown(auth, _ALLOWED_AUTH_UNRESTRICTED, label="auth")
@@ -231,6 +242,7 @@ def _parse_unrestricted(
         max_concurrent_executions=max_concurrent_executions,
         extensions=extensions,
         allow_public_unrestricted=allow_public_unrestricted,
+        include_dataset_docs_in_setup=include_dataset_docs_in_setup,
     )
 
 
@@ -248,6 +260,7 @@ def _parse_clerk(
     port: int,
     public_base_url: str,
     max_concurrent_executions: int,
+    include_dataset_docs_in_setup: bool,
 ) -> QuailConfig:
     _reject_unknown(data, _ALLOWED_ROOT_CLERK, label="root")
     _reject_unknown(auth, _ALLOWED_AUTH_CLERK, label="auth")
@@ -374,6 +387,7 @@ def _parse_clerk(
         search_warm=search_warm,
         max_concurrent_executions=max_concurrent_executions,
         extensions=extensions,
+        include_dataset_docs_in_setup=include_dataset_docs_in_setup,
     )
 
 
@@ -397,6 +411,15 @@ def _parse_allow_public_unrestricted(hosting: dict[str, Any]) -> bool:
     value = hosting["allow_public_unrestricted"]
     if not isinstance(value, bool):
         raise ConfigError("hosting.allow_public_unrestricted must be a boolean")
+    return value
+
+
+def _parse_include_dataset_docs_in_setup(hosting: dict[str, Any]) -> bool:
+    if "include_dataset_docs_in_setup" not in hosting:
+        return False
+    value = hosting["include_dataset_docs_in_setup"]
+    if not isinstance(value, bool):
+        raise ConfigError("hosting.include_dataset_docs_in_setup must be a boolean")
     return value
 
 

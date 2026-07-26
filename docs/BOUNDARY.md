@@ -34,12 +34,18 @@ Unrestricted loopback FastMCP (`create_mcp_server`) exposes:
 
 | Tool | Role |
 | --- | --- |
+| `quail_setup` | Cold-start: analysis docs + dataset catalog + fresh session |
 | `quail_get_api_docs` | Analysis language text from `docs/api.md` |
 | `quail_list_datasets` | Workspace dataset catalog |
 | `quail_start_session` | Create an active session |
 | `quail_get_dataset_info` | Name/id plus guidance (`dataset_document` from connectors when present) |
 | `quail_exec` | Worker `exec_script` for one session + dataset |
 | `provide_feedback` | Append friction/improvement notes to a JSONL file |
+
+Prefer `quail_setup` at connect (and after workspace switch) over separately
+calling docs/list/start. Dataset-specific guidance still comes from
+`quail_get_dataset_info` unless `hosting.include_dataset_docs_in_setup = true`
+embeds those docs in the setup payload.
 
 Connected connectors may add further tools, resources, MCP UI widgets, and
 narrow GET file routes for the active workspace.

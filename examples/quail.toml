@@ -15,6 +15,8 @@ port = 8000
 # max_concurrent_executions = 2
 # Dangerous: allow unrestricted MCP on a non-loopback bind / public_base_url:
 # allow_public_unrestricted = true
+# Embed connector dataset docs inside quail_setup (default false):
+# include_dataset_docs_in_setup = false
 
 # Optional warm knobs for `quail process` (defaults: batch 32, concurrency 2):
 # [search.warm]

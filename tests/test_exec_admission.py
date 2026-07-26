@@ -157,5 +157,5 @@ def test_instructions_state_session_rules() -> None:
     clerk = clerk_instructions()
     for text in (unrestricted, clerk):
         assert "workspace-scoped" in text
-        assert "quail_start_session again" in text
+        assert "quail_setup again" in text or "quail_start_session again" in text
         assert "one quail_exec in flight per session_id" in text
