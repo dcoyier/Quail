@@ -18,6 +18,7 @@ _SCHEMA_COMMON_NODE_KEYS = frozenset({"enum", "type"})
 _SCHEMA_OBJECT_NODE_KEYS = frozenset({"additionalProperties", "properties", "required"})
 _SCHEMA_ARRAY_NODE_KEYS = frozenset({"items", "maxItems", "minItems", "uniqueItems"})
 _MAX_TEXT_BYTES = 64 * 1024
+_MAX_TOOL_TEXT_BYTES = 2 * 1024 * 1024
 _MAX_TOOL_IMAGE_BYTES = 524_288
 _MAX_TOOL_IMAGES = 8
 _TOOL_IMAGE_MIME_TYPES = frozenset(
@@ -230,7 +231,9 @@ class ToolResult:
             _freeze_mapping(self.structured_content, "tool structured content"),
         )
         if self.text is not None:
-            _require_bounded_text(self.text, "tool text")
+            _require_bounded_text(
+                self.text, "tool text", maximum_bytes=_MAX_TOOL_TEXT_BYTES
+            )
         if not isinstance(self.images, tuple):
             raise ValueError("ToolResult images must be a tuple")
         if len(self.images) > _MAX_TOOL_IMAGES:

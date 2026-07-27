@@ -41,7 +41,8 @@ Tool input schemas must be closed JSON Schema objects (`type: object`,
 `ToolResult` may attach up to eight `ToolImage` values (PNG/JPEG/WebP/GIF,
 ≤512 KiB each). The host maps them to MCP `ImageContent` blocks after any text
 block; omit `text` with a non-empty `images` tuple for image-only content.
-`structuredContent` stays JSON-only.
+Optional `text` may be up to 2 MiB (for connectors that embed large payloads
+such as preview base64). `structuredContent` stays JSON-only.
 
 ## Lifecycle
 

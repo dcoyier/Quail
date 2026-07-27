@@ -21,6 +21,7 @@ DatasetRef remembers id, name, active_version_id.
 ConnectorContext remembers workspace_id, optional user_id, extension id/version,
 and bound dataset_ids. require_dataset raises PermissionError when unbound.
 
+There is _MAX_TOOL_TEXT_BYTES = 2097152.
 There is _MAX_TOOL_IMAGE_BYTES = 524288.
 There is _MAX_TOOL_IMAGES = 8.
 There is _TOOL_IMAGE_MIME_TYPES for png, jpeg, jpg, webp, and gif.
@@ -32,6 +33,7 @@ To create ToolImage:
   Require mime_type in the allowed image set; map image/jpg to image/jpeg.
 
 ToolResult remembers structured_content, optional text, and images (default empty).
+Require tool text within _MAX_TOOL_TEXT_BYTES when set.
 Require images to be a tuple of ToolImage of length at most _MAX_TOOL_IMAGES.
 
 ConnectorError remembers stable_code, message, repair_hint, and context.
