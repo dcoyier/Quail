@@ -11,7 +11,9 @@ register_connectors(server, catalog, resolve_workspace):
   After add_tool, publish ToolSpec.input_schema onto the FastMCP tool parameters
   so tools/list shows the real JSON Schema (not the Any signature).
   ToolResult structured_content becomes structuredContent; optional text becomes
-  the MCP text content block (not merged into structured content).
+  the MCP text content block (not merged into structured content). When text is
+  omitted and images are present, content is image-only. Optional images become
+  MCP ImageContent blocks after any text block.
 
 Routes mount at /extensions/{extension_id}/{workspace_id}/{path_suffix} for each
 RouteSpec. GET only. The handler resolves the workspace-bound provider, calls

@@ -18,6 +18,11 @@ _SCHEMA_COMMON_NODE_KEYS = frozenset({"enum", "type"})
 _SCHEMA_OBJECT_NODE_KEYS = frozenset({"additionalProperties", "properties", "required"})
 _SCHEMA_ARRAY_NODE_KEYS = frozenset({"items", "maxItems", "minItems", "uniqueItems"})
 _MAX_TEXT_BYTES = 64 * 1024
+_MAX_TOOL_IMAGE_BYTES = 524_288
+_MAX_TOOL_IMAGES = 8
+_TOOL_IMAGE_MIME_TYPES = frozenset(
+    {"image/png", "image/jpeg", "image/webp", "image/gif"}
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -184,11 +189,39 @@ class ConnectorContext:
 
 
 @dataclass(frozen=True, slots=True)
+class ToolImage:
+    """One inline image attached to a connector tool result (MCP ImageContent)."""
+
+    data: bytes
+    mime_type: str = "image/png"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.data, bytes | bytearray) or not self.data:
+            raise ValueError("ToolImage data must be non-empty bytes")
+        data = bytes(self.data)
+        if len(data) > _MAX_TOOL_IMAGE_BYTES:
+            raise ValueError(
+                f"ToolImage data exceeds {_MAX_TOOL_IMAGE_BYTES} bytes"
+            )
+        object.__setattr__(self, "data", data)
+        _require_bounded_text(self.mime_type, "ToolImage mime_type", maximum_bytes=128)
+        mime = self.mime_type.strip().casefold()
+        if mime == "image/jpg":
+            mime = "image/jpeg"
+        if mime not in _TOOL_IMAGE_MIME_TYPES:
+            raise ValueError(
+                "ToolImage mime_type must be image/png, image/jpeg, image/webp, or image/gif"
+            )
+        object.__setattr__(self, "mime_type", mime)
+
+
+@dataclass(frozen=True, slots=True)
 class ToolResult:
     """Structured connector tool result."""
 
     structured_content: Mapping[str, Any]
     text: str | None = None
+    images: tuple[ToolImage, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -198,6 +231,15 @@ class ToolResult:
         )
         if self.text is not None:
             _require_bounded_text(self.text, "tool text")
+        if not isinstance(self.images, tuple):
+            raise ValueError("ToolResult images must be a tuple")
+        if len(self.images) > _MAX_TOOL_IMAGES:
+            raise ValueError(f"ToolResult images exceeds {_MAX_TOOL_IMAGES} items")
+        for index, image in enumerate(self.images):
+            if not isinstance(image, ToolImage):
+                raise ValueError(
+                    f"ToolResult images[{index}] must be a ToolImage"
+                )
 
 
 class ConnectorError(Exception):

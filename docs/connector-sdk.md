@@ -26,7 +26,7 @@ file paths in TOML. Hosting / ngrok stays outside the SDK
 | Declarations | `ConnectorManifest`, `ToolSpec`, `ResourceSpec`, `WidgetSpec`, `RouteSpec` |
 | Lifecycle | `ConnectorFactory`, `Connector`, `Provider` |
 | Env / request | `ConnectorEnvironment`, `WorkspaceConnectorRuntime`, `ConnectorContext`, `ConnectorHost`, `DatasetRef` |
-| Results | `ToolResult`, `ConnectorError`, `FileResponse` |
+| Results | `ToolResult`, `ToolImage`, `ConnectorError`, `FileResponse` |
 
 ### Required methods
 
@@ -37,6 +37,11 @@ file paths in TOML. Hosting / ngrok stays outside the SDK
 
 Tool input schemas must be closed JSON Schema objects (`type: object`,
 `additionalProperties: false`) with Python-safe property names.
+
+`ToolResult` may attach up to eight `ToolImage` values (PNG/JPEG/WebP/GIF,
+≤512 KiB each). The host maps them to MCP `ImageContent` blocks after any text
+block; omit `text` with a non-empty `images` tuple for image-only content.
+`structuredContent` stays JSON-only.
 
 ## Lifecycle
 

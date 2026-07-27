@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -916,3 +917,60 @@ def test_tool_result_text_not_merged_into_structured() -> None:
     assert result.structuredContent == {"assets": [{"id": "a"}]}
     assert result.content[0].text == "two previews"
     assert "text" not in result.structuredContent
+
+
+def test_tool_result_images_become_image_content() -> None:
+    from mcp.types import ImageContent, TextContent
+
+    from quail.connectors.sdk import ToolImage, ToolResult
+    from quail.mcp.results import success_result
+
+    png = b"\x89PNG\r\n\x1a\n" + b"x" * 32
+    image = ToolImage(png, "image/PNG")
+    assert image.mime_type == "image/png"
+    wrapped = ToolResult(
+        structured_content={"assets": [{"id": "a"}]},
+        text="one preview",
+        images=(image,),
+    )
+    result = success_result(
+        dict(wrapped.structured_content),
+        text=wrapped.text,
+        images=wrapped.images,
+    )
+    assert result.structuredContent == {"assets": [{"id": "a"}]}
+    assert isinstance(result.content[0], TextContent)
+    assert result.content[0].text == "one preview"
+    assert isinstance(result.content[1], ImageContent)
+    assert result.content[1].mimeType == "image/png"
+    assert result.content[1].data == base64.b64encode(png).decode("ascii")
+
+
+def test_tool_result_images_only_omit_text_content() -> None:
+    from mcp.types import ImageContent, TextContent
+
+    from quail.connectors.sdk import ToolImage
+    from quail.mcp.results import success_result
+
+    png = b"\x89PNG\r\n\x1a\n" + b"y" * 16
+    result = success_result(
+        {"assets": [{"id": "a"}]},
+        images=(ToolImage(png),),
+    )
+    assert result.structuredContent == {"assets": [{"id": "a"}]}
+    assert len(result.content) == 1
+    assert isinstance(result.content[0], ImageContent)
+    assert not any(isinstance(block, TextContent) for block in result.content)
+    assert result.content[0].data == base64.b64encode(png).decode("ascii")
+
+
+def test_tool_image_rejects_oversized_and_bad_mime() -> None:
+    from quail.connectors.sdk import ToolImage, ToolResult
+
+    with pytest.raises(ValueError, match="mime_type"):
+        ToolImage(b"abc", "application/pdf")
+    with pytest.raises(ValueError, match="exceeds"):
+        ToolImage(b"x" * (524_288 + 1))
+    images = tuple(ToolImage(b"x") for _ in range(9))
+    with pytest.raises(ValueError, match="images exceeds"):
+        ToolResult(structured_content={"ok": True}, images=images)

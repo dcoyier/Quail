@@ -190,7 +190,11 @@ def _register_tool(
                 result = connected.provider.call_tool(context, spec.name, kwargs)
                 if isinstance(result, ToolResult):
                     payload = dict(result.structured_content)
-                    return success_result(payload, text=result.text)
+                    return success_result(
+                        payload,
+                        text=result.text,
+                        images=result.images,
+                    )
                 if isinstance(result, dict):
                     return success_result(dict(result))
                 raise ConnectorError(

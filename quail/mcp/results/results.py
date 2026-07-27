@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import re
+from collections.abc import Sequence
 from typing import Any
 
-from mcp.types import CallToolResult, TextContent
+from mcp.types import CallToolResult, ImageContent, TextContent
 
 from quail.analysis.errors import (
     QuailError,
@@ -18,7 +20,7 @@ from quail.analysis.errors import (
     QuailSyntaxError,
 )
 from quail.auth.errors import AuthError, ForbiddenError, UnauthorizedError
-from quail.connectors.sdk import ConnectorError
+from quail.connectors.sdk import ConnectorError, ToolImage
 from quail.datasets.errors import DatasetConflictError, DatasetError, DatasetSyntaxError
 from quail.session.errors import (
     SessionClosedError,
@@ -34,21 +36,43 @@ def success_printed_output(printed_output: str) -> CallToolResult:
     return success_result({"printed_output": printed_output})
 
 
-def success_result(payload: dict[str, Any], *, text: str | None = None) -> CallToolResult:
+def success_result(
+    payload: dict[str, Any],
+    *,
+    text: str | None = None,
+    images: Sequence[ToolImage] = (),
+) -> CallToolResult:
     """Wrap a success dict as an MCP CallToolResult.
 
     When ``text`` is set, it becomes the human-readable content block.
-    Otherwise the payload is JSON-serialized into the content block.
+    When ``text`` is omitted and there are no images, the payload is
+    JSON-serialized into a text content block.
+    When ``text`` is omitted and ``images`` is non-empty, content is
+    image-only (no text block).
     ``structuredContent`` is always the payload alone (never merged with text).
+    Optional ``images`` become MCP ``ImageContent`` blocks after any text block.
     """
 
-    content_text = text if text is not None else json.dumps(payload, ensure_ascii=False)
+    content: list[TextContent | ImageContent] = []
+    if text is not None:
+        content.append(TextContent(type="text", text=text))
+    elif not images:
+        content.append(
+            TextContent(type="text", text=json.dumps(payload, ensure_ascii=False))
+        )
+    for image in images:
+        content.append(
+            ImageContent(
+                type="image",
+                data=base64.b64encode(image.data).decode("ascii"),
+                mimeType=image.mime_type,
+            )
+        )
     return CallToolResult(
-        content=[TextContent(type="text", text=content_text)],
+        content=content,
         structuredContent=payload,
         isError=False,
     )
-
 
 def validate_time_window(time_window: str | None) -> str:
     """Accept standard|extended or None (treated as standard)."""

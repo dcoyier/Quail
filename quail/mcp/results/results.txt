@@ -1,10 +1,13 @@
 success_printed_output(printed_output):
   Give back a success CallToolResult with {"printed_output": printed_output}.
 
-success_result(payload, text default None):
+success_result(payload, text default None, images default empty):
   Give back a CallToolResult with isError false and the payload as structuredContent.
-  When text is set, use it for the text content block; otherwise JSON-dump payload.
+  When text is set, use it for the text content block.
+  When text is omitted and images is empty, JSON-dump payload into a text block.
+  When text is omitted and images is non-empty, omit the text block (image-only).
   Never merge text into structuredContent.
+  Append one ImageContent block per ToolImage after any text block (base64 data).
 
 validate_time_window(time_window):
   Delegate to quail.analysis.limits.validate_time_window.
