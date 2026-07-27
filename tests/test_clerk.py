@@ -316,6 +316,7 @@ def test_authorized_party_claim_matching() -> None:
     _require_authorized_party({"azp": "app_a", "sub": "u"}, parties)
     _require_authorized_party({"aud": "app_b", "sub": "u"}, parties)
     _require_authorized_party({"aud": ["other", "app_a"], "sub": "u"}, parties)
+    _require_authorized_party({"client_id": "app_b", "sub": "u"}, parties)
     with pytest.raises(UnauthorizedError, match="authorized party"):
         _require_authorized_party({"sub": "u"}, parties)
     with pytest.raises(UnauthorizedError, match="not for this Quail"):

@@ -26,3 +26,5 @@ ClerkAccessTokenVerifier(verifier, scopes=MCP_OAUTH_SCOPES):
 register_clerk_oauth_discovery(server, clerk_domain):
   Register GET/OPTIONS /.well-known/oauth-authorization-server that proxies Clerk's
   authorization-server metadata (for older MCP clients).
+  Register GET /authorize that 302-redirects to Clerk /oauth/authorize with the
+  same query string (clients that open the resource origin's /authorize).

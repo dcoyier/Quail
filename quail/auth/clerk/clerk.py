@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -15,6 +16,14 @@ from quail.auth.errors import ForbiddenError, UnauthorizedError
 from quail.config.models import UserSpec
 
 _USERINFO_TIMEOUT_SECONDS = 10.0
+_LOG = logging.getLogger("quail.auth.clerk")
+if not _LOG.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+    _LOG.addHandler(_handler)
+    _LOG.setLevel(logging.WARNING)
+    _LOG.propagate = True
+_PEEK_CLAIM_KEYS = ("iss", "aud", "azp", "sub", "client_id", "exp", "iat", "nbf", "scope")
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,8 +68,17 @@ class ClerkJwtVerifier:
     def verify(self, token: str) -> str:
         try:
             return self._verify_jwt(token)
-        except UnauthorizedError:
-            return self._verify_userinfo(token)
+        except UnauthorizedError as jwt_error:
+            _LOG.warning(
+                "clerk jwt verify failed: %s; peek=%s",
+                jwt_error,
+                _peek_token_claims(token),
+            )
+            try:
+                return self._verify_userinfo(token)
+            except UnauthorizedError as userinfo_error:
+                _LOG.warning("clerk userinfo verify failed: %s", userinfo_error)
+                raise
 
     def _verify_jwt(self, token: str) -> str:
         try:
@@ -73,7 +91,7 @@ class ClerkJwtVerifier:
                 options={"require": ["exp", "iat", "sub"], "verify_aud": False},
             )
         except jwt.PyJWTError as error:
-            raise UnauthorizedError("Invalid bearer token") from error
+            raise UnauthorizedError(f"Invalid bearer token ({type(error).__name__})") from error
         _require_authorized_party(payload, self._authorized_parties)
         sub = payload.get("sub")
         if not isinstance(sub, str) or not sub.strip():
@@ -93,9 +111,11 @@ class ClerkJwtVerifier:
             with urllib.request.urlopen(request, timeout=_USERINFO_TIMEOUT_SECONDS) as response:
                 raw = response.read()
         except urllib.error.HTTPError as error:
-            raise UnauthorizedError("Invalid bearer token") from error
+            raise UnauthorizedError(
+                f"Invalid bearer token (userinfo HTTP {error.code})"
+            ) from error
         except urllib.error.URLError as error:
-            raise UnauthorizedError("Invalid bearer token") from error
+            raise UnauthorizedError("Invalid bearer token (userinfo unreachable)") from error
         try:
             payload = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -109,13 +129,36 @@ class ClerkJwtVerifier:
         raise UnauthorizedError("Bearer token missing sub")
 
 
+def _peek_token_claims(token: str) -> dict[str, object]:
+    """Unverified claim peek for auth diagnostics (no email/profile fields)."""
+
+    parts = token.count(".")
+    if parts != 2:
+        return {"jwt_parts": parts + 1, "token_len": len(token)}
+    try:
+        payload = jwt.decode(
+            token,
+            options={"verify_signature": False, "verify_exp": False, "verify_nbf": False},
+        )
+    except jwt.PyJWTError as error:
+        return {"peek_error": type(error).__name__, "token_len": len(token)}
+    if not isinstance(payload, dict):
+        return {"peek_error": "non_object_payload"}
+    out: dict[str, object] = {}
+    for key in _PEEK_CLAIM_KEYS:
+        if key in payload:
+            out[key] = payload[key]
+    return out
+
+
 def _require_authorized_party(payload: dict[str, object], parties: frozenset[str]) -> None:
-    """Require JWT azp or aud to match a configured Clerk application party."""
+    """Require JWT azp, aud, or client_id to match a configured Clerk party."""
 
     candidates: list[str] = []
-    azp = payload.get("azp")
-    if isinstance(azp, str) and azp.strip():
-        candidates.append(azp.strip())
+    for key in ("azp", "client_id"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            candidates.append(value.strip())
     aud = payload.get("aud")
     if isinstance(aud, str) and aud.strip():
         candidates.append(aud.strip())
@@ -124,9 +167,12 @@ def _require_authorized_party(payload: dict[str, object], parties: frozenset[str
             if isinstance(item, str) and item.strip():
                 candidates.append(item.strip())
     if not candidates:
-        raise UnauthorizedError("Bearer token missing authorized party (azp/aud)")
+        raise UnauthorizedError("Bearer token missing authorized party (azp/aud/client_id)")
     if not parties.intersection(candidates):
-        raise UnauthorizedError("Bearer token is not for this Quail application")
+        raise UnauthorizedError(
+            "Bearer token is not for this Quail application "
+            f"(candidates={sorted(set(candidates))})"
+        )
 
 
 @dataclass(frozen=True, slots=True)

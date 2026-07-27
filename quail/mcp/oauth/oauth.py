@@ -12,7 +12,7 @@ from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
 from pydantic import AnyHttpUrl
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from quail.auth.clerk import TokenVerifier
 from quail.auth.errors import UnauthorizedError
@@ -96,6 +96,7 @@ def register_clerk_oauth_discovery(server: FastMCP, *, clerk_domain: str) -> Non
 
     issuer = clerk_issuer_url(clerk_domain)
     metadata_url = f"{issuer}{_AS_METADATA_PATH}"
+    clerk_authorize = f"{issuer}/oauth/authorize"
 
     @server.custom_route(_AS_METADATA_PATH, methods=["GET", "OPTIONS"])
     async def oauth_authorization_server_metadata(request: Request) -> Response:
@@ -117,6 +118,14 @@ def register_clerk_oauth_discovery(server: FastMCP, *, clerk_domain: str) -> Non
                 headers={"Access-Control-Allow-Origin": "*"},
             )
         return JSONResponse(payload, headers={"Access-Control-Allow-Origin": "*"})
+
+    @server.custom_route("/authorize", methods=["GET"])
+    async def oauth_authorize_redirect(request: Request) -> Response:
+        # Some MCP clients open {resource_origin}/authorize instead of Clerk's
+        # authorization_endpoint. Forward the query string to Clerk.
+        query = request.url.query
+        target = f"{clerk_authorize}?{query}" if query else clerk_authorize
+        return RedirectResponse(url=target, status_code=302)
 
 
 def _fetch_json(url: str) -> dict[str, Any]:

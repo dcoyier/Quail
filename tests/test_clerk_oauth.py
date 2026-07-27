@@ -199,6 +199,32 @@ def test_authorization_server_metadata_proxy(tmp_path: Path) -> None:
         assert response.json()["issuer"] == payload["issuer"]
 
 
+def test_authorize_redirects_to_clerk(tmp_path: Path) -> None:
+    manifest = _write_clerk_manifest(tmp_path)
+    config = load_config(manifest)
+    apply_config(config)
+    server = create_mcp_server_from_config(
+        config,
+        verifier=StaticTokenVerifier({"alice-token": "user_alice"}),
+    )
+    app = server.streamable_http_app()
+    with TestClient(app, follow_redirects=False) as client:
+        response = client.get(
+            "/authorize",
+            params={
+                "response_type": "code",
+                "client_id": "test_clerk_app",
+                "redirect_uri": "https://client.example/callback",
+            },
+        )
+    assert response.status_code == 302
+    location = response.headers["location"]
+    assert location.startswith("https://example.clerk.accounts.dev/oauth/authorize?")
+    assert "response_type=code" in location
+    assert "client_id=test_clerk_app" in location
+    assert "redirect_uri=" in location
+
+
 def test_userinfo_fallback_on_clerk_verifier(monkeypatch: pytest.MonkeyPatch) -> None:
     from quail.auth.clerk import ClerkJwtVerifier
 
