@@ -1,6 +1,9 @@
 OpenRouterEmbedder POSTs to {base_url}/embeddings with Bearer auth,
 model, input texts, and dimensions.
 
+Privacy: every embed_texts call sends the full input strings to the remote
+OpenRouter API (off-host). Prefer Ollama when corpus text must stay local.
+
 embed_texts(texts):
   Give back one float vector per input text in request order.
   Raise ProviderError on HTTP/JSON/shape/dimension mismatches.

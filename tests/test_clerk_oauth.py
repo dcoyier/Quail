@@ -404,3 +404,86 @@ def test_oauth_metadata_served_from_cache(tmp_path: Path) -> None:
     assert first.json()["issuer"] == "https://example.clerk.accounts.dev"
     assert len(calls) == 1
 
+
+def test_jwt_verify_via_local_jwks_http_round_trip() -> None:
+    """RSA-signed JWT verified through a real PyJWKClient HTTP JWKS fetch."""
+
+    import json
+    import threading
+    import time
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from jwt import PyJWKClient
+    from jwt.algorithms import RSAAlgorithm
+
+    from quail.auth.clerk import ClerkJwtVerifier
+
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    jwk = json.loads(RSAAlgorithm.to_jwk(private_key.public_key()))
+    jwk["kid"] = "test-key"
+    jwk["use"] = "sig"
+    jwk["alg"] = "RS256"
+    jwks_body = json.dumps({"keys": [jwk]}).encode("utf-8")
+
+    class _JwksHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            if self.path.rstrip("/") != "/.well-known/jwks.json":
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(jwks_body)))
+            self.end_headers()
+            self.wfile.write(jwks_body)
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            del format, args
+
+    server = HTTPServer(("127.0.0.1", 0), _JwksHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        port = server.server_address[1]
+        jwks_url = f"http://127.0.0.1:{port}/.well-known/jwks.json"
+        verifier = ClerkJwtVerifier(
+            "example.clerk.accounts.dev",
+            authorized_parties=("test_clerk_app",),
+        )
+        # Issuer stays Clerk-shaped; only the JWKS client points at the local fixture.
+        verifier._jwks = PyJWKClient(jwks_url)
+
+        now = int(time.time())
+        good = jwt.encode(
+            {
+                "sub": "user_alice",
+                "iss": "https://example.clerk.accounts.dev",
+                "azp": "test_clerk_app",
+                "exp": now + 3600,
+                "iat": now,
+            },
+            private_key,
+            algorithm="RS256",
+            headers={"kid": "test-key"},
+        )
+        assert verifier.verify(good) == "user_alice"
+
+        wrong_party = jwt.encode(
+            {
+                "sub": "user_alice",
+                "iss": "https://example.clerk.accounts.dev",
+                "azp": "other_app",
+                "exp": now + 3600,
+                "iat": now,
+            },
+            private_key,
+            algorithm="RS256",
+            headers={"kid": "test-key"},
+        )
+        with pytest.raises(UnauthorizedError, match="not for this Quail application"):
+            verifier.verify(wrong_party)
+    finally:
+        server.shutdown()
+        server.server_close()
+

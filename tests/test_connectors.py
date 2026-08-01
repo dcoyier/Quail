@@ -624,6 +624,71 @@ def test_example_package_surface(tmp_path: Path) -> None:
         assert "notes_describe_dataset" in html
 
 
+def test_production_shaped_toml_loads_notes_via_entry_point(tmp_path: Path) -> None:
+    """Garden-like pin/connect TOML through real entry points + create_mcp_server_from_config."""
+
+    from importlib.metadata import entry_points
+
+    from quail.mcp import create_mcp_server_from_config
+    from quail.run import apply_config
+
+    if "notes" not in {
+        ep.name for ep in entry_points().select(group=load_module.ENTRY_POINT_GROUP)
+    }:
+        pytest.skip("install examples/notes-connector (uv pip install -e ./examples/notes-connector)")
+
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "notes.csv").write_text("id,title,content\ne1,Hello,body\n", encoding="utf-8")
+    manifest = tmp_path / "quail.toml"
+    manifest.write_text(
+        """
+[core]
+database = "data/quail.turso"
+feedback = "data/feedback.jsonl"
+
+[auth]
+mode = "unrestricted"
+workspace = "local"
+
+[hosting]
+bind = "127.0.0.1"
+port = 8765
+
+[[extensions]]
+id = "notes"
+version = "1.0.0"
+
+[[datasets]]
+id = "notes"
+source = "data/notes.csv"
+name = "Notes"
+
+[[connectors]]
+id = "notes"
+
+[connectors.config]
+heading = "Notes"
+
+[[connectors.datasets]]
+id = "notes"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    config = load_config(manifest)
+    apply_config(config)
+    prepared = create_mcp_server_from_config(config)
+    try:
+        bundle = prepared.connector_catalog.for_workspace("local")
+        assert len(bundle.providers) == 1
+        assert bundle.providers[0].extension_id == "notes"
+        assert bundle.providers[0].version == "1.0.0"
+        assert "notes" in bundle.docs_by_dataset
+    finally:
+        prepared.close()
+
+
 class _CoreHostAdapter:
     def __init__(self, db: Any) -> None:
         self._db = db

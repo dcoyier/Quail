@@ -203,7 +203,6 @@ def test_field_kind_mismatch_raises(tmp_path: Path) -> None:
 
 def test_foreign_entry_rejected_across_datasets(tmp_path: Path) -> None:
     from quail.analysis.entry import make_entry
-    from quail.analysis.errors import QuailScopeError
     from quail.session import resolve_scope
 
     csv_a = tmp_path / "a.csv"

@@ -196,7 +196,10 @@ by pasting Clerk `user_…` ids into `[[users]]` and set
 
 Semantic uses per-dataset embedding profiles (Ollama/OpenRouter), a rebuildable
 Turso vector cache, and **exact** batch cosine via `-vector_distance_dot`.
-Lexical uses Turso **native FTS** in the same rebuildable search DB
+**OpenRouter privacy:** when a dataset pins `provider = "openrouter"`, warm and
+query embedding export send the full field text for each embedded segment to
+OpenRouter’s remote API (off-host). Prefer Ollama for corpora that must stay
+local. Lexical uses Turso **native FTS** in the same rebuildable search DB
 (in-process): one warmed corpus table pair per source field, plus request-local
 scratch corpora for derived/analysis/unwarmed scoring. Both Lexical and Semantic
 accept `str`, `list[str]`, entry `GroupExpr`, and `list[Entry]` query targets.

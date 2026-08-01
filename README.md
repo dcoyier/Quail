@@ -31,12 +31,19 @@ match the current TOML, then serves MCP.
   `user_…` ids into TOML. Set `hosting.public_base_url` when the public origin
   differs from `bind`/`port` (e.g. ngrok).
 
-Feedback stays in a separate JSONL file. Semantic similarity uses a per-dataset
-embedding profile (`[datasets.embedding]` plus `[providers.*]` and
-`core.search_database`) with Turso exact batch cosine (not ANN). Lexical FTS
-uses Turso native FTS in the same rebuildable search database (in-process).
-Both accept `str`, `list[str]`, entry groups, and Entry lists as query targets.
-Invitations remain deferred.
+Feedback stays in a separate JSONL file (messages capped at 16 KiB UTF-8; the
+file fail-closes at 64 MiB). Semantic similarity uses a per-dataset embedding
+profile (`[datasets.embedding]` plus `[providers.*]` and `core.search_database`)
+with Turso exact batch cosine (not ANN). **OpenRouter sends full corpus field
+text off-host** for embedding export — use Ollama when text must stay local.
+Lexical FTS uses Turso native FTS in the same rebuildable search database
+(in-process). Both accept `str`, `list[str]`, entry groups, and Entry lists as
+query targets. Invitations remain deferred.
+
+Clerk public deployments expect an `https://` `hosting.public_base_url` unless
+`hosting.allow_insecure_http = true` is set deliberately. `process` and `run`
+take an exclusive local deployment lease (`fcntl.flock`); `process` warms all
+imports then publishes activation and embedding pins; `run` never activates.
 
 ## Operator path
 
