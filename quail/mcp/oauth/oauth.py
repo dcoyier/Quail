@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.request
 from typing import Any
 
+import anyio
 from mcp.server.auth.provider import AccessToken
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
@@ -18,12 +20,14 @@ from quail.auth.clerk import TokenVerifier
 from quail.auth.errors import UnauthorizedError
 from quail.config.hosting_url import normalize_public_base_url
 from quail.config.models import QuailConfig
+from quail.mcp.offload import run_blocking
 
 # Advertised scopes for MCP protected-resource metadata / middleware checks.
 MCP_OAUTH_SCOPES: tuple[str, ...] = ("openid", "profile", "email")
 
 _AS_METADATA_PATH = "/.well-known/oauth-authorization-server"
 _FETCH_TIMEOUT_SECONDS = 10.0
+_METADATA_CACHE_TTL_SECONDS = 300.0
 
 
 class _MetadataFetchError(RuntimeError):
@@ -80,7 +84,7 @@ class ClerkAccessTokenVerifier:
 
     async def verify_token(self, token: str) -> AccessToken | None:
         try:
-            subject = self._verifier.verify(token)
+            subject = await run_blocking(lambda: self._verifier.verify(token))
         except UnauthorizedError:
             return None
         return AccessToken(
@@ -97,6 +101,22 @@ def register_clerk_oauth_discovery(server: FastMCP, *, clerk_domain: str) -> Non
     issuer = clerk_issuer_url(clerk_domain)
     metadata_url = f"{issuer}{_AS_METADATA_PATH}"
     clerk_authorize = f"{issuer}/oauth/authorize"
+    cache: dict[str, Any] = {"payload": None, "fetched_at": 0.0}
+    lock = anyio.Lock()
+
+    async def _cached_metadata() -> dict[str, Any]:
+        async with lock:
+            now = time.monotonic()
+            payload = cache["payload"]
+            if (
+                isinstance(payload, dict)
+                and (now - float(cache["fetched_at"])) < _METADATA_CACHE_TTL_SECONDS
+            ):
+                return payload
+            fetched = await run_blocking(lambda: _fetch_json(metadata_url))
+            cache["payload"] = fetched
+            cache["fetched_at"] = time.monotonic()
+            return fetched
 
     @server.custom_route(_AS_METADATA_PATH, methods=["GET", "OPTIONS"])
     async def oauth_authorization_server_metadata(request: Request) -> Response:
@@ -110,7 +130,7 @@ def register_clerk_oauth_discovery(server: FastMCP, *, clerk_domain: str) -> Non
                 },
             )
         try:
-            payload = _fetch_json(metadata_url)
+            payload = await _cached_metadata()
         except _MetadataFetchError as error:
             return JSONResponse(
                 {"error": "server_error", "error_description": str(error)},

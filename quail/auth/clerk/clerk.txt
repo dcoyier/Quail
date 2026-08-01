@@ -7,12 +7,15 @@ ClerkJwtVerifier(clerk_domain, authorized_parties):
   Require a non-empty authorized_parties tuple (Clerk application azp/aud
     /client_id party values).
   Derive issuer, JWKS URL, and OAuth userinfo URL from the Clerk domain.
-  verify(token): try RS256 JWT (require exp/iat/sub; do not use PyJWT audience
-    verification). Require azp, aud, or client_id to intersect
-    authorized_parties. On JWT failure, log a claim peek (iss/aud/azp/sub/
-    client_id/exp only) and GET /oauth/userinfo with the bearer and read
-    sub/user_id (opaque tokens skip the party claim check; Clerk issuer still
-    vouches). On userinfo failure, log and raise UnauthorizedError.
+  verify(token):
+    If the token is JWT-shaped (exactly three segments and a base64url JSON
+      object header), verify RS256 JWT only (require exp/iat/sub; do not use
+      PyJWT audience verification). Require azp, aud, or client_id to intersect
+      authorized_parties. On any JWT failure (including party mismatch), log a
+      claim peek at debug and re-raise UnauthorizedError with no userinfo fallback.
+    Otherwise treat the token as opaque: GET /oauth/userinfo with the bearer and
+      read sub only (opaque tokens skip the party claim check; Clerk issuer still
+      vouches). On userinfo failure, log at debug and raise UnauthorizedError.
 
 StaticTokenVerifier(tokens):
   Test helper mapping exact bearer strings to clerk user ids (no party check).

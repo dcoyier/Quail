@@ -16,7 +16,9 @@ Rebuild Quail so the author can understand and extend it. Keep load-bearing inva
 - **Soak / deliberate public tunnel:** unrestricted plus
   `hosting.allow_public_unrestricted = true` (anyone who can reach the URL can
   call MCP; no Clerk). Fail-closed without the override.
-- **Company (~10 users):** HTTP + Clerk/OIDC, users allowlisted in TOML.
+- **Company (~10 users):** HTTPS + Clerk/OIDC, users allowlisted in TOML.
+  Non-loopback `http://` public origins require
+  `hosting.allow_insecure_http = true` (fail-closed otherwise).
 
 ## Audiences
 
@@ -126,10 +128,11 @@ Clerk mode is **identity + allowlist**, not full OAuth resource-server scope
 enforcement. A Clerk token proves `sub`; `auth.clerk_authorized_parties` must
 match JWT `azp` or `aud` (application binding). TOML `[[users]]` is the tool
 gate. MCP still advertises openid/profile/email for client compatibility;
-Quail does not read or enforce those scopes from the token. Opaque tokens
-verified via Clerk userinfo skip the azp/aud claim check (issuer still
-vouches). Sessions store `owner_user_id` (TOML user id); only that user may
-exec or attach feedback to the session.
+Quail does not read or enforce those scopes from the token. JWT-shaped tokens
+never fall back to userinfo after signature, issuer, time, claim, or party
+failure. Only opaque (non-JWT-shaped) tokens use Clerk userinfo and skip the
+azp/aud claim check (issuer still vouches). Sessions store `owner_user_id`
+(TOML user id); only that user may exec or attach feedback to the session.
 
 Clerk mode also serves MCP OAuth discovery so clients can sign in via Clerk:
 protected-resource metadata for `{public_base_url}/mcp` and a proxied

@@ -232,16 +232,12 @@ def test_userinfo_fallback_on_clerk_verifier(monkeypatch: pytest.MonkeyPatch) ->
         "example.clerk.accounts.dev",
         authorized_parties=("test_clerk_app",),
     )
-
-    def _boom(_token: str) -> str:
-        raise UnauthorizedError("Invalid bearer token")
-
-    monkeypatch.setattr(verifier, "_verify_jwt", _boom)
+    userinfo_calls: list[str] = []
 
     def _fake_urlopen(request: Any, timeout: float = 0) -> Any:
         class _Resp:
             def read(self) -> bytes:
-                return json.dumps({"user_id": "user_from_info"}).encode("utf-8")
+                return json.dumps({"sub": "user_from_info"}).encode("utf-8")
 
             def __enter__(self) -> _Resp:
                 return self
@@ -250,7 +246,161 @@ def test_userinfo_fallback_on_clerk_verifier(monkeypatch: pytest.MonkeyPatch) ->
                 return None
 
         assert request.get_header("Authorization") == "Bearer opaque-token"
+        userinfo_calls.append("called")
         return _Resp()
 
+    def _jwt_should_not_run(_token: str) -> str:
+        raise AssertionError("JWT path must not run for opaque tokens")
+
+    monkeypatch.setattr(verifier, "_verify_jwt", _jwt_should_not_run)
     with patch("quail.auth.clerk.clerk.urllib.request.urlopen", _fake_urlopen):
         assert verifier.verify("opaque-token") == "user_from_info"
+    assert userinfo_calls == ["called"]
+
+
+def test_wrong_party_jwt_does_not_fall_back_to_userinfo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import time
+
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    from quail.auth.clerk import ClerkJwtVerifier
+
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public_key = private_key.public_key()
+    now = int(time.time())
+    token = jwt.encode(
+        {
+            "sub": "user_alice",
+            "iss": "https://example.clerk.accounts.dev",
+            "azp": "wrong_app",
+            "exp": now + 3600,
+            "iat": now,
+        },
+        private_key,
+        algorithm="RS256",
+    )
+    verifier = ClerkJwtVerifier(
+        "example.clerk.accounts.dev",
+        authorized_parties=("test_clerk_app",),
+    )
+
+    class _FakeKey:
+        def __init__(self, key: object) -> None:
+            self.key = key
+
+    monkeypatch.setattr(
+        verifier._jwks,
+        "get_signing_key_from_jwt",
+        lambda _token: _FakeKey(public_key),
+    )
+
+    def _fake_urlopen(*_args: object, **_kwargs: object) -> Any:
+        raise AssertionError("userinfo must not be called for JWT party failures")
+
+    with patch("quail.auth.clerk.clerk.urllib.request.urlopen", _fake_urlopen):
+        with pytest.raises(UnauthorizedError, match="not for this Quail application"):
+            verifier.verify(token)
+
+
+def test_jwt_shaped_garbage_does_not_fall_back_to_userinfo() -> None:
+    from quail.auth.clerk import ClerkJwtVerifier
+
+    verifier = ClerkJwtVerifier(
+        "example.clerk.accounts.dev",
+        authorized_parties=("test_clerk_app",),
+    )
+    # Valid base64url JSON header + two more segments → JWT-shaped.
+    token = "eyJhbGciOiJub25lIn0.e30.x"
+
+    def _fake_urlopen(*_args: object, **_kwargs: object) -> Any:
+        raise AssertionError("userinfo must not be called for JWT-shaped tokens")
+
+    with patch("quail.auth.clerk.clerk.urllib.request.urlopen", _fake_urlopen):
+        with pytest.raises(UnauthorizedError, match="Invalid bearer token"):
+            verifier.verify(token)
+
+
+def test_clerk_rejects_non_loopback_http_public_base_url(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="allow_insecure_http|https"):
+        load_config(
+            _write_clerk_manifest(
+                tmp_path,
+                hosting_extra='public_base_url = "http://public.example"\n',
+            )
+        )
+
+
+def test_clerk_allows_insecure_http_with_override(tmp_path: Path) -> None:
+    config = load_config(
+        _write_clerk_manifest(
+            tmp_path,
+            hosting_extra=(
+                'public_base_url = "http://public.example"\n'
+                "allow_insecure_http = true\n"
+            ),
+        )
+    )
+    assert config.public_base_url == "http://public.example"
+    assert config.allow_insecure_http is True
+
+
+def test_access_token_verifier_offloads_sync_verify() -> None:
+    import asyncio
+    import threading
+
+    class _SlowVerifier:
+        def __init__(self) -> None:
+            self.thread_ids: list[int] = []
+
+        def verify(self, token: str) -> str:
+            self.thread_ids.append(threading.get_ident())
+            return f"user_{token}"
+
+    async def _run() -> None:
+        slow = _SlowVerifier()
+        adapter = ClerkAccessTokenVerifier(slow)
+        main_thread = threading.get_ident()
+        result = await adapter.verify_token("abc")
+        assert result is not None
+        assert result.subject == "user_abc"
+        assert slow.thread_ids
+        assert slow.thread_ids[0] != main_thread
+        await asyncio.wait_for(asyncio.sleep(0.01), timeout=0.5)
+
+    asyncio.run(_run())
+
+
+def test_oauth_metadata_served_from_cache(tmp_path: Path) -> None:
+    config = load_config(
+        _write_clerk_manifest(
+            tmp_path,
+            hosting_extra='public_base_url = "https://acme.example"\n',
+        )
+    )
+    apply_config(config)
+    calls: list[str] = []
+
+    def _fake_fetch(url: str) -> dict[str, Any]:
+        calls.append(url)
+        return {
+            "issuer": "https://example.clerk.accounts.dev",
+            "authorization_endpoint": "https://example.clerk.accounts.dev/oauth/authorize",
+        }
+
+    with patch("quail.mcp.oauth.oauth._fetch_json", _fake_fetch):
+        server = create_mcp_server_from_config(
+            config,
+            verifier=StaticTokenVerifier({"tok": "user_alice"}),
+        )
+        app = server.streamable_http_app()
+        with TestClient(app) as client:
+            first = client.get("/.well-known/oauth-authorization-server")
+            second = client.get("/.well-known/oauth-authorization-server")
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["issuer"] == "https://example.clerk.accounts.dev"
+    assert len(calls) == 1
+

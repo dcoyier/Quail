@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import urllib.error
@@ -44,8 +45,9 @@ class ClerkJwtVerifier:
 
     Identity mode: signature + issuer + sub, then TOML allowlist (elsewhere).
     App binding: JWT must present azp or aud in authorized_parties. Opaque
-    tokens verified only via userinfo skip that claim check (Clerk issuer still
-    vouches for the token).
+    (non-JWT-shaped) tokens verified only via userinfo skip that claim check
+    (Clerk issuer still vouches for the token). JWT-shaped tokens never fall
+    back to userinfo after any JWT failure, including party mismatch.
     """
 
     def __init__(
@@ -66,19 +68,21 @@ class ClerkJwtVerifier:
         self._authorized_parties = frozenset(parties)
 
     def verify(self, token: str) -> str:
-        try:
-            return self._verify_jwt(token)
-        except UnauthorizedError as jwt_error:
-            _LOG.warning(
-                "clerk jwt verify failed: %s; peek=%s",
-                jwt_error,
-                _peek_token_claims(token),
-            )
+        if _is_jwt_shaped(token):
             try:
-                return self._verify_userinfo(token)
-            except UnauthorizedError as userinfo_error:
-                _LOG.warning("clerk userinfo verify failed: %s", userinfo_error)
+                return self._verify_jwt(token)
+            except UnauthorizedError as jwt_error:
+                _LOG.debug(
+                    "clerk jwt verify failed: %s; peek=%s",
+                    jwt_error,
+                    _peek_token_claims(token),
+                )
                 raise
+        try:
+            return self._verify_userinfo(token)
+        except UnauthorizedError as userinfo_error:
+            _LOG.debug("clerk userinfo verify failed: %s", userinfo_error)
+            raise
 
     def _verify_jwt(self, token: str) -> str:
         try:
@@ -122,11 +126,25 @@ class ClerkJwtVerifier:
             raise UnauthorizedError("Invalid bearer token") from error
         if not isinstance(payload, dict):
             raise UnauthorizedError("Invalid bearer token")
-        for key in ("sub", "user_id", "userId"):
-            value = payload.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
+        sub = payload.get("sub")
+        if isinstance(sub, str) and sub.strip():
+            return sub.strip()
         raise UnauthorizedError("Bearer token missing sub")
+
+
+def _is_jwt_shaped(token: str) -> bool:
+    """True when the token has three segments and a base64url JSON object header."""
+
+    parts = token.split(".")
+    if len(parts) != 3 or not parts[0]:
+        return False
+    try:
+        padded = parts[0] + "=" * (-len(parts[0]) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode("ascii"))
+        header = json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    return isinstance(header, dict)
 
 
 def _peek_token_claims(token: str) -> dict[str, object]:

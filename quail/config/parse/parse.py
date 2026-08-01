@@ -5,6 +5,7 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from quail.config.errors import ConfigError
 from quail.config.models import (
@@ -46,6 +47,7 @@ _ALLOWED_HOSTING = frozenset(
         "max_concurrent_executions",
         "public_base_url",
         "allow_public_unrestricted",
+        "allow_insecure_http",
         "include_dataset_docs_in_setup",
     }
 )
@@ -135,12 +137,17 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
     max_concurrent_executions = _parse_max_concurrent_executions(hosting)
     public_base_url = _parse_public_base_url(hosting, bind=bind, port=port)
     allow_public_unrestricted = _parse_allow_public_unrestricted(hosting)
+    allow_insecure_http = _parse_allow_insecure_http(hosting)
     include_dataset_docs_in_setup = _parse_include_dataset_docs_in_setup(hosting)
 
     providers = _parse_providers(data.get("providers"))
     search_warm = _parse_search_warm(data.get("search"))
 
     if mode == "unrestricted":
+        if allow_insecure_http:
+            raise ConfigError(
+                "hosting.allow_insecure_http is only valid when auth.mode is clerk"
+            )
         _require_unrestricted_loopback(
             bind=bind,
             public_base_url=public_base_url,
@@ -167,6 +174,10 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
             raise ConfigError(
                 "hosting.allow_public_unrestricted is only valid when auth.mode is unrestricted"
             )
+        _require_clerk_https_public_base_url(
+            public_base_url=public_base_url,
+            allow_insecure_http=allow_insecure_http,
+        )
         config = _parse_clerk(
             data,
             auth=auth,
@@ -180,6 +191,7 @@ def parse_config(raw_text: str, *, manifest_path: Path) -> QuailConfig:
             port=port,
             public_base_url=public_base_url,
             max_concurrent_executions=max_concurrent_executions,
+            allow_insecure_http=allow_insecure_http,
             include_dataset_docs_in_setup=include_dataset_docs_in_setup,
         )
     _validate_embedding_wiring(config)
@@ -261,6 +273,7 @@ def _parse_clerk(
     port: int,
     public_base_url: str,
     max_concurrent_executions: int,
+    allow_insecure_http: bool,
     include_dataset_docs_in_setup: bool,
 ) -> QuailConfig:
     _reject_unknown(data, _ALLOWED_ROOT_CLERK, label="root")
@@ -390,6 +403,7 @@ def _parse_clerk(
         search_warm=search_warm,
         max_concurrent_executions=max_concurrent_executions,
         extensions=extensions,
+        allow_insecure_http=allow_insecure_http,
         include_dataset_docs_in_setup=include_dataset_docs_in_setup,
     )
 
@@ -437,6 +451,15 @@ def _parse_allow_public_unrestricted(hosting: dict[str, Any]) -> bool:
     return value
 
 
+def _parse_allow_insecure_http(hosting: dict[str, Any]) -> bool:
+    if "allow_insecure_http" not in hosting:
+        return False
+    value = hosting["allow_insecure_http"]
+    if not isinstance(value, bool):
+        raise ConfigError("hosting.allow_insecure_http must be a boolean")
+    return value
+
+
 def _parse_include_dataset_docs_in_setup(hosting: dict[str, Any]) -> bool:
     if "include_dataset_docs_in_setup" not in hosting:
         return False
@@ -444,6 +467,22 @@ def _parse_include_dataset_docs_in_setup(hosting: dict[str, Any]) -> bool:
     if not isinstance(value, bool):
         raise ConfigError("hosting.include_dataset_docs_in_setup must be a boolean")
     return value
+
+
+def _require_clerk_https_public_base_url(
+    *,
+    public_base_url: str,
+    allow_insecure_http: bool,
+) -> None:
+    from quail.config.hosting_url import is_loopback_public_base_url
+
+    if allow_insecure_http or is_loopback_public_base_url(public_base_url):
+        return
+    if urlparse(public_base_url).scheme != "https":
+        raise ConfigError(
+            "clerk mode requires hosting.public_base_url to be https for non-loopback "
+            "origins; set hosting.allow_insecure_http = true to override"
+        )
 
 
 def _require_unrestricted_loopback(

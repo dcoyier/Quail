@@ -17,17 +17,19 @@ parse_config(raw_text, manifest_path):
   Require [hosting] bind, port 1..65535, optional max_concurrent_executions
   (default 2, range 1..100), optional public_base_url (http(s) origin; defaults
   from bind/port, mapping 0.0.0.0/:: to 127.0.0.1), optional
-  allow_public_unrestricted (boolean, default false; unrestricted-only), and optional
+  allow_public_unrestricted (boolean, default false; unrestricted-only), optional
+  allow_insecure_http (boolean, default false; clerk-only), and optional
   include_dataset_docs_in_setup (boolean, default false).
   Optional [providers.ollama] / [providers.openrouter] (api_key must be env:NAME).
   Parse optional [[extensions]] (id + version pins, unique ids).
   If unrestricted: require auth.workspace and optional root [[datasets]]; reject clerk-only keys.
   Unless allow_public_unrestricted is true, require bind and public_base_url host to be
-  loopback (127.0.0.1, localhost, or ::1).
+  loopback (127.0.0.1, localhost, or ::1). Reject allow_insecure_http.
   Parse optional root [[connectors]] against pinned extension ids and workspace dataset ids.
   If clerk: require auth.clerk_domain, auth.clerk_authorized_parties (non-empty
   azp/aud party ids), [[workspaces]] with nested datasets, and [[users]];
   reject auth.workspace, root [[datasets]], and allow_public_unrestricted.
+  Unless allow_insecure_http is true, require non-loopback public_base_url to be https.
   Parse optional workspaces[].connectors against pinned extension ids and that workspace's
   dataset ids.
   For datasets: optional [datasets.embedding] with provider, model, dimensions > 0, revision,

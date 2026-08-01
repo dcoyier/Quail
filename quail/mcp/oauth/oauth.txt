@@ -20,11 +20,15 @@ build_clerk_auth_settings(clerk_domain, public_base_url):
 
 ClerkAccessTokenVerifier(verifier, scopes=MCP_OAUTH_SCOPES):
   Adapt Quail's sync TokenVerifier to the MCP SDK async verify_token protocol.
+  Run verifier.verify off the event loop via run_blocking.
   On UnauthorizedError, give back None.
   On success, give back AccessToken with subject and the advertised scopes.
 
 register_clerk_oauth_discovery(server, clerk_domain):
   Register GET/OPTIONS /.well-known/oauth-authorization-server that proxies Clerk's
   authorization-server metadata (for older MCP clients).
+  Cache the fetched JSON for about 300 seconds inside this registration closure
+  (keyed by the one clerk_domain for this server). Concurrent misses share one
+  fetch under an anyio.Lock; the fetch itself runs via run_blocking.
   Register GET /authorize that 302-redirects to Clerk /oauth/authorize with the
   same query string (clients that open the resource origin's /authorize).

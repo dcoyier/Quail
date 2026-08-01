@@ -144,5 +144,7 @@ class QuailConfig:
     extensions: tuple[ExtensionPin, ...] = ()
     # Unrestricted only: allow non-loopback bind / public_base_url (dangerous).
     allow_public_unrestricted: bool = False
+    # Clerk only: allow non-loopback http:// public_base_url (dangerous).
+    allow_insecure_http: bool = False
     # When true, quail_setup embeds connector dataset docs in each catalog row.
     include_dataset_docs_in_setup: bool = False
