@@ -172,13 +172,18 @@ class QueryEngine:
     def tag(self, plan: TagPlan) -> None:
         field = self._require_analysis_field(plan.field)
         field_name = field.name
+        mutated = False
         for entry_id in self._tag_entry_ids(plan.group):
             self._value_overlay[(field_name, entry_id)] = plan.value
             self._mutations.append(ValueWrite(field_name, entry_id, plan.value))
+            mutated = True
+        if mutated:
+            self._search_scores.clear()
 
     def untag(self, plan: UntagPlan) -> None:
         field = self._require_analysis_field(plan.field)
         field_name = field.name
+        mutated = False
         for entry_id in self._tag_entry_ids(plan.group):
             current = self._read_field_value(field, entry_id)
             if current is None:
@@ -187,6 +192,9 @@ class QueryEngine:
                 continue
             self._value_overlay[(field_name, entry_id)] = self._absent
             self._mutations.append(ValueDelete(field_name, entry_id, plan.value))
+            mutated = True
+        if mutated:
+            self._search_scores.clear()
 
     def entry_value(
         self,

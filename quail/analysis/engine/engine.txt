@@ -37,10 +37,12 @@ tag(plan):
   Require an analysis field (via resolve_field).
   Require each Entry handle in a tuple group to belong to this scope.
   For each selected entry, stage ValueWrite and update the overlay.
+  If any ValueWrite was staged, clear the per-exec Lexical/Semantic score cache.
 
 untag(plan):
   Same scope checks as tag.
   Clear matching overlay cells and stage ValueDelete.
+  If any ValueDelete was staged, clear the per-exec Lexical/Semantic score cache.
 
 entry_value / entry_fields:
   Require the Entry handle to belong to this scope.

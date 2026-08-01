@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from quail.analysis.engine import QueryEngine
-from quail.analysis.errors import QuailFieldError, QuailRuntimeError
+from quail.analysis.errors import QuailFieldError, QuailRuntimeError, QuailScopeError
 from quail.analysis.exec_host import dispatch_call, run_analysis
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
@@ -15,6 +15,7 @@ from quail.analysis.group import G0, G1
 from quail.analysis.operations import Lexical, RegexSearch, Value
 from quail.analysis.unit import fields
 from quail.datasets import import_csv_dataset, open_core_db
+from quail.search import LexicalService, open_search_db
 from quail.session import analysis_values, catalog_fields, create_session, get_session
 
 
@@ -244,3 +245,47 @@ def test_foreign_entry_rejected_across_datasets(tmp_path: Path) -> None:
         )
         scope_b = resolve_scope(db, session.id, "b")
         assert analysis_values(db, scope_b, "topic") == ["ok"]
+
+
+class _CountingLexical(LexicalService):
+    batch_calls: int = 0
+
+    def lexical_scores_for_entries(self, **kwargs):  # type: ignore[no-untyped-def]
+        self.batch_calls += 1
+        return super().lexical_scores_for_entries(**kwargs)
+
+
+def test_tag_invalidates_search_score_cache(tmp_path: Path) -> None:
+    """Search → tag → identical search must recompute scores in one exec."""
+
+    db, session = _seed(tmp_path)
+    search = open_search_db(tmp_path / "search.turso")
+    lexical = _CountingLexical(search=search)
+    with db:
+        label = Field("label", kind="analysis")
+        score = Expression(label, Lexical("hydrangea"))
+        matching = G0.where(score > 0)
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            created = dispatch_call(engine, "create_field", ("label",))
+            entries = dispatch_call(engine, "retrieve", (), {"limit": 50})
+            e1 = next(entry for entry in entries if entry.id == "e1")
+            dispatch_call(engine, "tag", ([e1], created, "hydrangea care tips"))
+            assert dispatch_call(engine, "count", (), {"group": matching}) == 1
+            assert lexical.batch_calls == 1
+
+            dispatch_call(engine, "untag", ([e1], created))
+            dispatch_call(engine, "tag", ([e1], created, "climate notes only"))
+            assert dispatch_call(engine, "count", (), {"group": matching}) == 0
+            # Cache must clear on mutation so the second Lexical pass re-scores.
+            assert lexical.batch_calls == 2
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            lexical=lexical,
+        )
+    search.close()
