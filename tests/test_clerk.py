@@ -183,7 +183,7 @@ def test_clerk_unbound_requires_switch(tmp_path: Path) -> None:
     config = load_config(manifest)
     apply_config(config).close()
     verifier = StaticTokenVerifier({"alice-token": "user_alice"})
-    server = create_mcp_server_from_config(config, verifier=verifier)
+    server = create_mcp_server_from_config(config, verifier=verifier).server
 
     async def run() -> None:
         with bearer_token("alice-token"):
@@ -210,7 +210,7 @@ def test_clerk_default_binds_and_switch_allowed(tmp_path: Path) -> None:
     config = load_config(manifest)
     apply_config(config).close()
     verifier = StaticTokenVerifier({"alice-token": "user_alice"})
-    server = create_mcp_server_from_config(config, verifier=verifier)
+    server = create_mcp_server_from_config(config, verifier=verifier).server
 
     async def run() -> None:
         with bearer_token("alice-token"):
@@ -231,7 +231,7 @@ def test_clerk_lock_blocks_switch(tmp_path: Path) -> None:
     config = load_config(manifest)
     apply_config(config).close()
     verifier = StaticTokenVerifier({"alice-token": "user_alice"})
-    server = create_mcp_server_from_config(config, verifier=verifier)
+    server = create_mcp_server_from_config(config, verifier=verifier).server
 
     async def run() -> None:
         with bearer_token("alice-token"):
@@ -250,7 +250,7 @@ def test_clerk_session_workspace_mismatch_after_switch(tmp_path: Path) -> None:
     config = load_config(manifest)
     apply_config(config).close()
     verifier = StaticTokenVerifier({"alice-token": "user_alice"})
-    server = create_mcp_server_from_config(config, verifier=verifier)
+    server = create_mcp_server_from_config(config, verifier=verifier).server
 
     async def run() -> None:
         with bearer_token("alice-token"):
@@ -277,7 +277,7 @@ def test_clerk_missing_token(tmp_path: Path) -> None:
     apply_config(config).close()
     server = create_mcp_server_from_config(
         config, verifier=StaticTokenVerifier({"alice-token": "user_alice"})
-    )
+    ).server
 
     async def run() -> None:
         failed = await server.call_tool("quail_list_workspaces", {})
@@ -371,7 +371,7 @@ default_workspace = "acme"
         verifier=StaticTokenVerifier(
             {"alice-token": "user_alice", "bob-token": "user_bob"}
         ),
-    )
+    ).server
 
     async def run() -> None:
         with bearer_token("alice-token"):

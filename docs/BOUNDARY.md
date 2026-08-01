@@ -72,7 +72,9 @@ Deployment
 
 Agent `provide_feedback` notes are **not** stored in the core analysis DB.
 They go to a separate append-only feedback JSONL file owned by the MCP/host
-layer (path configured beside the core DB or via constructor args).
+layer (path configured beside the core DB or via constructor args). Each
+message is capped at 16 KiB (UTF-8); appends fail closed once the file reaches
+64 MiB.
 
 Connect-time agent orientation lives in MCP **server instructions** plus
 **tool descriptions** (not in `docs/api.md`). Dataset-specific guidance is
@@ -111,8 +113,9 @@ Full shadow-build staging is deferred.
 activating, fail-closes unless each imported version is already active **and**
 its warm receipt matches the current TOML, then serves MCP (unrestricted
 loopback, unrestricted with `allow_public_unrestricted`, or Clerk allowlist on
-one URL). It never flips activation. Edit TOML → process → run. The CLI never
-writes the TOML.
+one URL). It never flips activation. On exit it closes the search connection
+pool and disconnects connectors (when they implement `disconnect`), then
+releases the lease. Edit TOML → process → run. The CLI never writes the TOML.
 
 Unrestricted mode rejects non-loopback `hosting.bind` and non-loopback
 `hosting.public_base_url` unless `hosting.allow_public_unrestricted = true`.

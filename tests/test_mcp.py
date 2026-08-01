@@ -6,6 +6,7 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
 from mcp.types import CallToolResult
 
 from quail.datasets import import_csv_dataset, open_core_db
@@ -245,6 +246,59 @@ def test_provide_feedback_appends_jsonl(tmp_path: Path) -> None:
     assert record["dataset_id"] is None
     assert "timestamp" in record
     assert db_path.read_bytes() == core_before
+
+
+def test_provide_feedback_rejects_oversized_message(tmp_path: Path) -> None:
+    from quail.mcp.feedback import append_feedback
+
+    path = tmp_path / "feedback.jsonl"
+    with pytest.raises(ValueError, match="16|16384|bytes"):
+        append_feedback(
+            path,
+            workspace_id="local",
+            message="x" * (16 * 1024 + 1),
+        )
+    assert not path.exists()
+
+
+def test_provide_feedback_rejects_when_file_at_quota(tmp_path: Path) -> None:
+    from quail.mcp.feedback import append_feedback
+    from quail.mcp.feedback import feedback as feedback_mod
+
+    path = tmp_path / "feedback.jsonl"
+    path.write_bytes(b"x" * feedback_mod._MAX_FILE_BYTES)
+    with pytest.raises(ValueError, match="64|file exceeds|quota"):
+        append_feedback(path, workspace_id="local", message="one more note")
+
+
+def test_prepared_mcp_close_closes_search_pool_and_connectors(tmp_path: Path) -> None:
+    from quail.config.models import ProvidersConfig
+    from quail.mcp.server import PreparedMcp
+    from quail.search import open_search_db
+    from quail.search.pool import open_search_pool
+    from quail.search.runtime import SearchRuntime
+
+    class _Catalog:
+        closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    path = tmp_path / "search.turso"
+    open_search_db(path).close()
+    runtime = SearchRuntime(
+        path=path,
+        providers=ProvidersConfig(),
+        pool=open_search_pool(path, max_size=1),
+    )
+    handle = runtime.pool.checkout()
+    runtime.pool.release(handle)
+    catalog = _Catalog()
+    prepared = PreparedMcp(server=object(), search_runtime=runtime, connector_catalog=catalog)  # type: ignore[arg-type]
+    prepared.close()
+    assert catalog.closed is True
+    with pytest.raises(RuntimeError, match="closed"):
+        runtime.pool.checkout()
 
 
 def test_exec_field_kind_mismatch_error_class(tmp_path: Path) -> None:

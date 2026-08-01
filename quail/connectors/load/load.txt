@@ -8,6 +8,7 @@ dataset_ids, and provides_docs.
 WorkspaceConnectorBundle remembers workspace_id, providers, and docs_by_dataset.
 
 ConnectorCatalog maps workspace id to WorkspaceConnectorBundle.
+close(): call disconnect() once per distinct connector instance when present.
 
 ConnectorLoadError is a ConfigError for fail-closed quail run failures.
 

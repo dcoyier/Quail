@@ -5,8 +5,10 @@ serve(config, verifier default None):
   Fail closed unless each imported version is already active and search warm
   receipts match TOML when search_database is set.
   Close the core DB handle.
-  Build MCP from config (optional test verifier for Clerk).
-  Block on streamable-http transport (lease held until exit).
+  Build MCP from config (optional test verifier for Clerk), including search
+  runtime and connector catalog.
+  Block on streamable-http transport; on exit close the search pool and
+  disconnect connectors, then release the lease.
 
 run_from_config(config, verifier default None):
   Same as serve.

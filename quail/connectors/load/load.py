@@ -64,6 +64,21 @@ class ConnectorCatalog:
             WorkspaceConnectorBundle(workspace_id=workspace_id, providers=(), docs_by_dataset={}),
         )
 
+    def close(self) -> None:
+        """Best-effort disconnect for connectors that implement disconnect()."""
+
+        seen: set[int] = set()
+        for bundle in self.by_workspace.values():
+            for connected in bundle.providers:
+                connector = connected.connector
+                identity = id(connector)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                disconnect = getattr(connector, "disconnect", None)
+                if callable(disconnect):
+                    disconnect()
+
 
 @dataclass(slots=True)
 class _CoreHost:

@@ -142,7 +142,7 @@ def test_protected_resource_metadata_and_mcp_401(tmp_path: Path) -> None:
     server = create_mcp_server_from_config(
         config,
         verifier=StaticTokenVerifier({"alice-token": "user_alice"}),
-    )
+    ).server
     app = server.streamable_http_app()
     with TestClient(app) as client:
         meta = client.get("/.well-known/oauth-protected-resource/mcp")
@@ -168,7 +168,7 @@ def test_authorization_server_metadata_proxy(tmp_path: Path) -> None:
     server = create_mcp_server_from_config(
         config,
         verifier=StaticTokenVerifier({"alice-token": "user_alice"}),
-    )
+    ).server
     app = server.streamable_http_app()
     payload = {
         "issuer": "https://example.clerk.accounts.dev",
@@ -206,7 +206,7 @@ def test_authorize_redirects_to_clerk(tmp_path: Path) -> None:
     server = create_mcp_server_from_config(
         config,
         verifier=StaticTokenVerifier({"alice-token": "user_alice"}),
-    )
+    ).server
     app = server.streamable_http_app()
     with TestClient(app, follow_redirects=False) as client:
         response = client.get(
@@ -394,7 +394,7 @@ def test_oauth_metadata_served_from_cache(tmp_path: Path) -> None:
         server = create_mcp_server_from_config(
             config,
             verifier=StaticTokenVerifier({"tok": "user_alice"}),
-        )
+        ).server
         app = server.streamable_http_app()
         with TestClient(app) as client:
             first = client.get("/.well-known/oauth-authorization-server")

@@ -23,8 +23,11 @@ def serve(config: QuailConfig, *, verifier: TokenVerifier | None = None) -> None
             assert_search_warm(db, config, refs)
         finally:
             db.close()
-        server = create_mcp_server_from_config(config, verifier=verifier)
-        server.run(transport="streamable-http")
+        prepared = create_mcp_server_from_config(config, verifier=verifier)
+        try:
+            prepared.server.run(transport="streamable-http")
+        finally:
+            prepared.close()
 
 
 def run_from_config(

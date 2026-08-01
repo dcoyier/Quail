@@ -16,9 +16,14 @@ create_mcp_server(db_path, feedback_path, workspace_id default local, api_docs_p
 create_mcp_server_from_config(config, api_docs_path default None, verifier default None):
   Configure process-wide exec slots from config.max_concurrent_executions.
   Build SearchRuntime from config when search_database is set.
+  Load the connector catalog.
   If unrestricted, build create_mcp_server from config paths (pass
   include_dataset_docs_in_setup).
   If clerk, build create_clerk_mcp_server with ClerkJwtVerifier or the given verifier.
+  Give back PreparedMcp (server, search_runtime, connector_catalog).
+
+PreparedMcp remembers server, optional search_runtime, optional connector_catalog.
+close(): close the search pool and call ConnectorCatalog.close when present.
 
 create_clerk_mcp_server(config, verifier, api_docs_path default None,
                         search_runtime default None, connector_catalog default None):

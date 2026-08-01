@@ -1,5 +1,6 @@
 SearchRuntime holds path, ProvidersConfig, and a SearchDbPool.
 bind_services(search): build SimilarityService + LexicalService on that SearchDb.
+close(): close idle pooled SearchDb connections.
 
 SearchServices holds one SearchDb plus SimilarityService and LexicalService
 (single-threaded warm helpers / tests).

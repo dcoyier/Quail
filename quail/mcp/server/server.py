@@ -85,6 +85,25 @@ class ClerkMcpRuntime:
     include_dataset_docs_in_setup: bool = False
 
 
+@dataclass(slots=True)
+class PreparedMcp:
+    """FastMCP server plus resources that must close when serve exits."""
+
+    server: FastMCP
+    search_runtime: SearchRuntime | None = None
+    connector_catalog: Any | None = None
+
+    def close(self) -> None:
+        """Close the search pool and disconnect connectors (best-effort)."""
+
+        if self.search_runtime is not None:
+            self.search_runtime.close()
+        if self.connector_catalog is not None:
+            close = getattr(self.connector_catalog, "close", None)
+            if callable(close):
+                close()
+
+
 def create_mcp_server(
     db_path: str | Path,
     feedback_path: str | Path,
@@ -131,8 +150,8 @@ def create_mcp_server_from_config(
     *,
     api_docs_path: str | Path | None = None,
     verifier: TokenVerifier | None = None,
-) -> FastMCP:
-    """Build MCP from slim config (unrestricted or Clerk)."""
+) -> PreparedMcp:
+    """Build MCP from slim config (unrestricted or Clerk) with closable resources."""
 
     from quail.analysis.admission import configure_execution_slots
 
@@ -144,7 +163,7 @@ def create_mcp_server_from_config(
         connector_catalog = load_connector_catalog(config, db)
     if config.auth_mode == "unrestricted":
         assert config.workspace_id is not None
-        return create_mcp_server(
+        server = create_mcp_server(
             config.database,
             config.feedback,
             workspace_id=config.workspace_id,
@@ -155,8 +174,13 @@ def create_mcp_server_from_config(
             connector_catalog=connector_catalog,
             include_dataset_docs_in_setup=config.include_dataset_docs_in_setup,
         )
+        return PreparedMcp(
+            server=server,
+            search_runtime=runtime,
+            connector_catalog=connector_catalog,
+        )
     assert config.clerk_domain is not None
-    return create_clerk_mcp_server(
+    server = create_clerk_mcp_server(
         config,
         api_docs_path=api_docs_path,
         verifier=verifier
@@ -164,6 +188,11 @@ def create_mcp_server_from_config(
             config.clerk_domain,
             authorized_parties=config.clerk_authorized_parties,
         ),
+        search_runtime=runtime,
+        connector_catalog=connector_catalog,
+    )
+    return PreparedMcp(
+        server=server,
         search_runtime=runtime,
         connector_catalog=connector_catalog,
     )
@@ -442,6 +471,7 @@ def _register_unrestricted_tools(
 
         Use when Quail was confusing, blocked you, or should improve — including
         expected outcomes that did not occur. Low bar for entry.
+        Message max 16 KiB (UTF-8); the feedback file rejects appends past 64 MiB.
         """
 
         def work() -> CallToolResult:
@@ -788,7 +818,10 @@ def _register_clerk_tools(
         dataset_id: str | None = None,
         ctx: Context | None = None,
     ) -> CallToolResult:
-        """Record friction notes outside the core analysis DB for the active workspace."""
+        """Record friction notes outside the core analysis DB for the active workspace.
+
+        Message max 16 KiB (UTF-8); the feedback file rejects appends past 64 MiB.
+        """
 
         def work() -> CallToolResult:
             principal = _auth(ctx)

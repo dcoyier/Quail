@@ -28,6 +28,11 @@ class SearchRuntime:
             LexicalService(search=search),
         )
 
+    def close(self) -> None:
+        """Close idle pooled SearchDb connections."""
+
+        self.pool.close()
+
 
 @dataclass(slots=True)
 class SearchServices:
