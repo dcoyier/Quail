@@ -89,16 +89,30 @@ quail process --config /absolute/path/to/quail.toml
 quail run --config /absolute/path/to/quail.toml
 ```
 
-`process` reads slim TOML → import CSVs → warm Lexical FTS and (when declared)
-unbounded corpus embeddings into `core.search_database`. Knobs live under
-`[search.warm]` (`embed_batch_size`, `max_concurrent_embed_requests`).
-`process --clear` wipes search warm/vectors/FTS for active versions, then
-re-warms; core data is never deleted.
+`process` and `run` take an exclusive deployment lease (`fcntl.flock` lock files
+beside `core.database` and, when set, `core.search_database`, acquired in sorted
+path order). Local POSIX filesystems only; NFS lock semantics vary. If the lease
+is held, `process` fails fast (“stop the server, then retry”).
 
-`run` imports CSVs, fail-closes unless each dataset’s warm receipt matches the
-active version and current TOML embedding profile, then serves MCP
-(unrestricted loopback, unrestricted with `allow_public_unrestricted`, or Clerk
-allowlist on one URL). Edit TOML → process → run. The CLI never writes the TOML.
+`process` reads slim TOML → import CSVs **without** activating → warm Lexical
+FTS and (when declared) unbounded corpus embeddings for those imported versions
+→ **publish** (activate all successful imports + add/update/delete embedding
+pins). Warm-all-then-activate-all: a later dataset failure leaves prior actives
+unchanged. Knobs live under `[search.warm]` (`embed_batch_size`,
+`max_concurrent_embed_requests`). `process --clear` wipes search warm/vectors/FTS
+for the versions being warmed, then re-warms; core data is never deleted.
+
+Same-version in-place rewarm (config-only / schema bump on the already-active
+version) still rebuilds search artifacts in place; a mid-rewarm failure leaves
+the deployment fail-closed until a successful re-process — never silently wrong.
+Full shadow-build staging is deferred.
+
+`run` holds the lease for the server lifetime, imports CSVs **without**
+activating, fail-closes unless each imported version is already active **and**
+its warm receipt matches the current TOML, then serves MCP (unrestricted
+loopback, unrestricted with `allow_public_unrestricted`, or Clerk allowlist on
+one URL). It never flips activation. Edit TOML → process → run. The CLI never
+writes the TOML.
 
 Unrestricted mode rejects non-loopback `hosting.bind` and non-loopback
 `hosting.public_base_url` unless `hosting.allow_public_unrestricted = true`.

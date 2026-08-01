@@ -1,10 +1,12 @@
 serve(config, verifier default None):
   Configure process-wide exec slots from hosting.max_concurrent_executions.
-  Apply the config (import CSVs and pins).
-  Fail closed unless search warm receipts match TOML when search_database is set.
-  Close the apply DB handle.
+  Acquire the deployment lease for the server lifetime.
+  Import declared CSVs without activating.
+  Fail closed unless each imported version is already active and search warm
+  receipts match TOML when search_database is set.
+  Close the core DB handle.
   Build MCP from config (optional test verifier for Clerk).
-  Block on streamable-http transport.
+  Block on streamable-http transport (lease held until exit).
 
 run_from_config(config, verifier default None):
   Same as serve.

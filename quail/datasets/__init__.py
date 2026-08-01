@@ -1,6 +1,7 @@
 """Immutable dataset import and source reads."""
 
 from quail.datasets.catalog import (
+    activate_dataset_version,
     active_version,
     get_dataset,
     import_csv_dataset,
@@ -31,6 +32,7 @@ __all__ = [
     "SourceEntry",
     "SourceField",
     "active_version",
+    "activate_dataset_version",
     "ensure_workspace",
     "get_dataset",
     "import_csv_dataset",

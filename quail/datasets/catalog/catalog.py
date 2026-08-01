@@ -447,6 +447,27 @@ def _activate_version(
     )
 
 
+def activate_dataset_version(
+    db: CoreDb,
+    workspace_id: str,
+    dataset_id: str,
+    version_id: str,
+) -> None:
+    """Mark a ready dataset version as active in its own transaction."""
+
+    workspace_id = _require_scope_id(workspace_id, label="Workspace id")
+    dataset_id = _require_scope_id(dataset_id, label="Dataset id")
+    version_id = _require_scope_id(version_id, label="Dataset version id")
+    connection = db.connection
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        _activate_version(connection, workspace_id, dataset_id, version_id)
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+
+
 def _require_ready_version(
     connection: Any,
     workspace_id: str,

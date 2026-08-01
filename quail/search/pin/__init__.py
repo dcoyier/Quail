@@ -1,5 +1,15 @@
 """Public exports for ``quail.search.pin``."""
 
-from .pin import get_embedding_pin, get_pinned_profile_hash, pin_embedding_profile
+from .pin import (
+    delete_embedding_pin,
+    get_embedding_pin,
+    get_pinned_profile_hash,
+    pin_embedding_profile,
+)
 
-__all__ = ["get_embedding_pin", "get_pinned_profile_hash", "pin_embedding_profile"]
+__all__ = [
+    "delete_embedding_pin",
+    "get_embedding_pin",
+    "get_pinned_profile_hash",
+    "pin_embedding_profile",
+]

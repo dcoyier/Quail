@@ -1,15 +1,23 @@
 ProcessOutcome remembers results from one process_config call.
 
 process_config(config, clear=False, embedder_factory=None):
-  Apply CSV import and embedding pins.
-  When search_database is unset, stop after apply.
+  Acquire the deployment lease for the whole run.
+  Open the core database and import declared CSVs without activating.
+  When search_database is unset, publish activation (no pins) and stop.
   Otherwise warm Lexical (using datasets.lexical.fields when set) and embeddings
-  when declared for each dataset.
+  when declared for each imported version_id (not the prior active version).
   With clear=True, wipe that version's search artifacts before warming.
+  Warm all datasets before any publication.
+  Then publish: activate every imported version, pin embeddings when declared,
+  and delete pins when embedding is omitted.
   Give back ProcessOutcome.
+  Same-version in-place rewarm is a documented limitation: a mid-rewarm failure
+  leaves the deployment fail-closed until a successful re-process.
 
-assert_search_warm(db, config):
+assert_search_warm(db, config, refs default None):
+  When refs is set, require each imported version_id to already be active
+  (serve never activates).
   When search_database is set, require a matching warm receipt for every
-  declared dataset's active version (search-build fingerprint covers lexical
-  fields and embedding profile).
+  declared dataset version (from refs when set, else the active version).
+  Search-build fingerprint covers lexical fields and embedding profile.
   Used by quail run before MCP starts.

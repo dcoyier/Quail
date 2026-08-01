@@ -46,6 +46,25 @@ def pin_embedding_profile(
     db.connection.commit()
 
 
+def delete_embedding_pin(
+    db: SearchDb,
+    *,
+    workspace_id: str,
+    dataset_id: str,
+    version_id: str,
+) -> None:
+    """Remove the embedding profile pin for one dataset version, if present."""
+
+    db.connection.execute(
+        """
+        DELETE FROM quail_embedding_pins
+        WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+        """,
+        (workspace_id, dataset_id, version_id),
+    )
+    db.connection.commit()
+
+
 def get_embedding_pin(
     db: SearchDb,
     *,

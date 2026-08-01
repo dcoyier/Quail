@@ -1,10 +1,12 @@
 apply_config(config):
   Require each dataset source file exists.
   Open the core database.
-  When search_database is set, open the search database.
-  Ensure each workspace exists.
-  Import each declared CSV and activate it.
-  When a dataset declares embedding, pin that profile to the imported version_id.
-  Close the search database.
+  Import declared datasets with activate=True (no embedding pins).
   On failure, close the core database and raise.
   Give back the open CoreDb.
+
+import_declared_datasets(config, db, activate default True):
+  Require each dataset source file exists.
+  Ensure each workspace exists.
+  Import each declared CSV with the given activate flag.
+  Give back the DatasetRef tuple in declaration order.

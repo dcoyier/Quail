@@ -5,7 +5,7 @@ Import and expose:
   models ActiveVersion, CsvDataset, DatasetRef, SourceEntry, SourceField
   CoreDb, open_core_db, ensure_workspace
   load_csv_dataset
-  import_csv_dataset, list_datasets, active_version, get_dataset
+  import_csv_dataset, list_datasets, active_version, activate_dataset_version, get_dataset
   source_fields, source_entries, source_values
 
 __all__ lists those public names.

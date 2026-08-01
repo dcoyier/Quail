@@ -536,3 +536,172 @@ def test_lexical_fields_change_search_build_fingerprint(tmp_path: Path) -> None:
             assert_search_warm(db, edited)
     finally:
         db.close()
+
+
+def test_process_fails_when_lease_held(tmp_path: Path) -> None:
+    from quail.run.lease import acquire_deployment_lease
+
+    manifest = _write_manifest(tmp_path, embedding=False)
+    config = load_config(manifest)
+    with acquire_deployment_lease(config):
+        with pytest.raises(QuailRuntimeError, match="deployment lease"):
+            process_config(config)
+
+
+def test_crash_before_warm_keeps_prior_active(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manifest = _write_manifest(tmp_path, embedding=False)
+    config = load_config(manifest)
+    first = process_config(config)
+    prior = first.results[0].version_id
+
+    (tmp_path / "data" / "notes.csv").write_text(
+        "id,title,body\ne1,Hello,hydrangea care\ne2,Other,climate notes\ne3,New,row\n",
+        encoding="utf-8",
+    )
+    config2 = load_config(manifest)
+
+    def _boom(*_args: object, **_kwargs: object) -> object:
+        raise QuailRuntimeError("simulated warm crash")
+
+    monkeypatch.setattr("quail.run.process.process.warm_dataset", _boom)
+    with pytest.raises(QuailRuntimeError, match="simulated warm crash"):
+        process_config(config2)
+
+    db = open_core_db(config2.database)
+    try:
+        active = active_version(db, "local", "notes")
+        assert active is not None
+        assert active.version_id == prior
+    finally:
+        db.close()
+
+
+def test_multi_dataset_warm_failure_activates_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = tmp_path / "data"
+    data.mkdir(parents=True, exist_ok=True)
+    (data / "a.csv").write_text("id,title\ne1,Alpha\n", encoding="utf-8")
+    (data / "b.csv").write_text("id,title\ne1,Beta\n", encoding="utf-8")
+    manifest = tmp_path / "quail.toml"
+    manifest.write_text(
+        """
+[core]
+database = "data/quail.turso"
+feedback = "data/feedback.jsonl"
+search_database = "data/quail-search.turso"
+
+[auth]
+mode = "unrestricted"
+workspace = "local"
+
+[hosting]
+bind = "127.0.0.1"
+port = 8765
+
+[[datasets]]
+id = "alpha"
+source = "data/a.csv"
+
+[[datasets]]
+id = "beta"
+source = "data/b.csv"
+""",
+        encoding="utf-8",
+    )
+    config = load_config(manifest)
+    calls = {"n": 0}
+
+    def _warm_once(*args: object, **kwargs: object) -> object:
+        from quail.search.warm import WarmDatasetResult
+
+        calls["n"] += 1
+        if calls["n"] >= 2:
+            raise QuailRuntimeError("second dataset warm failed")
+        return WarmDatasetResult(
+            workspace_id=str(kwargs["workspace_id"]),
+            dataset_id=str(kwargs["dataset_id"]),
+            version_id=str(kwargs["version_id"]),
+            lexical_ready=True,
+            embedding_ready=False,
+            text_count=0,
+            unique_text_count=0,
+            embedded_batches=0,
+            build_fingerprint="test",
+        )
+
+    monkeypatch.setattr("quail.run.process.process.warm_dataset", _warm_once)
+    with pytest.raises(QuailRuntimeError, match="second dataset warm failed"):
+        process_config(config)
+
+    db = open_core_db(config.database)
+    try:
+        assert active_version(db, "local", "alpha") is None
+        assert active_version(db, "local", "beta") is None
+    finally:
+        db.close()
+
+
+def test_serve_gate_rejects_changed_csv_without_activating(tmp_path: Path) -> None:
+    from quail.run.apply import import_declared_datasets
+
+    manifest = _write_manifest(tmp_path, embedding=False)
+    config = load_config(manifest)
+    process_config(config)
+    db = open_core_db(config.database)
+    try:
+        prior = active_version(db, "local", "notes")
+        assert prior is not None
+    finally:
+        db.close()
+
+    (tmp_path / "data" / "notes.csv").write_text(
+        "id,title,body\ne1,Hello,hydrangea care\ne2,Other,climate notes\ne3,Extra,row\n",
+        encoding="utf-8",
+    )
+    config2 = load_config(manifest)
+    db2 = open_core_db(config2.database)
+    try:
+        refs = import_declared_datasets(config2, db2, activate=False)
+        with pytest.raises(QuailRuntimeError, match="is not active"):
+            assert_search_warm(db2, config2, refs)
+        active = active_version(db2, "local", "notes")
+        assert active is not None
+        assert active.version_id == prior.version_id
+        assert refs[0].version_id != prior.version_id
+    finally:
+        db2.close()
+
+
+def test_process_deletes_pin_when_embedding_removed(tmp_path: Path) -> None:
+    from quail.search.pin import get_embedding_pin
+
+    manifest = _write_manifest(tmp_path, embedding=True)
+    config = load_config(manifest)
+    outcome = process_config(
+        config, embedder_factory=lambda _p: RecordingEmbedder(dimensions=4)
+    )
+    version = outcome.results[0].version_id
+    search = open_search_db(config.search_database)  # type: ignore[arg-type]
+    try:
+        assert (
+            get_embedding_pin(
+                search, workspace_id="local", dataset_id="notes", version_id=version
+            )
+            is not None
+        )
+    finally:
+        search.close()
+
+    config2 = load_config(_write_manifest(tmp_path, embedding=False))
+    process_config(config2)
+    search2 = open_search_db(config2.search_database)  # type: ignore[arg-type]
+    try:
+        assert (
+            get_embedding_pin(
+                search2, workspace_id="local", dataset_id="notes", version_id=version
+            )
+            is None
+        )
+    finally:
+        search2.close()

@@ -19,7 +19,7 @@ from quail.analysis.unit import Unit
 from quail.config import ConfigError, load_config
 from quail.config.models import EmbeddingProfile, ProvidersConfig
 from quail.datasets import import_csv_dataset, open_core_db
-from quail.run import apply_config
+from quail.run import process_config
 from quail.search import (
     SimilarityService,
     get_embedding_pin,
@@ -244,21 +244,23 @@ revision = "v1"
         load_config(manifest)
 
 
-def test_apply_pins_embedding_profile(tmp_path: Path) -> None:
+def test_process_pins_embedding_profile(tmp_path: Path) -> None:
     manifest = _write_semantic_manifest(tmp_path)
     config = load_config(manifest)
-    db = apply_config(config)
+    process_config(config, embedder_factory=lambda _p: FakeEmbedder(dimensions=4))
+    db = open_core_db(config.database)
     try:
         assert config.search_database is not None
+        version_id = db.connection.execute(
+            "SELECT active_version_id FROM quail_datasets WHERE id = ?",
+            ("notes",),
+        ).fetchone()[0]
         with open_search_db(config.search_database) as search:
             pin = get_embedding_pin(
                 search,
                 workspace_id="local",
                 dataset_id="notes",
-                version_id=db.connection.execute(
-                    "SELECT active_version_id FROM quail_datasets WHERE id = ?",
-                    ("notes",),
-                ).fetchone()[0],
+                version_id=version_id,
             )
             assert pin is not None
             assert pin.provider == "ollama"

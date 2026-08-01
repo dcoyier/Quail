@@ -15,10 +15,11 @@ Connector SDK (extra tools, dataset docs, MCP UI widgets) is in place. Author
 guide: [`docs/connector-sdk.md`](docs/connector-sdk.md). Example package:
 [`examples/notes-connector/`](examples/notes-connector/).
 
-`quail process --config /absolute/path/to/quail.toml` imports declared CSVs and
-warms Lexical FTS plus corpus embeddings into the search database.
-`quail run --config …` applies CSVs, fail-closes unless warm receipts match the
-current TOML pins, then serves MCP.
+`quail process --config /absolute/path/to/quail.toml` imports declared CSVs,
+warms Lexical FTS plus corpus embeddings, then publishes activation and pins.
+`quail run --config …` holds a deployment lease, imports without activating,
+fail-closes unless each imported version is already active and warm receipts
+match the current TOML, then serves MCP.
 
 - **Unrestricted:** fixed workspace, loopback, no sign-in
   ([`examples/quail.toml`](examples/quail.toml)).

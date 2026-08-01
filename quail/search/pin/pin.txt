@@ -2,6 +2,9 @@ pin_embedding_profile(db, workspace_id, dataset_id, version_id, profile):
   Upsert the embedding profile pin for one immutable dataset version.
   Stores profile_hash from profile.profile_hash() (includes optional fields).
 
+delete_embedding_pin(db, workspace_id, dataset_id, version_id):
+  Delete the embedding profile pin for one dataset version if present.
+
 get_embedding_pin(db, workspace_id, dataset_id, version_id):
   Give back the pinned EmbeddingProfile or None.
   Does not restore optional embed field lists (client identity only:
