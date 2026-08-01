@@ -102,11 +102,11 @@ def test_mcp_session_busy_diagnostic(tmp_path: Path) -> None:
         thread.start()
         assert held.wait(timeout=2)
         result = await server.call_tool(
-            "quail_exec",
+            "search",
             {
                 "session_id": session_id,
                 "dataset_id": "notes",
-                "code": "print(1)\n",
+                "query": "hello",
             },
         )
         release.set()
@@ -141,8 +141,8 @@ def test_search_pool_bounds_checkouts(tmp_path: Path) -> None:
     pool.close()
 
 
-def test_mcp_list_during_blocking_exec(tmp_path: Path) -> None:
-    """Catalog tool stays responsive while another thread holds a slow exec host path."""
+def test_mcp_list_during_blocking_get_entry(tmp_path: Path) -> None:
+    """Catalog tool stays responsive while another tool runs on the same event loop."""
 
     import asyncio
 
@@ -168,19 +168,20 @@ def test_mcp_list_during_blocking_exec(tmp_path: Path) -> None:
     async def run() -> None:
         payload = as_dict(await server.call_tool("quail_start_session", {}))
         session_id = payload["session_id"]
-        listed, counted = await asyncio.gather(
+        listed, entry = await asyncio.gather(
             server.call_tool("quail_list_datasets", {}),
             server.call_tool(
-                "quail_exec",
+                "get_entry",
                 {
                     "session_id": session_id,
                     "dataset_id": "notes",
-                    "code": "print(count(group=G0))\n",
+                    "entry_id": "e1",
                 },
             ),
         )
         assert as_dict(listed)["datasets"][0]["dataset_id"] == "notes"
-        assert "1" in as_dict(counted).get("printed_output", "")
+        assert as_dict(entry)["entry_id"] == "e1"
+        assert as_dict(entry)["fields"]["body"] == "hello"
 
     asyncio.run(run())
 

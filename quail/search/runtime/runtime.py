@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from quail.config.models import ProvidersConfig, QuailConfig
+from quail.config.models import EmbeddingProfile, ProvidersConfig, QuailConfig
+from quail.providers import EmbeddingClient
 from quail.search.db import SearchDb, open_search_db
 from quail.search.lexical import LexicalService
 from quail.search.pool import SearchDbPool, open_search_pool
@@ -19,12 +21,17 @@ class SearchRuntime:
     path: Path
     providers: ProvidersConfig
     pool: SearchDbPool
+    embedder_factory: Callable[[EmbeddingProfile], EmbeddingClient] | None = None
 
     def bind_services(self, search: SearchDb) -> tuple[SimilarityService, LexicalService]:
         """Build per-exec Lexical/Similarity services on one SearchDb."""
 
         return (
-            SimilarityService(search=search, providers=self.providers),
+            SimilarityService(
+                search=search,
+                providers=self.providers,
+                embedder_factory=self.embedder_factory,
+            ),
             LexicalService(search=search),
         )
 

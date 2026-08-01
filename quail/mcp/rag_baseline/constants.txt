@@ -1,0 +1,2 @@
+There is a hardcoded searchable source field name SEARCH_FIELD set to "body".
+Lexical and Semantic arms both use only this field.

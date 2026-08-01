@@ -99,7 +99,7 @@ def test_second_exec_fails_busy_when_slots_full(tmp_path: Path) -> None:
                     code="print(count())",
                 )
         assert raised.value.repair_hint is not None
-        assert "Retry after another quail_exec" in raised.value.repair_hint
+        assert "Retry after another in-flight call finishes." in raised.value.repair_hint
         diagnostic = diagnostic_from_exception(raised.value)
         assert diagnostic["stable_error_code"] == "server_busy"
         assert diagnostic["error_class"] == "QuailRuntimeError"
@@ -158,4 +158,4 @@ def test_instructions_state_session_rules() -> None:
     for text in (unrestricted, clerk):
         assert "workspace-scoped" in text
         assert "quail_setup again" in text or "quail_start_session again" in text
-        assert "one quail_exec in flight per session_id" in text
+        assert "one search in flight per session_id" in text

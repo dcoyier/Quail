@@ -1,0 +1,3 @@
+Re-export SEARCH_FIELD, build_search_script, OUTPUT_MARKER, candidate_n,
+rrf_fuse, normalize_query, normalize_top_k, run_search, and get_entry_payload
+for the opaque hybrid search MCP surface.

@@ -7,11 +7,12 @@ create_mcp_server(db_path, feedback_path, workspace_id default local, api_docs_p
                   search_runtime default None, connector_catalog default None,
                   include_dataset_docs_in_setup default false):
   Remember unrestricted McpContext with db_path (not a live CoreDb), optional
-  api_docs_path override (None uses packaged docs via load_api_docs), and optional
-  SearchRuntime.
+  api_docs_path override (kept for context compatibility; setup does not ship
+  analysis docs on this branch), and optional SearchRuntime.
   Build FastMCP with unrestricted instructions.
-  Register the core unrestricted async tools (including quail_setup; bodies via
-  run_blocking) and give back the server.
+  Register the core unrestricted async tools (quail_setup, list/start/info,
+  search, get_entry, provide_feedback; bodies via run_blocking) and give back
+  the server. Do not register quail_exec or quail_get_api_docs.
 
 create_mcp_server_from_config(config, api_docs_path default None, verifier default None):
   Configure process-wide exec slots from config.max_concurrent_executions.
@@ -33,21 +34,24 @@ create_clerk_mcp_server(config, verifier, api_docs_path default None,
   Build FastMCP with locking-agnostic clerk instructions, MCP AuthSettings
   (Clerk issuer + public /mcp resource), and ClerkAccessTokenVerifier.
   Register /.well-known/oauth-authorization-server proxy for older clients.
-  Register list/switch plus gated analysis tools (including quail_setup) and give
-  back the server.
-  Clerk session create stamps owner_user_id; exec and feedback-with-session
-  require that owner.
+  Register list/switch plus gated retrieval tools (including quail_setup, search,
+  get_entry) and give back the server.
+  Clerk session create stamps owner_user_id; search/get_entry and
+  feedback-with-session require that owner.
 
 All tools are async and offload blocking work with run_blocking.
 Unrestricted tools open CoreDb per call from context.db_path.
-quail_setup returns documentation, datasets, session_id, workspace_id, and
-state_revision (optionally per-dataset documentation when configured).
-quail_exec passes context.search_runtime into exec_script (pool checkout per exec).
+quail_setup returns datasets, session_id, workspace_id, and state_revision
+(optionally per-dataset documentation when configured). It does not return
+analysis-language documentation.
+search runs the rag-baseline canned dual Lexical/Semantic recipe via exec_script
+(with search_runtime) then host RRF; get_entry reads source fields through the
+catalog.
 
 Clerk tools:
   Authenticate Bearer via override or request headers.
   Sticky-bind default_workspace once per connection key.
   quail_list_workspaces returns memberships (or only default when locked) and active_workspace_id.
   quail_switch_workspace binds an allowlisted workspace or errors when locked.
-  Dataset/session/setup/exec/feedback require an active workspace; unbound gets UNBOUND_REPAIR_HINT.
-  quail_exec passes runtime.search_runtime into exec_script.
+  Dataset/session/setup/search/get_entry/feedback require an active workspace;
+  unbound gets UNBOUND_REPAIR_HINT.

@@ -259,11 +259,11 @@ def test_clerk_session_workspace_mismatch_after_switch(tmp_path: Path) -> None:
             assert started["workspace_id"] == "acme"
             await server.call_tool("quail_switch_workspace", {"workspace_id": "labs"})
             failed = await server.call_tool(
-                "quail_exec",
+                "search",
                 {
                     "session_id": session_id,
                     "dataset_id": "other",
-                    "code": "print(1)\n",
+                    "query": "hello",
                 },
             )
             assert _is_error(failed)
@@ -378,21 +378,21 @@ default_workspace = "acme"
             started = _as_dict(await server.call_tool("quail_start_session", {}))
             session_id = started["session_id"]
             ok = await server.call_tool(
-                "quail_exec",
+                "get_entry",
                 {
                     "session_id": session_id,
                     "dataset_id": "notes",
-                    "code": "print(1)",
+                    "entry_id": "e1",
                 },
             )
             assert not _is_error(ok)
         with bearer_token("bob-token"):
             stolen = await server.call_tool(
-                "quail_exec",
+                "get_entry",
                 {
                     "session_id": session_id,
                     "dataset_id": "notes",
-                    "code": "print(2)",
+                    "entry_id": "e1",
                 },
             )
             assert _is_error(stolen)

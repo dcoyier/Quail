@@ -1,0 +1,8 @@
+parse_search_output(printed_output):
+  Require printed_output is text.
+  Require exactly one OUTPUT_MARKER line.
+  Read lexical arm: header "lexical <count>" then that many single-token id lines.
+  Read semantic arm the same way.
+  Require a final END line with no trailing content.
+  Give back (lexical_ids, semantic_ids).
+  On any shape error, raise QuailRuntimeError.

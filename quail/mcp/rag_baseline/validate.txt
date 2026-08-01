@@ -1,0 +1,14 @@
+There is a private query character ceiling of 2000.
+There is a private default top_k of 8 and a max top_k of 20.
+
+normalize_query(query):
+  Require query is a string.
+  Strip it; if empty, raise QuailSyntaxError.
+  If longer than the character ceiling, raise QuailSyntaxError.
+  Give back the stripped query.
+
+normalize_top_k(top_k default 8):
+  If top_k is None, give back 8.
+  If top_k is a bool or not an int, raise QuailSyntaxError.
+  If top_k is outside 1..20, raise QuailSyntaxError.
+  Give back top_k.

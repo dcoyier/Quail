@@ -1,0 +1,13 @@
+There is an output marker string OUTPUT_MARKER equal to QUAIL_SEARCH_V1.
+There is a private field-name pattern requiring identifier-shaped names.
+
+build_search_script(query, n):
+  Require n is a positive int (not bool).
+  Require SEARCH_FIELD matches the safe field-name pattern; else raise.
+  Encode query and SEARCH_FIELD with json.dumps as Quail string literals.
+  Give back sandbox-legal Quail code that:
+    builds Lexical and Semantic score expressions on SEARCH_FIELD
+    retrieves top-n lexical hits where score > 0
+    retrieves top-n semantic hits over G0
+    prints OUTPUT_MARKER, then lexical count and ids, then semantic count and ids,
+    then END.

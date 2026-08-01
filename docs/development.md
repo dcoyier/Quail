@@ -37,8 +37,12 @@ Python modules under `quail/` use a folder pair (`.py` + `.txt` twin). See
 ## Frozen host surface
 
 Agents use the core MCP tools:
-`quail_get_api_docs`, `quail_list_datasets`, `quail_start_session`,
-`quail_get_dataset_info`, `quail_exec`, `provide_feedback`, plus Clerk
+`quail_setup`, `quail_list_datasets`, `quail_start_session`,
+`quail_get_dataset_info`, `search`, `get_entry`, `provide_feedback`, plus Clerk
 workspace tools when `auth.mode = "clerk"`. Connected connectors may add
-tools, resources, and MCP UI widgets. Soak regression path:
-`examples/quail.soak.toml` (local soak DBs stay untracked).
+tools, resources, and MCP UI widgets.
+
+**Experimental (this branch):** `search` / `get_entry` substitute for
+`quail_exec` / `quail_get_api_docs` on the agent surface. Analysis stack remains
+in-tree for the canned hybrid recipe. See `examples/rag-baseline/README.md`.
+Soak regression path: `examples/quail.soak.toml` (local soak DBs stay untracked).

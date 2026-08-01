@@ -1,0 +1,21 @@
+There is a private snippet character ceiling of 500.
+
+run_search(db, workspace_id, session, dataset_id, query, top_k default 8,
+           search_runtime default None):
+  Require session.workspace_id matches workspace_id.
+  Normalize query and top_k.
+  Require the dataset exists and has an active version.
+  Require SEARCH_FIELD is present on that version; else raise QuailFieldError.
+  Build the canned search script with candidate_n(top_k).
+  Run one exec_script with search_runtime and standard time window.
+  Parse printed dual id lists, RRF-fuse to top_k, load SEARCH_FIELD snippets,
+  truncate each to 500 chars.
+  Give back {query, top_k, hits:[{rank, entry_id, text}, ...]}.
+
+get_entry_payload(db, workspace_id, session, dataset_id, entry_id):
+  Require session belongs to workspace_id.
+  Require entry_id is a non-empty string.
+  Require dataset and active version exist.
+  Require the entry id exists on that version.
+  Load every source field value for that entry.
+  Give back {entry_id, fields:{...}}.

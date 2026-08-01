@@ -28,13 +28,13 @@ class QuailRuntimeError(QuailError):
 
 
 class QuailServerBusyError(QuailRuntimeError):
-    """Process is at its concurrent quail_exec slot limit."""
+    """Process is at its concurrent analysis/search slot limit."""
 
     stable_error_code = "server_busy"
 
 
 class QuailSessionBusyError(QuailRuntimeError):
-    """Another quail_exec is already running for this session_id."""
+    """Another call is already running for this session_id."""
 
     stable_error_code = "session_busy"
 

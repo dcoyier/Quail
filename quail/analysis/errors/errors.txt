@@ -13,10 +13,10 @@ Mostly raised later by the engine when resolving columns against real data.
 QuailRuntimeError means a data-dependent failure, unavailable search, timeout, or resource limit.
 It may remember an optional repair_hint for MCP diagnostics.
 
-QuailServerBusyError means the process is at its concurrent quail_exec slot limit.
+QuailServerBusyError means the process is at its concurrent analysis/search slot limit.
 It is a QuailRuntimeError with stable_error_code server_busy.
 
-QuailSessionBusyError means another quail_exec already holds this session_id.
+QuailSessionBusyError means another call already holds this session_id.
 It is a QuailRuntimeError with stable_error_code session_busy.
 
 rehydrate_quail_error(exception_type, message):

@@ -1,0 +1,13 @@
+There is a private RRF rank constant of 60.
+There is a private per-arm N floor of 10 and cap of 50.
+
+candidate_n(top_k):
+  Give back min(50, max(10, top_k * 5)).
+
+rrf_fuse(lexical_ids, semantic_ids, top_k, rank_constant default 60):
+  If top_k is below 1, give back an empty list.
+  For each arm, walk ids in order, skip empties/duplicates, assign 1-based ranks,
+  and add 1 / (rank_constant + rank) into a fused score map.
+  Remember each id's best (lowest) arm rank for tie-breaks.
+  Sort by fused score descending, then best arm rank ascending, then entry id.
+  Give back at most top_k ids.

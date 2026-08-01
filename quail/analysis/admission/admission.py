@@ -1,4 +1,4 @@
-"""Process-wide quail_exec admission (fail-fast when full)."""
+"""Process-wide analysis/search admission (fail-fast when full)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ _slots: threading.BoundedSemaphore | None = None
 _configured_n: int | None = None
 _lock = threading.Lock()
 
-_BUSY_REPAIR = "Retry after another quail_exec call finishes."
+_BUSY_REPAIR = "Retry after another in-flight call finishes."
 
 
 def configure_execution_slots(max_concurrent_executions: int) -> None:

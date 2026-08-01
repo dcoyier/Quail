@@ -10,7 +10,6 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import CallToolResult
 
 from quail.analysis.errors import QuailRuntimeError, QuailScopeError
-from quail.analysis.exec_host import exec_script
 from quail.auth import (
     AllowlistedPrincipal,
     AuthError,
@@ -22,7 +21,6 @@ from quail.auth import (
 from quail.auth.clerk import TokenVerifier
 from quail.config.models import QuailConfig, UserSpec
 from quail.datasets import get_dataset, list_datasets, open_core_db
-from quail.mcp.api_docs import load_api_docs
 from quail.mcp.bearer import get_bearer_override
 from quail.mcp.context import DEFAULT_WORKSPACE_ID, McpContext
 from quail.mcp.feedback import append_feedback
@@ -38,11 +36,10 @@ from quail.mcp.oauth import (
     register_clerk_oauth_discovery,
 )
 from quail.mcp.offload import run_blocking
+from quail.mcp.rag_baseline import get_entry_payload, run_search
 from quail.mcp.results import (
     error_result,
-    success_printed_output,
     success_result,
-    validate_time_window,
 )
 from quail.mcp.sticky import StickyWorkspaceStore
 from quail.search.runtime import SearchRuntime, search_runtime_from_config
@@ -53,19 +50,14 @@ from quail.session.sessions import (
     require_session_owner,
 )
 
-_API_DOCS_REPAIR = (
-    "Ensure the packaged analysis docs are installed, or pass a readable api_docs_path."
-)
-
 _DATASET_INFO_FALLBACK = (
     "No connector documentation is installed for this dataset. "
-    "Use quail_exec inspection and quail_get_api_docs for the analysis language. "
-    "Imported source data is immutable; analysis tags and bindings stay on the session."
+    "Use search and get_entry to retrieve evidence. "
+    "Imported source data is immutable."
 )
 
-_DEFAULT_EXEC_REPAIR = (
-    "Fix the diagnostic, keep the same session_id, and retry. "
-    "Failed exec does not commit tags or bindings."
+_DEFAULT_SEARCH_REPAIR = (
+    "Fix the diagnostic, keep the same session_id, and retry search."
 )
 
 
@@ -285,14 +277,14 @@ def _register_unrestricted_tools(
 ) -> None:
     @server.tool(title="Set up Quail workspace")
     async def quail_setup() -> CallToolResult:
-        """Cold-start this workspace for analysis: return the analysis-language docs,
-        the dataset catalog, and a fresh session_id in one call.
+        """Cold-start this workspace for retrieval: return the dataset catalog and a
+        fresh session_id in one call.
 
-        Call once after connect (and again after quail_switch_workspace). Do not call
-        on every quail_exec — reuse session_id serially. Sharper tools remain:
-        quail_get_api_docs, quail_list_datasets, quail_start_session for refresh or
-        partial use; quail_get_dataset_info after you pick a dataset_id (unless the
-        operator enabled dataset docs inside this payload).
+        Call once after connect (and again after quail_switch_workspace). Reuse
+        session_id serially with search/get_entry. Sharper tools remain:
+        quail_list_datasets, quail_start_session for refresh or partial use;
+        quail_get_dataset_info after you pick a dataset_id (unless the operator
+        enabled dataset docs inside this payload).
         """
 
         def work() -> CallToolResult:
@@ -300,7 +292,6 @@ def _register_unrestricted_tools(
                 return success_result(
                     _build_setup_payload(
                         db_path=context.db_path,
-                        api_docs_path=context.api_docs_path,
                         workspace_id=context.workspace_id,
                         user_id=None,
                         connector_catalog=connector_catalog,
@@ -310,26 +301,8 @@ def _register_unrestricted_tools(
             except Exception as error:
                 return error_result(
                     error=error,
-                    repair_hint=f"{_API_DOCS_REPAIR} Also ensure the core DB is available.",
+                    repair_hint="Ensure the core DB is available.",
                 )
-
-        return await run_blocking(work)
-
-    @server.tool(title="Get Quail API docs")
-    async def quail_get_api_docs() -> CallToolResult:
-        """Return the analysis-language docs for code inside quail_exec.
-
-        Necessary for writing quail_exec code.
-        Dataset and session workflow live in the other tools.
-        Prefer quail_setup at cold start when you also need a catalog and session.
-        """
-
-        def work() -> CallToolResult:
-            try:
-                documentation = load_api_docs(context.api_docs_path)
-            except Exception as error:
-                return error_result(error=error, repair_hint=_API_DOCS_REPAIR)
-            return success_result({"documentation": documentation})
 
         return await run_blocking(work)
 
@@ -338,7 +311,7 @@ def _register_unrestricted_tools(
         """List datasets in this server's fixed workspace.
 
         Returns dataset_id, optional name, and active_version_id. Use a
-        dataset_id with quail_get_dataset_info and quail_exec.
+        dataset_id with quail_get_dataset_info and search.
         """
 
         def work() -> CallToolResult:
@@ -360,11 +333,10 @@ def _register_unrestricted_tools(
 
     @server.tool(title="Start Quail session")
     async def quail_start_session() -> CallToolResult:
-        """Create an active analysis session in this workspace.
+        """Create an active session in this workspace.
 
         The session belongs to this workspace (workspace_id is returned).
-        Reuse session_id on quail_exec calls serially. Bindings and tags
-        persist on this session across successful execs.
+        Reuse session_id on search/get_entry calls serially.
         """
 
         def work() -> CallToolResult:
@@ -387,8 +359,8 @@ def _register_unrestricted_tools(
     async def quail_get_dataset_info(dataset_id: str) -> CallToolResult:
         """Return dataset identity plus short corpus/guidance documentation.
 
-        Call this for dataset-specific notes before analyzing. Do not invent
-        field meanings beyond what this tool and quail_exec inspection return.
+        Call this for dataset-specific notes before searching. Do not invent
+        field meanings beyond what this tool and search/get_entry return.
         """
 
         def work() -> CallToolResult:
@@ -417,46 +389,65 @@ def _register_unrestricted_tools(
 
         return await run_blocking(work)
 
-    @server.tool(title="Execute Quail analysis")
-    async def quail_exec(
+    @server.tool(title="Search dataset")
+    async def search(
         session_id: str,
         dataset_id: str,
-        code: str,
-        time_window: str | None = "standard",
+        query: str,
+        top_k: int = 8,
     ) -> CallToolResult:
-        """Run bounded Quail Python for one session and one dataset.
+        """Retrieve ranked entries for a natural-language query (hybrid lexical+semantic).
 
-        code must follow quail_get_api_docs. Success: printed_output only.
-        Failure: diagnostic with execution_id null; no tags/bindings/prints
-        are kept. Reuse one session_id serially; do not overlap quail_exec
-        calls on the same session_id. time_window is "standard" (30s wall /
-        15s CPU) or "extended" (100s wall / 60s CPU); worker RSS is capped
-        at 256 MiB.
+        Optional top_k (default 8, max 20). Returns hits with entry_id, rank, and
+        text snippet. Reuse session_id serially. Answer from these hits; use
+        get_entry when you need the full row.
         """
 
         def work() -> CallToolResult:
             try:
-                validate_time_window(time_window)
                 with open_core_db(context.db_path) as db:
                     session = require_active_session(db, session_id)
-                    if session.workspace_id != context.workspace_id:
-                        raise ValueError("Session does not belong to this workspace")
-                    outcome = exec_script(
+                    payload = run_search(
                         db,
-                        session_id=session_id,
+                        workspace_id=context.workspace_id,
+                        session=session,
                         dataset_id=dataset_id,
-                        expected_revision=session.state_revision,
-                        code=code,
+                        query=query,
+                        top_k=top_k,
                         search_runtime=context.search_runtime,
-                        time_window=time_window,
                     )
             except Exception as error:
                 return error_result(
                     error=error,
                     execution_id=None,
-                    repair_hint=_exec_repair_hint(error),
+                    repair_hint=_search_repair_hint(error),
                 )
-            return success_printed_output(outcome.printed_output)
+            return success_result(payload)
+
+        return await run_blocking(work)
+
+    @server.tool(title="Get entry")
+    async def get_entry(
+        session_id: str,
+        dataset_id: str,
+        entry_id: str,
+    ) -> CallToolResult:
+        """Return the full field map for one entry_id (usually from search hits)."""
+
+        def work() -> CallToolResult:
+            try:
+                with open_core_db(context.db_path) as db:
+                    session = require_active_session(db, session_id)
+                    payload = get_entry_payload(
+                        db,
+                        workspace_id=context.workspace_id,
+                        session=session,
+                        dataset_id=dataset_id,
+                        entry_id=entry_id,
+                    )
+            except Exception as error:
+                return error_result(error=error)
+            return success_result(payload)
 
         return await run_blocking(work)
 
@@ -577,7 +568,7 @@ def _register_clerk_tools(
         """Bind this MCP connection to one allowlisted workspace.
 
         Sticky bind only: does not create a session. After switching, call
-        quail_start_session again; do not reuse a prior session_id.
+        quail_setup or quail_start_session again; do not reuse a prior session_id.
         Fails when the user is TOML-locked or the workspace is not in their
         memberships. Success returns active_workspace_id.
         """
@@ -604,13 +595,13 @@ def _register_clerk_tools(
 
     @server.tool(title="Set up Quail workspace")
     async def quail_setup(ctx: Context | None = None) -> CallToolResult:
-        """Cold-start the active sticky workspace for analysis: return the
-        analysis-language docs, the dataset catalog, and a fresh session_id.
+        """Cold-start the active sticky workspace for retrieval: return the
+        dataset catalog and a fresh session_id.
 
         Call once after workspace bind (and again after quail_switch_workspace).
-        Do not call on every quail_exec — reuse session_id serially. Sharper tools
-        remain for refresh or partial use; quail_get_dataset_info after you pick a
-        dataset_id (unless the operator enabled dataset docs inside this payload).
+        Reuse session_id serially with search/get_entry. Sharper tools remain for
+        refresh or partial use; quail_get_dataset_info after you pick a dataset_id
+        (unless the operator enabled dataset docs inside this payload).
         """
 
         def work() -> CallToolResult:
@@ -624,7 +615,6 @@ def _register_clerk_tools(
                 return success_result(
                     _build_setup_payload(
                         db_path=runtime.db_path,
-                        api_docs_path=runtime.api_docs_path,
                         workspace_id=workspace_id,
                         user_id=principal.user.user_id,
                         connector_catalog=connector_catalog,
@@ -634,28 +624,8 @@ def _register_clerk_tools(
             except Exception as error:
                 return error_result(
                     error=error,
-                    repair_hint=f"{_API_DOCS_REPAIR} Also ensure the core DB is available.",
+                    repair_hint="Ensure the core DB is available.",
                 )
-
-        return await run_blocking(work)
-
-    @server.tool(title="Get Quail API docs")
-    async def quail_get_api_docs(ctx: Context | None = None) -> CallToolResult:
-        """Return the analysis-language docs for code inside quail_exec.
-
-        Prefer quail_setup at cold start when you also need a catalog and session.
-        """
-
-        def work() -> CallToolResult:
-            principal = _auth(ctx)
-            if isinstance(principal, CallToolResult):
-                return principal
-            del principal
-            try:
-                documentation = load_api_docs(runtime.api_docs_path)
-            except Exception as error:
-                return error_result(error=error, repair_hint=_API_DOCS_REPAIR)
-            return success_result({"documentation": documentation})
 
         return await run_blocking(work)
 
@@ -688,11 +658,11 @@ def _register_clerk_tools(
 
     @server.tool(title="Start Quail session")
     async def quail_start_session(ctx: Context | None = None) -> CallToolResult:
-        """Create an analysis session in the active sticky workspace.
+        """Create a session in the active sticky workspace.
 
         The session belongs to that workspace (workspace_id is returned).
         After quail_switch_workspace, start a new session; do not reuse an
-        old session_id. Reuse this session_id serially on quail_exec.
+        old session_id. Reuse this session_id serially on search/get_entry.
         """
 
         def work() -> CallToolResult:
@@ -760,18 +730,18 @@ def _register_clerk_tools(
 
         return await run_blocking(work)
 
-    @server.tool(title="Execute Quail analysis")
-    async def quail_exec(
+    @server.tool(title="Search dataset")
+    async def search(
         session_id: str,
         dataset_id: str,
-        code: str,
-        time_window: str | None = "standard",
+        query: str,
+        top_k: int = 8,
         ctx: Context | None = None,
     ) -> CallToolResult:
-        """Run bounded Quail Python for one session and dataset in the active workspace.
+        """Retrieve ranked entries for a natural-language query in the active workspace.
 
-        Reuse one session_id serially; do not overlap quail_exec calls on the
-        same session_id. After switching workspace, start a new session first.
+        Reuse one session_id serially; do not overlap search calls on the same
+        session_id. After switching workspace, start a new session first.
         """
 
         def work() -> CallToolResult:
@@ -782,7 +752,6 @@ def _register_clerk_tools(
             if isinstance(workspace_id, CallToolResult):
                 return workspace_id
             try:
-                validate_time_window(time_window)
                 with open_core_db(runtime.db_path) as db:
                     session = require_owned_active_session(
                         db,
@@ -791,22 +760,60 @@ def _register_clerk_tools(
                     )
                     if session.workspace_id != workspace_id:
                         raise ValueError("Session does not belong to the active workspace")
-                    outcome = exec_script(
+                    payload = run_search(
                         db,
-                        session_id=session_id,
+                        workspace_id=workspace_id,
+                        session=session,
                         dataset_id=dataset_id,
-                        expected_revision=session.state_revision,
-                        code=code,
+                        query=query,
+                        top_k=top_k,
                         search_runtime=runtime.search_runtime,
-                        time_window=time_window,
                     )
             except Exception as error:
                 return error_result(
                     error=error,
                     execution_id=None,
-                    repair_hint=_exec_repair_hint(error),
+                    repair_hint=_search_repair_hint(error),
                 )
-            return success_printed_output(outcome.printed_output)
+            return success_result(payload)
+
+        return await run_blocking(work)
+
+    @server.tool(title="Get entry")
+    async def get_entry(
+        session_id: str,
+        dataset_id: str,
+        entry_id: str,
+        ctx: Context | None = None,
+    ) -> CallToolResult:
+        """Return the full field map for one entry_id in the active workspace."""
+
+        def work() -> CallToolResult:
+            principal = _auth(ctx)
+            if isinstance(principal, CallToolResult):
+                return principal
+            workspace_id = _require_workspace(principal, ctx)
+            if isinstance(workspace_id, CallToolResult):
+                return workspace_id
+            try:
+                with open_core_db(runtime.db_path) as db:
+                    session = require_owned_active_session(
+                        db,
+                        session_id,
+                        owner_user_id=principal.user.user_id,
+                    )
+                    if session.workspace_id != workspace_id:
+                        raise ValueError("Session does not belong to the active workspace")
+                    payload = get_entry_payload(
+                        db,
+                        workspace_id=workspace_id,
+                        session=session,
+                        dataset_id=dataset_id,
+                        entry_id=entry_id,
+                    )
+            except Exception as error:
+                return error_result(error=error)
+            return success_result(payload)
 
         return await run_blocking(work)
 
@@ -888,18 +895,17 @@ def _mcp_session_id(ctx: Context | None) -> str | None:
     return str(session_id)
 
 
-def _exec_repair_hint(error: BaseException) -> str | None:
-    """Prefer QuailRuntimeError.repair_hint over the generic exec failure hint."""
+def _search_repair_hint(error: BaseException) -> str | None:
+    """Prefer QuailRuntimeError.repair_hint over the generic search failure hint."""
 
     if isinstance(error, QuailRuntimeError) and error.repair_hint:
         return None
-    return _DEFAULT_EXEC_REPAIR
+    return _DEFAULT_SEARCH_REPAIR
 
 
 def _build_setup_payload(
     *,
     db_path: Path,
-    api_docs_path: Path | None,
     workspace_id: str,
     user_id: str | None,
     connector_catalog: Any | None,
@@ -907,7 +913,6 @@ def _build_setup_payload(
 ) -> dict[str, Any]:
     """Build the quail_setup success payload for one workspace."""
 
-    documentation = load_api_docs(api_docs_path)
     with open_core_db(db_path) as db:
         session = create_session(db, workspace_id, owner_user_id=user_id)
         datasets: list[dict[str, Any]] = []
@@ -930,7 +935,6 @@ def _build_setup_payload(
         "workspace_id": session.workspace_id,
         "session_id": session.id,
         "state_revision": session.state_revision,
-        "documentation": documentation,
         "datasets": datasets,
     }
 
