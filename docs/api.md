@@ -296,7 +296,10 @@ Semantic(query, input_aggregation=None, target_aggregation=None)
 Aggregations: `"total"`, `"avg"`, or `None` (= total).
 
 - **Lexical:** `score > 0` means “matched”; string queries support simple
-  query syntax (phrases, `AND` / `NOT`, `term*`). Scores are corpus-relative
+  query syntax (phrases, `AND` / `NOT`, `term*`). Hyphens and other
+  punctuation inside an unquoted atom split the same way indexing does
+  (match any resulting term); `term*` still requires a single clean term.
+  Scores are corpus-relative
   (Turso native FTS). `str`, `list[str]`, entry `GroupExpr`, and `list[Entry]`
   queries all work. Entry-derived targets read the expression root field and are
   quoted as FTS terms (field prose is not parsed as query syntax).

@@ -63,6 +63,39 @@ def test_parse_rejects_pure_negative_and_explicit_or() -> None:
         parse_queries(("*",))
 
 
+def test_parse_hyphenated_atom_becomes_any_leaf() -> None:
+    (leaf,) = parse_queries(("hydrangea-care",))
+    assert isinstance(leaf, Leaf)
+    assert leaf.kind is LeafKind.ANY
+    assert leaf.terms == ("hydrangea", "care")
+    assert compile_query(leaf, {}) == '("hydrangea" OR "care")'
+
+
+def test_parse_hyphenated_atom_keeps_and_binding() -> None:
+    (expression,) = parse_queries(("foo-bar AND baz",))
+    assert isinstance(expression, BooleanExpression)
+    assert len(expression.required) == 2
+    left, right = expression.required
+    assert left.kind is LeafKind.ANY and left.terms == ("foo", "bar")
+    assert right.kind is LeafKind.TERM and right.terms == ("baz",)
+    assert compile_query(expression, {}) == '(("foo" OR "bar") AND "baz")'
+
+
+def test_parse_hyphenated_atom_keeps_not_binding() -> None:
+    (expression,) = parse_queries(("alpha NOT foo-bar",))
+    assert isinstance(expression, BooleanExpression)
+    assert expression.required == (Leaf(LeafKind.TERM, ("alpha",)),)
+    assert expression.excluded == (Leaf(LeafKind.ANY, ("foo", "bar")),)
+    assert compile_query(expression, {}) == '("alpha" NOT ("foo" OR "bar"))'
+
+
+def test_parse_prefix_still_rejects_punctuated_atoms() -> None:
+    with pytest.raises(QuailRuntimeError, match="prefixes require a single term"):
+        parse_queries(("foo-bar*",))
+    with pytest.raises(QuailRuntimeError, match="removed by the current lexical tokenizer"):
+        parse_queries(("---",))
+
+
 def test_lexical_score_reuses_warm_segments_without_rewrite(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

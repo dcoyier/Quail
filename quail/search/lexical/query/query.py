@@ -21,6 +21,8 @@ class LeafKind(Enum):
     TERM = "term"
     PHRASE = "phrase"
     PREFIX = "prefix"
+    # Punctuation-split query atom: match any indexed term (aligns with tokenize).
+    ANY = "any"
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,21 +224,35 @@ def _lex_word(word: str, budget: _Budget) -> _Token:
     source = word[:-1] if is_prefix else word
     if not source:
         raise QuailRuntimeError("Bare wildcard is not supported")
-    if not _is_word_source(source):
-        raise QuailRuntimeError(f"Unsupported lexical query construct in {word!r}")
+
     analyzed = tokenize(source)
-    if len(analyzed) != 1:
+    if not analyzed:
         raise QuailRuntimeError(
             f"Lexical term {source!r} is removed by the current lexical tokenizer"
         )
-    normalized = analyzed[0]
-    if is_prefix and normalized.startswith(_HASHED_TERM_PREFIX):
-        raise QuailRuntimeError(
-            f"Lexical prefixes must be shorter than {MAX_TERM_BYTES} normalized UTF-8 bytes"
-        )
-    budget.charge_leaf()
-    kind = LeafKind.PREFIX if is_prefix else LeafKind.TERM
-    return _Token(_TokenKind.LEAF, Leaf(kind, (normalized,)))
+
+    if is_prefix:
+        # Prefix wildcards stay single-term only; punctuation would be ambiguous.
+        if not _is_word_source(source) or len(analyzed) != 1:
+            raise QuailRuntimeError(
+                f"Lexical prefixes require a single term without punctuation ({word!r})"
+            )
+        normalized = analyzed[0]
+        if normalized.startswith(_HASHED_TERM_PREFIX):
+            raise QuailRuntimeError(
+                f"Lexical prefixes must be shorter than {MAX_TERM_BYTES} normalized UTF-8 bytes"
+            )
+        budget.charge_leaf()
+        return _Token(_TokenKind.LEAF, Leaf(LeafKind.PREFIX, (normalized,)))
+
+    if len(analyzed) == 1:
+        budget.charge_leaf()
+        return _Token(_TokenKind.LEAF, Leaf(LeafKind.TERM, analyzed))
+
+    # Hyphens/punctuation: one query atom → ANY leaf (keeps AND/NOT binding).
+    for _term in analyzed:
+        budget.charge_leaf()
+    return _Token(_TokenKind.LEAF, Leaf(LeafKind.ANY, analyzed))
 
 
 def _compile_leaf(leaf: Leaf, prefixes: dict[str, tuple[str, ...]]) -> str:
@@ -244,6 +260,8 @@ def _compile_leaf(leaf: Leaf, prefixes: dict[str, tuple[str, ...]]) -> str:
         return quote_term(" ".join(leaf.terms))
     if leaf.kind is LeafKind.TERM:
         return quote_term(leaf.terms[0])
+    if leaf.kind is LeafKind.ANY:
+        return "(" + " OR ".join(quote_term(term) for term in leaf.terms) + ")"
     expanded = prefixes[leaf.terms[0]]
     if not expanded:
         return quote_term(MATCH_NONE_TERM)

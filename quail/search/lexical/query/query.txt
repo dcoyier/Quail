@@ -3,7 +3,7 @@ a max leaf budget of 1024, and a max phrase token budget of 4096.
 There is a hashed-term prefix called !sha256: and a no-match sentinel called
 !quail:no-match!.
 
-LeafKind is term, phrase, or prefix.
+LeafKind is term, phrase, prefix, or any.
 Leaf remembers kind and terms.
 BooleanExpression remembers required leaves and excluded leaves.
 OrExpression remembers child expressions.
@@ -31,7 +31,7 @@ parse_queries(queries):
 compile_query(expression, prefixes):
   Compile a Leaf, BooleanExpression, or OrExpression into a Turso FTS query
   string. Expand PREFIX leaves from the prefixes map; empty expansion becomes
-  the no-match sentinel.
+  the no-match sentinel. ANY leaves compile to a parenthesized OR of terms.
 
 collect_prefixes(expressions):
   Give back sorted PREFIX leaf strings.
@@ -43,6 +43,9 @@ _parse / _lex / _lex_phrase / _lex_word:
   Lex terms, phrases, AND, and NOT.
   Reject NUL, bare wildcards, explicit OR, wildcards inside phrases, and
   pure-negative queries.
+  Unquoted atoms with hyphens/punctuation tokenize like indexing into an ANY
+  leaf (match any term) so AND/NOT binding stays on the whole atom.
+  Prefix wildcards still require a single punctuation-free term.
   Charge leaf and phrase budgets.
 
 _Parser:
