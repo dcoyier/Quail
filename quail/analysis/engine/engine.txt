@@ -24,9 +24,11 @@ retrieve(plan):
   For Unit("entries", field), keep only entries where the field is present.
   Then apply ranking and limit/order.
   Materialize Expression values, Entry handles, present field values, or distinct values.
+  Distinct values use _distinct_value_key (JSON with sorted keys, else repr).
 
 count(plan):
   Same candidate sets as retrieve, but give back the length.
+  Distinct values-unit counts use the same _distinct_value_key.
 
 create_field(plan):
   Reject source-name collision.
@@ -55,8 +57,15 @@ _require_entry_in_scope(entry):
 Helpers evaluate groups and predicates, run expression pipelines (Value, AsText,
 AsNumber, regex, Slice, Length, Lexical via LexicalService, Semantic via
 SimilarityService). Member entry groups validate each member's scope.
+Field-scoped member groups resolve each member through resolve_field against the
+catalog (kind stamped; unknown or kind-mismatched names raise).
 Field reads bulk-load each referenced field once into an entry_id map; overlay
 wins. Ranking tie-breaks with a precomputed position map.
+
+_distinct_value_key(value):
+  Give back json.dumps(value, sort_keys=True) when the value is JSON-serializable.
+  Otherwise give back repr(value).
+
 Before Lexical/Semantic scoring, resolve query targets from
 LiteralText, LiteralTextList, EntryGroup, or EntryList using the expression root
 field; Lexical Entry* targets are term-quoted. Predicates and rankings that end in

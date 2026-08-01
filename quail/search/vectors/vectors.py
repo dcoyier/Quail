@@ -16,7 +16,11 @@ def text_hash(text: str) -> str:
 def unit_vector(values: list[float]) -> list[float]:
     """L2-normalize a vector; zero vectors stay zero."""
 
+    if any(not math.isfinite(component) for component in values):
+        raise ValueError("Embedding vector components must be finite")
     norm = math.sqrt(sum(component * component for component in values))
+    if not math.isfinite(norm):
+        raise ValueError("Embedding vector norm must be finite")
     if norm == 0.0:
         return [0.0 for _ in values]
     return [component / norm for component in values]

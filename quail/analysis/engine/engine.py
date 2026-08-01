@@ -120,7 +120,7 @@ class QueryEngine:
                 value = self._read_field_value(plan.unit.field, entry_id)
                 if value is None:
                     continue
-                key = repr(value)
+                key = _distinct_value_key(value)
                 if key in seen:
                     continue
                 seen.add(key)
@@ -151,7 +151,7 @@ class QueryEngine:
                 value = self._read_field_value(plan.unit.field, entry_id)
                 if value is None:
                     continue
-                seen.add(repr(value))
+                seen.add(_distinct_value_key(value))
             return len(seen)
         raise QuailSyntaxError(f"Unsupported unit scope: {plan.unit.scope}")
 
@@ -390,7 +390,7 @@ class QueryEngine:
         if group.name == "G1":
             return [Field(field.name, kind=field.kind) for field in catalog]
         if group.members is not None:
-            return list(group.members)
+            return [self.resolve_field(field) for field in group.members]
         if group.operator == "and":
             assert group.left is not None and group.right is not None
             right = {field.name for field in self._evaluate_field_group(group.right)}
@@ -946,6 +946,15 @@ def _expression_score_key(expression: Expression) -> str:
 
 def _is_search_terminal_expression(expression: Expression) -> bool:
     return bool(expression.operations and expression.operations[-1].kind in ("Lexical", "Semantic"))
+
+
+def _distinct_value_key(value: Any) -> str:
+    """Stable key for values-unit uniqueness (JSON when possible, else repr)."""
+
+    try:
+        return json.dumps(value, sort_keys=True)
+    except (TypeError, ValueError):
+        return repr(value)
 
 
 def _search_ranking_expressions(ranking: Ranking) -> list[Expression]:

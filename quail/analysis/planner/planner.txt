@@ -23,6 +23,8 @@ plan_count(unit, group):
 
 plan_create_field(field):
   Accept a string name or Field and normalize to analysis Field.
+  Strip leading and trailing whitespace from the name.
+  Raise QuailSyntaxError when the stripped name is empty.
   Give back a CreateFieldPlan.
 
 plan_tag(group, field, value):

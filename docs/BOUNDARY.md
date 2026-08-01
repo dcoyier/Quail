@@ -137,7 +137,9 @@ simultaneous `quail_exec` slots for the whole process. Independent of
   that handle).
 - `time_window` wall/memory limits set a cancel event, kill the analysis worker,
   and best-effort `connection.interrupt()` on that exec’s core/search
-  connections. Mid-query interrupt is not hard real-time.
+  connections. Mid-query interrupt is not hard real-time. Residual exposure
+  inside a single `dispatch_call` is non-DB host compute only; cancel is checked
+  before and after each dispatch, not mid-call.
 - Overlapping `quail_exec` on the same `session_id` fails fast with
   `session_busy` (enforced in-process lock).
 

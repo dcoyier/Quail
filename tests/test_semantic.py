@@ -576,6 +576,25 @@ def test_turso_cosine_on_packed_unit_blobs(tmp_path: Path) -> None:
     search.close()
 
 
+def test_unit_vector_rejects_non_finite() -> None:
+    with pytest.raises(ValueError, match="finite"):
+        unit_vector([1.0, float("nan")])
+    with pytest.raises(ValueError, match="finite"):
+        unit_vector([1.0, float("inf")])
+
+
+def test_provider_require_vector_rejects_non_finite() -> None:
+    from quail.providers.errors import ProviderError
+    from quail.providers.ollama.ollama import _require_vector as ollama_require
+    from quail.providers.openrouter.openrouter import _require_vector as openrouter_require
+
+    for require in (ollama_require, openrouter_require):
+        with pytest.raises(ProviderError, match="non-finite"):
+            require([1.0, float("nan")], 2, label="embedder")
+        with pytest.raises(ProviderError, match="non-finite"):
+            require([1.0, float("inf")], 2, label="embedder")
+
+
 def test_least_similar_avg_order_bottom(tmp_path: Path) -> None:
     csv_path = tmp_path / "notes.csv"
     csv_path.write_text(

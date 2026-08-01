@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import urllib.error
 import urllib.request
 from typing import Any, Sequence
@@ -130,5 +131,11 @@ def _require_vector(item: object, dimensions: int, *, label: str) -> list[float]
                 f"{label} returned a non-numeric embedding component",
                 repair_hint="Check the embedding model response.",
             )
-        vector.append(float(value))
+        number = float(value)
+        if not math.isfinite(number):
+            raise ProviderError(
+                f"{label} returned a non-finite embedding component",
+                repair_hint="Check the embedding model response.",
+            )
+        vector.append(number)
     return vector

@@ -140,7 +140,10 @@ def plan_create_field(field: str | Field) -> CreateFieldPlan:
     elif isinstance(field, Field):
         if field.kind not in (None, "analysis"):
             raise QuailSyntaxError('create_field Field kind must be "analysis" or None')
-        resolved = Field(field.name, kind="analysis")
+        name = field.name.strip()
+        if not name:
+            raise QuailSyntaxError("create_field name must be a non-empty string")
+        resolved = Field(name, kind="analysis")
     else:
         raise QuailSyntaxError("create_field requires a string name or Field")
     return CreateFieldPlan(field=resolved)

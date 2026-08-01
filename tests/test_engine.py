@@ -7,13 +7,14 @@ from pathlib import Path
 import pytest
 
 from quail.analysis.engine import QueryEngine
-from quail.analysis.errors import QuailFieldError, QuailRuntimeError, QuailScopeError
+from quail.analysis.errors import QuailFieldError, QuailRuntimeError, QuailScopeError, QuailSyntaxError
 from quail.analysis.exec_host import dispatch_call, run_analysis
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
-from quail.analysis.group import G0, G1
+from quail.analysis.group import G0, G1, GroupExpr
 from quail.analysis.operations import Lexical, RegexSearch, Value
-from quail.analysis.unit import fields
+from quail.analysis.planner import plan_create_field
+from quail.analysis.unit import Unit, fields
 from quail.datasets import import_csv_dataset, open_core_db
 from quail.search import LexicalService, open_search_db
 from quail.session import analysis_values, catalog_fields, create_session, get_session
@@ -289,3 +290,64 @@ def test_tag_invalidates_search_score_cache(tmp_path: Path) -> None:
             lexical=lexical,
         )
     search.close()
+
+
+def test_plan_create_field_strips_field_name() -> None:
+    plan = plan_create_field(Field("  topic  "))
+    assert plan.field.name == "topic"
+    assert plan.field.kind == "analysis"
+    with pytest.raises(QuailSyntaxError, match="non-empty"):
+        plan_create_field(Field("   "))
+
+
+def test_distinct_values_normalize_dict_key_order(tmp_path: Path) -> None:
+    db, session = _seed(tmp_path)
+    with db:
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            meta = dispatch_call(engine, "create_field", ("meta",))
+            entries = dispatch_call(engine, "retrieve", (), {"limit": 50})
+            e1 = next(entry for entry in entries if entry.id == "e1")
+            e2 = next(entry for entry in entries if entry.id == "e2")
+            dispatch_call(engine, "tag", ([e1], meta, {"a": 1, "b": 2}))
+            dispatch_call(engine, "tag", ([e2], meta, {"b": 2, "a": 1}))
+            unit = Unit("values", meta)
+            values = dispatch_call(engine, "retrieve", (), {"unit": unit, "limit": 50})
+            assert len(values) == 1
+            assert dispatch_call(engine, "count", (), {"unit": unit}) == 1
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+        )
+
+
+def test_field_group_members_resolve_against_catalog(tmp_path: Path) -> None:
+    db, session = _seed(tmp_path)
+    with db:
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            group = GroupExpr(scope="fields", members=[Field("title"), Field("body")])
+            rows = dispatch_call(
+                engine, "retrieve", (), {"unit": fields, "group": group, "limit": 50}
+            )
+            assert [(field.name, field.kind) for field in rows] == [
+                ("title", "source"),
+                ("body", "source"),
+            ]
+            unknown = GroupExpr(scope="fields", members=[Field("missing")])
+            with pytest.raises(QuailFieldError, match="Unknown field"):
+                dispatch_call(
+                    engine, "retrieve", (), {"unit": fields, "group": unknown, "limit": 50}
+                )
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+        )

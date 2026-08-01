@@ -4,3 +4,4 @@ model, input texts, and dimensions.
 embed_texts(texts):
   Give back one float vector per input text in request order.
   Raise ProviderError on HTTP/JSON/shape/dimension mismatches.
+  Raise ProviderError when any embedding component is non-numeric or non-finite.
