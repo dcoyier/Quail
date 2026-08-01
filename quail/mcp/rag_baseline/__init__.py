@@ -3,7 +3,7 @@
 from .constants import SEARCH_FIELD
 from .rrf import candidate_n, rrf_fuse
 from .service import get_entry_payload, run_search
-from .template import OUTPUT_MARKER, build_search_script
+from .template import OUTPUT_MARKER, build_search_script, lexical_query_text
 from .validate import normalize_query, normalize_top_k
 
 __all__ = [
@@ -12,6 +12,7 @@ __all__ = [
     "build_search_script",
     "candidate_n",
     "get_entry_payload",
+    "lexical_query_text",
     "normalize_query",
     "normalize_top_k",
     "rrf_fuse",

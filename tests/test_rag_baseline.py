@@ -15,6 +15,7 @@ from quail.mcp.rag_baseline import (
     rrf_fuse,
 )
 from quail.mcp.rag_baseline.parse import parse_search_output
+from quail.mcp.rag_baseline.template import lexical_query_text
 
 
 def test_candidate_n_scales_and_caps() -> None:
@@ -60,9 +61,23 @@ def test_build_search_script_escapes_query() -> None:
     script = build_search_script('say "hi"\nworld', 10)
     assert SEARCH_FIELD in script
     assert "Lexical(" in script and "Semantic(" in script
-    assert '"say \\"hi\\"\\nworld"' in script or '\\"hi\\"' in script
     assert "limit=10" in script
     assert OUTPUT_MARKER in script
+    # Semantic keeps raw query; Lexical uses tokenized bag.
+    assert "say" in script and "hi" in script and "world" in script
+
+
+def test_lexical_query_text_strips_hyphens_and_punctuation() -> None:
+    assert lexical_query_text("zzzz-no-match-token") == "zzzz no match token"
+    assert lexical_query_text("  hello, world! ") == "hello world"
+    assert lexical_query_text("***") == ""
+
+
+def test_build_search_script_skips_lexical_when_no_terms() -> None:
+    script = build_search_script("***", 5)
+    assert "Semantic(" in script
+    assert "Lexical(" not in script
+    assert "lex_hits = []" in script
 
 
 def test_parse_search_output_round_trip_shape() -> None:

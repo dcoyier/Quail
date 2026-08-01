@@ -1,13 +1,18 @@
 There is an output marker string OUTPUT_MARKER equal to QUAIL_SEARCH_V1.
 There is a private field-name pattern requiring identifier-shaped names.
 
+lexical_query_text(query):
+  Tokenize query with the Lexical analyzer and join terms with spaces.
+  Give back that Lexical-safe bag (possibly empty).
+
 build_search_script(query, n):
   Require n is a positive int (not bool).
   Require SEARCH_FIELD matches the safe field-name pattern; else raise.
-  Encode query and SEARCH_FIELD with json.dumps as Quail string literals.
+  Encode SEARCH_FIELD and the raw query (for Semantic) with json.dumps.
+  Build Lexical-safe text via lexical_query_text.
   Give back sandbox-legal Quail code that:
-    builds Lexical and Semantic score expressions on SEARCH_FIELD
-    retrieves top-n lexical hits where score > 0
-    retrieves top-n semantic hits over G0
+    always builds Semantic on SEARCH_FIELD with the raw query and retrieves top-n
+    if Lexical-safe text is non-empty, builds Lexical on that text and retrieves
+    top-n where score > 0; otherwise uses an empty lex_hits list
     prints OUTPUT_MARKER, then lexical count and ids, then semantic count and ids,
     then END.
