@@ -192,8 +192,10 @@ by pasting Clerk `user_…` ids into `[[users]]` and set
 Semantic uses per-dataset embedding profiles (Ollama/OpenRouter), a rebuildable
 Turso vector cache, and **exact** batch cosine via `-vector_distance_dot`.
 Lexical uses Turso **native FTS** in the same rebuildable search DB
-(in-process). Both accept `str`, `list[str]`, entry `GroupExpr`, and
-`list[Entry]` query targets. Session bindings persist across successful execs.
+(in-process): one warmed corpus table pair per source field, plus request-local
+scratch corpora for derived/analysis/unwarmed scoring. Both Lexical and Semantic
+accept `str`, `list[str]`, entry `GroupExpr`, and `list[Entry]` query targets.
+Session bindings persist across successful execs.
 
 ## Build order (stop if you cannot explain the step)
 

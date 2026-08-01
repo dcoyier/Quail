@@ -5,7 +5,8 @@ embedding_ready, text_count, and warmed_at.
 WarmDatasetResult remembers one process summary for a dataset version, including
 build_fingerprint.
 
-There is a private search-build schema version constant.
+There is a private search-build schema version constant (bumped when Lexical
+artifact layout changes, e.g. per-field corpora).
 
 search_build_fingerprint(lexical_fields, profile):
   SHA-256 of canonical JSON covering schema version, lexical field list
@@ -16,25 +17,31 @@ get_warm_receipt / put_warm_receipt:
   put_warm_receipt takes build_fingerprint and stores it in the profile_hash column.
 
 clear_search_version:
-  Drop Lexical FTS tables and registry row, all vectors for the version, and
-  the warm receipt.
+  Drop every per-field Lexical corpus for the version, all vectors, and the
+  warm receipt.
+
+collect_field_corpora:
+  Read source fields for every entry (all fields, or field_names when set).
+  Keep non-empty text cells per field.
+  Give back field_name -> (entry_id -> segment list).
+  Unknown field_names raise QuailRuntimeError (source fields message).
 
 collect_corpus_texts:
-  Read source fields for every entry (all fields, or field_names when set).
-  Keep non-empty text cells.
-  Give back the flat text list and per-entry segment lists.
-  Unknown field_names raise QuailRuntimeError (source fields message).
+  Flatten collect_field_corpora into a flat text list and per-entry segment lists.
+  Used by embedding warm.
 
 warm_dataset:
   Optionally clear the version.
   Compute the search-build fingerprint from lexical_fields and profile.
   If an existing receipt has a different fingerprint, delete all vectors for
   the version.
-  Collect texts for Lexical using lexical_fields when set (else all fields).
-  Resolve the Lexical corpus.
+  Collect per-field corpora for Lexical using lexical_fields when set
+  (else all fields).
   Write a not-ready warm receipt before Lexical rebuild so a mid-pass failure
   cannot leave lexical_ready over a partial index.
-  Rebuild Lexical with warm_entry_segments (plain row writes, then one FTS build).
+  For each field, resolve that field's corpus and rebuild with
+  warm_entry_segments (plain row writes, then one FTS build).
+  Drop any registered field corpora not in this warm set.
   When a profile is set, collect embed texts from profile.fields only
   (or all fields when fields is omitted — never reuse the Lexical text list),
   then embed unique missing texts in batches with at most

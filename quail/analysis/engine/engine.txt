@@ -63,3 +63,6 @@ field; Lexical Entry* targets are term-quoted. Predicates and rankings that end 
 Lexical/Semantic share one per-exec score cache keyed by Expression.to_record():
 each distinct search-terminal Expression is batch-scored once over needed entry
 ids (gap-fill missing ids), then predicate filters and ranking reuse those scores.
+For Lexical, pass source_field when there are no transforming prefix operations
+and the root resolves to a source field; otherwise scratch scoring.
+_warmed_lexical_source_field encodes that rule for scalar eval.

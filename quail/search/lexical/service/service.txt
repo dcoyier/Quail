@@ -2,26 +2,26 @@ There is a match-work budget of 5_000_000 documents.
 
 LexicalService remembers a SearchDb.
 
-lexical_score(...):
+lexical_score(..., source_field default None):
   Delegate to lexical_scores_for_entries for a single synthetic entry and give
   back that score (default 0.0).
 
 lexical_scores_for_entries(workspace_id, dataset_id, version_id, corpus_by_entry,
-                           query_record, input_aggregation, target_aggregation):
+                           query_record, input_aggregation, target_aggregation,
+                           source_field default None):
   Resolve LiteralText / LiteralTextList query strings.
   Reject unresolved EntryGroup / EntryList (QueryEngine must resolve those first).
   Collect corpus segment texts per entry; empty corpora score 0.0.
-  Resolve or create the per-version document corpus (FTS built on write/warm).
-  When the warm receipt is lexical_ready and every scored entry already has
-    rows, reuse those segment counts and score read-only (no DELETE/INSERT).
-  Otherwise ensure (write) the provided segments and create FTS if missing,
-    then score with Turso fts_match / fts_score.
+  When source_field is set, the warm receipt is lexical_ready, that field's
+  corpus is registered, and every scored entry already has rows, reuse those
+  segment counts and score read-only against the warmed field corpus.
+  Otherwise build a request-local scratch corpus, write the provided segments,
+  score, and drop the scratch tables.
   Aggregate input over segments and target over queries with total or avg.
   Give back entry_id -> float.
 
-_segment_counts_for_score:
-  Prefer load_entry_segment_counts when warm receipt.lexical_ready and all
-  entries are present; else ensure_entry_segments.
+_try_warmed_field_corpus:
+  Give back (corpus, segment_counts) when warm reuse applies; else None.
 
 _score_entries:
   Parse queries, expand prefixes, then use the simple or prefix scoring path.

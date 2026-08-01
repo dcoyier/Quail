@@ -20,6 +20,7 @@ from quail.run.apply import import_declared_datasets
 from quail.run.lease import acquire_deployment_lease
 from quail.search import open_search_db
 from quail.search.db import SearchDb
+from quail.search.lexical.corpus import sweep_scratch_corpora
 from quail.search.pin import delete_embedding_pin, pin_embedding_profile
 from quail.search.warm import WarmDatasetResult, require_warm_ready, warm_dataset
 
@@ -59,6 +60,7 @@ def process_config(
             )
             results: list[WarmDatasetResult] = []
             try:
+                sweep_scratch_corpora(search)
                 for spec, ref in zip(config.datasets, refs, strict=True):
                     result = warm_dataset(
                         db,
@@ -112,6 +114,7 @@ def assert_search_warm(
         return
     search = open_search_db(config.search_database)
     try:
+        sweep_scratch_corpora(search)
         for index, spec in enumerate(config.datasets):
             if refs is not None:
                 version = refs[index].version_id

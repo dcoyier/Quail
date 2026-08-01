@@ -1,16 +1,36 @@
-There is a safe table-name pattern quail_lex_[dt]_<32 hex> and a default
-prefix-term budget of 4096.
+There is a safe table-name pattern for warmed tables quail_lex_[dt]_<32 hex>
+and scratch tables quail_lex_scratch_[dt]_<32 hex>.
+There is a default prefix-term budget of 4096.
 There is an entry commit batch size of 64 for plain segment writes.
 
-LexicalCorpus remembers doc_table and terms_table for one version.
+LexicalCorpus remembers doc_table and terms_table for one field or scratch corpus.
 
-resolve_corpus(search, workspace_id, dataset_id, version_id):
-  Look up quail_lexical_corpus.
+resolve_corpus(search, workspace_id, dataset_id, version_id, field_name):
+  Require a non-empty field_name.
+  Look up quail_lexical_corpus for that field.
   If present, require safe table names and give back LexicalCorpus.
-  Otherwise hash the scope to table names, create the document and terms
-  tables, create the entry index (not FTS), register the corpus row, and
-  give back LexicalCorpus.
+  Otherwise hash the scope plus field_name to table names, create the document
+  and terms tables, create the entry index (not FTS), register the corpus row,
+  and give back LexicalCorpus.
   Raise QuailRuntimeError with a rebuild hint when creation fails.
+
+lookup_field_corpus(search, workspace_id, dataset_id, version_id, field_name):
+  Give back the registered LexicalCorpus for that field, or None.
+
+scratch_corpus(search):
+  Create uniquely named scratch document and terms tables (no registry row).
+  Yield LexicalCorpus for the with-block, then drop the tables (and FTS).
+
+sweep_scratch_corpora(search):
+  Drop orphaned quail_lex_scratch_* tables left after a crash.
+  Give back how many tables were dropped.
+
+drop_version_corpora(search, workspace_id, dataset_id, version_id):
+  Drop every registered per-field corpus table pair for the version and
+  delete the registry rows.
+
+drop_field_corpora_except(search, workspace_id, dataset_id, version_id, keep_fields):
+  Drop registered field corpora whose field_name is not in keep_fields.
 
 load_entry_segment_counts(search, corpus, entry_ids):
   Read existing document row counts for the given entry ids (GROUP BY entry_id).
@@ -30,7 +50,7 @@ ensure_entry_segments(search, corpus, entry_segments):
   Write the given entries' rows in batches (delete then insert), then create
   FTS indexes if they are missing (including when entry_segments is empty).
   Give back entry_id -> segment count.
-  Used by score-time fallback when lexical warm is missing or incomplete.
+  Used for request-local scratch corpora.
 
 expand_prefixes(search, corpus, prefixes, max_prefix_terms default 4096):
   Range-scan the terms table for each prefix under the remaining budget.

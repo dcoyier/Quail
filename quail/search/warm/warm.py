@@ -16,15 +16,16 @@ from quail.providers import EmbeddingClient, ProviderError
 from quail.search.cache import get_cached_vector_blob, put_cached_vector
 from quail.search.db import SearchDb
 from quail.search.lexical.corpus import (
+    drop_field_corpora_except,
+    drop_version_corpora,
     resolve_corpus,
-    validate_table_ident,
     warm_entry_segments,
 )
 from quail.search.pin import get_pinned_profile_hash
 from quail.search.vectors import text_hash, unit_vector
 
 # Bump when warm artifact semantics change (not batch/concurrency knobs).
-_SEARCH_BUILD_SCHEMA_VERSION = 1
+_SEARCH_BUILD_SCHEMA_VERSION = 2
 
 
 def search_build_fingerprint(
@@ -147,31 +148,17 @@ def clear_search_version(
     dataset_id: str,
     version_id: str,
 ) -> None:
-    """Drop warm receipt, vectors, and Lexical corpus for one version."""
+    """Drop warm receipt, vectors, and Lexical corpora for one version."""
 
     connection = search.connection
     connection.execute("BEGIN IMMEDIATE")
     try:
-        row = connection.execute(
-            """
-            SELECT doc_table, terms_table
-            FROM quail_lexical_corpus
-            WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
-            """,
-            (workspace_id, dataset_id, version_id),
-        ).fetchone()
-        if row is not None:
-            doc_table = validate_table_ident(str(row[0]))
-            terms_table = validate_table_ident(str(row[1]))
-            connection.execute(f"DROP TABLE IF EXISTS {doc_table}")
-            connection.execute(f"DROP TABLE IF EXISTS {terms_table}")
-            connection.execute(
-                """
-                DELETE FROM quail_lexical_corpus
-                WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
-                """,
-                (workspace_id, dataset_id, version_id),
-            )
+        drop_version_corpora(
+            search,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+        )
         connection.execute(
             """
             DELETE FROM quail_embedding_vectors
@@ -192,15 +179,15 @@ def clear_search_version(
         raise
 
 
-def collect_corpus_texts(
+def collect_field_corpora(
     db: CoreDb,
     *,
     workspace_id: str,
     dataset_id: str,
     version_id: str,
     field_names: Sequence[str] | None = None,
-) -> tuple[list[str], dict[str, list[str]]]:
-    """Return (non-empty texts, entry_id -> segments).
+) -> dict[str, dict[str, list[str]]]:
+    """Return field_name -> (entry_id -> segments) for Lexical warm.
 
     When ``field_names`` is set, only those source fields are included.
     """
@@ -222,8 +209,7 @@ def collect_corpus_texts(
         fields = [field for field in fields if field.name in wanted]
     entries = source_entries(db, workspace_id, dataset_id, version_id)
     entry_ids = [entry.id for entry in entries]
-    all_texts: list[str] = []
-    entry_segments: dict[str, list[str]] = {entry_id: [] for entry_id in entry_ids}
+    field_corpora: dict[str, dict[str, list[str]]] = {}
     for field in fields:
         values = source_values(
             db,
@@ -233,11 +219,42 @@ def collect_corpus_texts(
             field.name,
             entry_ids=entry_ids,
         )
+        entry_segments: dict[str, list[str]] = {entry_id: [] for entry_id in entry_ids}
         for entry_id, value in zip(entry_ids, values, strict=True):
             if not isinstance(value, str) or not value:
                 continue
-            all_texts.append(value)
             entry_segments[entry_id].append(value)
+        field_corpora[field.name] = entry_segments
+    return field_corpora
+
+
+def collect_corpus_texts(
+    db: CoreDb,
+    *,
+    workspace_id: str,
+    dataset_id: str,
+    version_id: str,
+    field_names: Sequence[str] | None = None,
+) -> tuple[list[str], dict[str, list[str]]]:
+    """Return (non-empty texts, entry_id -> segments) flattened across fields.
+
+    Used by embedding warm. Lexical warm uses ``collect_field_corpora``.
+    When ``field_names`` is set, only those source fields are included.
+    """
+
+    field_corpora = collect_field_corpora(
+        db,
+        workspace_id=workspace_id,
+        dataset_id=dataset_id,
+        version_id=version_id,
+        field_names=field_names,
+    )
+    all_texts: list[str] = []
+    entry_segments: dict[str, list[str]] = {}
+    for field_segments in field_corpora.values():
+        for entry_id, segments in field_segments.items():
+            entry_segments.setdefault(entry_id, []).extend(segments)
+            all_texts.extend(segments)
     return all_texts, entry_segments
 
 
@@ -283,21 +300,21 @@ def warm_dataset(
         )
         search.connection.commit()
 
-    texts, entry_segments = collect_corpus_texts(
+    field_corpora = collect_field_corpora(
         db,
         workspace_id=workspace_id,
         dataset_id=dataset_id,
         version_id=version_id,
         field_names=lexical_fields,
     )
-    corpus = resolve_corpus(
-        search,
-        workspace_id=workspace_id,
-        dataset_id=dataset_id,
-        version_id=version_id,
-    )
-    # Full Lexical rebuild writes plain rows then creates FTS once. Clear
-    # readiness first so serve cannot treat a failed re-warm as authoritative.
+    texts = [
+        segment
+        for entry_segments in field_corpora.values()
+        for segments in entry_segments.values()
+        for segment in segments
+    ]
+    # Full Lexical rebuild writes plain rows then creates FTS once per field.
+    # Clear readiness first so serve cannot treat a failed re-warm as authoritative.
     put_warm_receipt(
         search,
         workspace_id=workspace_id,
@@ -308,7 +325,23 @@ def warm_dataset(
         embedding_ready=False,
         text_count=0,
     )
-    warm_entry_segments(search, corpus, entry_segments=entry_segments)
+    for field_name, entry_segments in field_corpora.items():
+        corpus = resolve_corpus(
+            search,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+            field_name=field_name,
+        )
+        warm_entry_segments(search, corpus, entry_segments=entry_segments)
+    drop_field_corpora_except(
+        search,
+        workspace_id=workspace_id,
+        dataset_id=dataset_id,
+        version_id=version_id,
+        keep_fields=tuple(field_corpora.keys()),
+    )
+    search.connection.commit()
 
     embedded_batches = 0
     embedding_ready = False

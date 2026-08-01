@@ -115,6 +115,7 @@ def test_lexical_score_reuses_warm_segments_without_rewrite(
         query_record={"kind": "LiteralText", "text": "hydrangea"},
         input_aggregation=None,
         target_aggregation=None,
+        source_field="body",
     )
     second = service.lexical_scores_for_entries(
         workspace_id="ws",
@@ -124,6 +125,7 @@ def test_lexical_score_reuses_warm_segments_without_rewrite(
         query_record={"kind": "LiteralText", "text": "hydrangea"},
         input_aggregation=None,
         target_aggregation=None,
+        source_field="body",
     )
     assert first["e1"] > 0
     assert first["e2"] == 0.0
@@ -145,6 +147,7 @@ def test_ensure_entry_segments_commits_in_batches(
         workspace_id="ws",
         dataset_id="notes",
         version_id="v1",
+        field_name="body",
     )
     # resolve_corpus must not create FTS up front (FTS-last warm order).
     fts_name = f"{corpus.doc_table}_fts"
@@ -200,6 +203,7 @@ def test_warm_entry_segments_builds_fts_after_rows(tmp_path: Path) -> None:
         workspace_id="ws",
         dataset_id="notes",
         version_id="v1",
+        field_name="body",
     )
     fts_name = f"{corpus.doc_table}_fts"
     create_order: list[str] = []
@@ -622,6 +626,7 @@ class _CountingLexical(LexicalService):
         query_record: dict[str, object],
         input_aggregation: str | None,
         target_aggregation: str | None,
+        source_field: str | None = None,
     ) -> dict[str, float]:
         self.batch_calls += 1
         return super().lexical_scores_for_entries(
@@ -632,6 +637,7 @@ class _CountingLexical(LexicalService):
             query_record=query_record,  # type: ignore[arg-type]
             input_aggregation=input_aggregation,
             target_aggregation=target_aggregation,
+            source_field=source_field,
         )
 
 
@@ -727,3 +733,164 @@ def test_engine_lexical_batches_survive_rpc_clones(tmp_path: Path) -> None:
             lexical=lexical,
         )
     search.close()
+
+
+def test_per_field_warm_isolation_and_scratch(tmp_path: Path) -> None:
+    from quail.config.models import SearchWarmConfig
+    from quail.search.lexical.corpus import lookup_field_corpus, load_entry_segment_counts
+    from quail.search.warm import warm_dataset
+
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text(
+        "id,title,body\ne1,hydrangea,climate\ne2,climate,hydrangea\n",
+        encoding="utf-8",
+    )
+    db = open_core_db(tmp_path / "core.turso")
+    imported = import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+    search = open_search_db(tmp_path / "search.turso")
+    try:
+        warm_dataset(
+            db,
+            search,
+            workspace_id="ws",
+            dataset_id="notes",
+            version_id=imported.version_id,
+            profile=None,
+            warm=SearchWarmConfig(),
+            embedder_factory=lambda _p: (_ for _ in ()).throw(RuntimeError("no")),
+        )
+        title = lookup_field_corpus(
+            search,
+            workspace_id="ws",
+            dataset_id="notes",
+            version_id=imported.version_id,
+            field_name="title",
+        )
+        body = lookup_field_corpus(
+            search,
+            workspace_id="ws",
+            dataset_id="notes",
+            version_id=imported.version_id,
+            field_name="body",
+        )
+        assert title is not None and body is not None
+        assert title.doc_table != body.doc_table
+        assert load_entry_segment_counts(search, title, entry_ids=["e1", "e2"]) == {
+            "e1": 1,
+            "e2": 1,
+        }
+        assert load_entry_segment_counts(search, body, entry_ids=["e1", "e2"]) == {
+            "e1": 1,
+            "e2": 1,
+        }
+
+        service = LexicalService(search=search)
+        title_scores = service.lexical_scores_for_entries(
+            workspace_id="ws",
+            dataset_id="notes",
+            version_id=imported.version_id,
+            corpus_by_entry={"e1": "hydrangea", "e2": "climate"},
+            query_record={"kind": "LiteralText", "text": "hydrangea"},
+            input_aggregation=None,
+            target_aggregation=None,
+            source_field="title",
+        )
+        body_scores = service.lexical_scores_for_entries(
+            workspace_id="ws",
+            dataset_id="notes",
+            version_id=imported.version_id,
+            corpus_by_entry={"e1": "climate", "e2": "hydrangea"},
+            query_record={"kind": "LiteralText", "text": "hydrangea"},
+            input_aggregation=None,
+            target_aggregation=None,
+            source_field="body",
+        )
+        assert title_scores["e1"] > 0 and title_scores["e2"] == 0.0
+        assert body_scores["e2"] > 0 and body_scores["e1"] == 0.0
+
+        before_title = search.connection.execute(
+            f"SELECT COUNT(*) FROM {title.doc_table}"
+        ).fetchone()[0]
+        scratch_scores = service.lexical_scores_for_entries(
+            workspace_id="ws",
+            dataset_id="notes",
+            version_id=imported.version_id,
+            corpus_by_entry={"e1": "hydrangea extra", "e2": "other"},
+            query_record={"kind": "LiteralText", "text": "hydrangea"},
+            input_aggregation=None,
+            target_aggregation=None,
+            source_field=None,
+        )
+        assert scratch_scores["e1"] > 0
+        after_title = search.connection.execute(
+            f"SELECT COUNT(*) FROM {title.doc_table}"
+        ).fetchone()[0]
+        assert after_title == before_title
+        leftovers = search.connection.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type = 'table' AND name LIKE 'quail_lex_scratch_%'
+            """
+        ).fetchall()
+        assert leftovers == []
+
+        again = service.lexical_scores_for_entries(
+            workspace_id="ws",
+            dataset_id="notes",
+            version_id=imported.version_id,
+            corpus_by_entry={"e1": "hydrangea", "e2": "climate"},
+            query_record={"kind": "LiteralText", "text": "hydrangea"},
+            input_aggregation=None,
+            target_aggregation=None,
+            source_field="title",
+        )
+        assert again == title_scores
+    finally:
+        search.close()
+        db.close()
+
+
+def test_slice_derived_corpus_does_not_reuse_warm_field(tmp_path: Path) -> None:
+    from quail.analysis.operations import Slice
+    from quail.config.models import SearchWarmConfig
+    from quail.search.warm import warm_dataset
+
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text(
+        "id,body\ne1,hydrangea care tips\ne2,climate policy notes\n",
+        encoding="utf-8",
+    )
+    db = open_core_db(tmp_path / "core.turso")
+    imported = import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+    search = open_search_db(tmp_path / "search.turso")
+    try:
+        warm_dataset(
+            db,
+            search,
+            workspace_id="ws",
+            dataset_id="notes",
+            version_id=imported.version_id,
+            profile=None,
+            warm=SearchWarmConfig(),
+            embedder_factory=lambda _p: (_ for _ in ()).throw(RuntimeError("no")),
+        )
+        session = create_session(db, workspace_id="ws")
+        lexical = LexicalService(search=search)
+        sliced = Expression(Field("body", kind="source"), Slice(0, 4), Lexical("care"))
+        full = Expression(Field("body", kind="source"), Lexical("care"))
+
+        def driver(engine: QueryEngine, _prints: object) -> None:
+            assert dispatch_call(engine, "count", (), {"group": G0.where(sliced > 0)}) == 0
+            assert dispatch_call(engine, "count", (), {"group": G0.where(full > 0)}) == 1
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            lexical=lexical,
+        )
+    finally:
+        search.close()
+        db.close()

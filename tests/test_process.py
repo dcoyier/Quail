@@ -453,6 +453,7 @@ def test_lexical_fields_limits_warm_segments(tmp_path: Path) -> None:
             workspace_id="local",
             dataset_id="notes",
             version_id=result.version_id,
+            field_name="body",
         )
         counts = load_entry_segment_counts(
             search, corpus, entry_ids=["e1", "e2"]
@@ -467,6 +468,7 @@ def test_lexical_fields_limits_warm_segments(tmp_path: Path) -> None:
             query_record={"kind": "LiteralText", "text": "hydrangea"},
             input_aggregation=None,
             target_aggregation=None,
+            source_field="body",
         )
         assert scores["e1"] > 0
         assert scores["e2"] == 0.0

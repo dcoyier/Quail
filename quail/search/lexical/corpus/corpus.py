@@ -1,18 +1,23 @@
-"""Per-version Turso document tables; FTS indexes built after plain inserts."""
+"""Per-field Turso document tables; FTS indexes built after plain inserts."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 import re
-from collections.abc import Sequence
+import uuid
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 from quail.analysis.errors import QuailRuntimeError
 from quail.search.db import SearchDb
 from quail.search.lexical.query import prepare_prefix_text, prepare_text
 
-_TABLE_NAME_RE = re.compile(r"^quail_lex_[dt]_[0-9a-f]{32}$")
+_TABLE_NAME_RE = re.compile(
+    r"^(?:quail_lex_[dt]_[0-9a-f]{32}|quail_lex_scratch_[dt]_[0-9a-f]{32})$"
+)
+_SCRATCH_TABLE_RE = re.compile(r"^quail_lex_scratch_[dt]_[0-9a-f]{32}$")
 _MAX_PREFIX_TERMS = 4_096
 # Bound WAL growth while writing plain segment rows during warm.
 _ENTRY_COMMIT_BATCH_SIZE = 64
@@ -20,7 +25,7 @@ _ENTRY_COMMIT_BATCH_SIZE = 64
 
 @dataclass(frozen=True, slots=True)
 class LexicalCorpus:
-    """Resolved per-version document and terms table names."""
+    """Resolved document and terms table names for one field or scratch corpus."""
 
     doc_table: str
     terms_table: str
@@ -32,17 +37,21 @@ def resolve_corpus(
     workspace_id: str,
     dataset_id: str,
     version_id: str,
+    field_name: str,
 ) -> LexicalCorpus:
-    """Return existing or newly created per-version document tables (no FTS yet)."""
+    """Return existing or newly created per-field document tables (no FTS yet)."""
+
+    if not field_name:
+        raise QuailRuntimeError("Lexical corpus field_name must be non-empty")
 
     connection = search.connection
     row = connection.execute(
         """
         SELECT doc_table, terms_table
         FROM quail_lexical_corpus
-        WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+        WHERE workspace_id = ? AND dataset_id = ? AND version_id = ? AND field_name = ?
         """,
-        (workspace_id, dataset_id, version_id),
+        (workspace_id, dataset_id, version_id, field_name),
     ).fetchone()
     if row is not None:
         doc_table = str(row[0])
@@ -51,7 +60,9 @@ def resolve_corpus(
         _require_safe_table(terms_table)
         return LexicalCorpus(doc_table=doc_table, terms_table=terms_table)
 
-    key = hashlib.sha256(f"{workspace_id}\0{dataset_id}\0{version_id}".encode()).hexdigest()[:32]
+    key = hashlib.sha256(
+        f"{workspace_id}\0{dataset_id}\0{version_id}\0{field_name}".encode()
+    ).hexdigest()[:32]
     doc_table = f"quail_lex_d_{key}"
     terms_table = f"quail_lex_t_{key}"
     try:
@@ -85,10 +96,11 @@ def resolve_corpus(
         connection.execute(
             """
             INSERT INTO quail_lexical_corpus(
-              workspace_id, dataset_id, version_id, doc_table, terms_table, created_at
-            ) VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+              workspace_id, dataset_id, version_id, field_name,
+              doc_table, terms_table, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
             """,
-            (workspace_id, dataset_id, version_id, doc_table, terms_table),
+            (workspace_id, dataset_id, version_id, field_name, doc_table, terms_table),
         )
         connection.commit()
     except Exception:
@@ -98,6 +110,175 @@ def resolve_corpus(
             repair_hint="Retry the whole exec; if it persists, rebuild the search database.",
         ) from None
     return LexicalCorpus(doc_table=doc_table, terms_table=terms_table)
+
+
+def lookup_field_corpus(
+    search: SearchDb,
+    *,
+    workspace_id: str,
+    dataset_id: str,
+    version_id: str,
+    field_name: str,
+) -> LexicalCorpus | None:
+    """Give back a registered per-field corpus, or None when missing."""
+
+    row = search.connection.execute(
+        """
+        SELECT doc_table, terms_table
+        FROM quail_lexical_corpus
+        WHERE workspace_id = ? AND dataset_id = ? AND version_id = ? AND field_name = ?
+        """,
+        (workspace_id, dataset_id, version_id, field_name),
+    ).fetchone()
+    if row is None:
+        return None
+    doc_table = str(row[0])
+    terms_table = str(row[1])
+    _require_safe_table(doc_table)
+    _require_safe_table(terms_table)
+    return LexicalCorpus(doc_table=doc_table, terms_table=terms_table)
+
+
+@contextmanager
+def scratch_corpus(search: SearchDb) -> Iterator[LexicalCorpus]:
+    """Create a request-local corpus; drop it when the block exits."""
+
+    key = uuid.uuid4().hex
+    doc_table = f"quail_lex_scratch_d_{key}"
+    terms_table = f"quail_lex_scratch_t_{key}"
+    connection = search.connection
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute(
+            f"""
+            CREATE TABLE {doc_table}(
+              document_id INTEGER PRIMARY KEY,
+              entry_id TEXT NOT NULL,
+              segment_position INTEGER NOT NULL,
+              text TEXT NOT NULL,
+              prefix_text TEXT NOT NULL,
+              UNIQUE(entry_id, segment_position)
+            )
+            """
+        )
+        connection.execute(
+            f"""
+            CREATE TABLE {terms_table}(
+              term TEXT PRIMARY KEY,
+              indexed_term TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            f"""
+            CREATE INDEX {doc_table}_entry
+            ON {doc_table}(entry_id, segment_position)
+            """
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise QuailRuntimeError(
+            "Failed to create lexical scratch corpus",
+            repair_hint="Retry the whole exec; if it persists, rebuild the search database.",
+        ) from None
+    corpus = LexicalCorpus(doc_table=doc_table, terms_table=terms_table)
+    try:
+        yield corpus
+    finally:
+        _drop_corpus_tables(search, corpus)
+
+
+def sweep_scratch_corpora(search: SearchDb) -> int:
+    """Drop orphaned scratch document/terms tables left by crashed requests."""
+
+    connection = search.connection
+    rows = connection.execute(
+        """
+        SELECT name FROM sqlite_master
+        WHERE type = 'table' AND name LIKE 'quail_lex_scratch_%'
+        """
+    ).fetchall()
+    dropped = 0
+    for row in rows:
+        name = str(row[0])
+        if not _SCRATCH_TABLE_RE.fullmatch(name):
+            continue
+        connection.execute(f"DROP TABLE IF EXISTS {name}")
+        dropped += 1
+    if dropped:
+        connection.commit()
+    return dropped
+
+
+def drop_version_corpora(
+    search: SearchDb,
+    *,
+    workspace_id: str,
+    dataset_id: str,
+    version_id: str,
+) -> None:
+    """Drop every registered per-field corpus for one dataset version."""
+
+    connection = search.connection
+    rows = connection.execute(
+        """
+        SELECT doc_table, terms_table
+        FROM quail_lexical_corpus
+        WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+        """,
+        (workspace_id, dataset_id, version_id),
+    ).fetchall()
+    for row in rows:
+        doc_table = validate_table_ident(str(row[0]))
+        terms_table = validate_table_ident(str(row[1]))
+        connection.execute(f"DROP TABLE IF EXISTS {doc_table}")
+        connection.execute(f"DROP TABLE IF EXISTS {terms_table}")
+    connection.execute(
+        """
+        DELETE FROM quail_lexical_corpus
+        WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+        """,
+        (workspace_id, dataset_id, version_id),
+    )
+
+
+def drop_field_corpora_except(
+    search: SearchDb,
+    *,
+    workspace_id: str,
+    dataset_id: str,
+    version_id: str,
+    keep_fields: Sequence[str],
+) -> None:
+    """Drop registered field corpora not listed in keep_fields."""
+
+    keep = set(keep_fields)
+    connection = search.connection
+    rows = connection.execute(
+        """
+        SELECT field_name, doc_table, terms_table
+        FROM quail_lexical_corpus
+        WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+        """,
+        (workspace_id, dataset_id, version_id),
+    ).fetchall()
+    for row in rows:
+        field_name = str(row[0])
+        if field_name in keep:
+            continue
+        doc_table = validate_table_ident(str(row[1]))
+        terms_table = validate_table_ident(str(row[2]))
+        connection.execute(f"DROP TABLE IF EXISTS {doc_table}")
+        connection.execute(f"DROP TABLE IF EXISTS {terms_table}")
+        connection.execute(
+            """
+            DELETE FROM quail_lexical_corpus
+            WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+              AND field_name = ?
+            """,
+            (workspace_id, dataset_id, version_id, field_name),
+        )
 
 
 def load_entry_segment_counts(
@@ -133,8 +314,8 @@ def warm_entry_segments(
     """Full Lexical rebuild: plain segment writes, then one dual FTS index build.
 
     Used by ``quail process``. Drops any existing FTS indexes first so inserts
-    stay cheap (v0.10 build order). Score paths should use
-    ``ensure_entry_segments`` for small fallback patches.
+    stay cheap (v0.10 build order). Score paths should use scratch corpora
+    when warm reuse is not available.
     """
 
     _drop_fts_indexes(search, corpus)
@@ -156,8 +337,8 @@ def ensure_entry_segments(
 ) -> dict[str, int]:
     """Replace segments for the given entries; ensure FTS indexes exist afterward.
 
-    Score-time fallback when warm is missing or incomplete. Prefer
-    ``load_entry_segment_counts`` when the warm receipt is lexical-ready.
+    Used for request-local scratch corpora (and tests). Prefer
+    ``load_entry_segment_counts`` when a warmed field corpus is ready.
     """
 
     counts = _write_entry_segments(
@@ -177,7 +358,7 @@ def expand_prefixes(
     *,
     max_prefix_terms: int = _MAX_PREFIX_TERMS,
 ) -> dict[str, tuple[str, ...]]:
-    """Expand prefix leaves against the version term dictionary."""
+    """Expand prefix leaves against the corpus term dictionary."""
 
     connection = search.connection
     expanded_count = 0
@@ -202,6 +383,22 @@ def expand_prefixes(
         expanded_count += len(terms)
         output[prefix] = terms
     return output
+
+
+def _drop_corpus_tables(search: SearchDb, corpus: LexicalCorpus) -> None:
+    doc_table = validate_table_ident(corpus.doc_table)
+    terms_table = validate_table_ident(corpus.terms_table)
+    connection = search.connection
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        fts_name, prefix_name = _fts_index_names(doc_table)
+        connection.execute(f"DROP INDEX IF EXISTS {fts_name}")
+        connection.execute(f"DROP INDEX IF EXISTS {prefix_name}")
+        connection.execute(f"DROP TABLE IF EXISTS {doc_table}")
+        connection.execute(f"DROP TABLE IF EXISTS {terms_table}")
+        connection.commit()
+    except Exception:
+        connection.rollback()
 
 
 def _write_entry_segments(

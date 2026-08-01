@@ -15,7 +15,8 @@ from quail.search.lexical.corpus import (
     ensure_entry_segments,
     expand_prefixes,
     load_entry_segment_counts,
-    resolve_corpus,
+    lookup_field_corpus,
+    scratch_corpus,
     validate_table_ident,
 )
 from quail.search.warm import get_warm_receipt
@@ -35,7 +36,7 @@ _MAX_MATCHES = 5_000_000
 
 @dataclass(slots=True)
 class LexicalService:
-    """Index corpus segments into per-version FTS tables and score with Turso."""
+    """Index corpus segments into per-field or scratch FTS tables and score."""
 
     search: SearchDb
 
@@ -49,6 +50,7 @@ class LexicalService:
         query_record: dict[str, Any],
         input_aggregation: str | None,
         target_aggregation: str | None,
+        source_field: str | None = None,
     ) -> float:
         """Score one corpus field value against a Lexical query record."""
 
@@ -60,6 +62,7 @@ class LexicalService:
             query_record=query_record,
             input_aggregation=input_aggregation,
             target_aggregation=target_aggregation,
+            source_field=source_field,
         )
         return scores.get("_", 0.0)
 
@@ -73,8 +76,9 @@ class LexicalService:
         query_record: dict[str, Any],
         input_aggregation: str | None,
         target_aggregation: str | None,
+        source_field: str | None = None,
     ) -> dict[str, float]:
-        """Score many entries with Turso FTS; reuse warmed segments when ready."""
+        """Score many entries; reuse a warmed field corpus or build scratch."""
 
         queries = _target_queries(query_record)
         if not queries:
@@ -95,66 +99,88 @@ class LexicalService:
                 results.setdefault(entry_id, 0.0)
             return results
 
-        corpus = resolve_corpus(
-            self.search,
-            workspace_id=workspace_id,
-            dataset_id=dataset_id,
-            version_id=version_id,
-        )
-        segment_counts = _segment_counts_for_score(
-            self.search,
-            corpus,
-            workspace_id=workspace_id,
-            dataset_id=dataset_id,
-            version_id=version_id,
-            entry_segments=entry_segments,
-        )
-
         input_mode = input_aggregation or "total"
         target_mode = target_aggregation or "total"
-        entry_ids = list(entry_segments.keys())
-        scored = _score_entries(
+        warmed = _try_warmed_field_corpus(
             self.search,
-            corpus,
-            queries=queries,
-            entry_ids=entry_ids,
-            segment_counts=segment_counts,
-            input_aggregation=input_mode,
-            target_aggregation=target_mode,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+            source_field=source_field,
+            entry_segments=entry_segments,
         )
+        if warmed is not None:
+            corpus, segment_counts = warmed
+            scored = _score_entries(
+                self.search,
+                corpus,
+                queries=queries,
+                entry_ids=list(entry_segments.keys()),
+                segment_counts=segment_counts,
+                input_aggregation=input_mode,
+                target_aggregation=target_mode,
+            )
+            results.update(scored)
+            for entry_id in corpus_by_entry:
+                results.setdefault(entry_id, 0.0)
+            return results
+
+        with scratch_corpus(self.search) as corpus:
+            segment_counts = ensure_entry_segments(
+                self.search,
+                corpus,
+                entry_segments=entry_segments,
+            )
+            scored = _score_entries(
+                self.search,
+                corpus,
+                queries=queries,
+                entry_ids=list(entry_segments.keys()),
+                segment_counts=segment_counts,
+                input_aggregation=input_mode,
+                target_aggregation=target_mode,
+            )
         results.update(scored)
         for entry_id in corpus_by_entry:
             results.setdefault(entry_id, 0.0)
         return results
 
 
-def _segment_counts_for_score(
+def _try_warmed_field_corpus(
     search: SearchDb,
-    corpus: LexicalCorpus,
     *,
     workspace_id: str,
     dataset_id: str,
     version_id: str,
+    source_field: str | None,
     entry_segments: dict[str, list[str]],
-) -> dict[str, int]:
-    """Reuse process-warmed FTS rows when ready; otherwise index then score."""
+) -> tuple[LexicalCorpus, dict[str, int]] | None:
+    """Reuse a process-warmed per-field corpus when ready; otherwise None."""
 
-    entry_ids = list(entry_segments.keys())
+    if source_field is None:
+        return None
     receipt = get_warm_receipt(
         search,
         workspace_id=workspace_id,
         dataset_id=dataset_id,
         version_id=version_id,
     )
-    if receipt is not None and receipt.lexical_ready:
-        existing = load_entry_segment_counts(search, corpus, entry_ids=entry_ids)
-        if all(existing.get(entry_id, 0) > 0 for entry_id in entry_ids):
-            return {entry_id: existing[entry_id] for entry_id in entry_ids}
-    return ensure_entry_segments(
+    if receipt is None or not receipt.lexical_ready:
+        return None
+    corpus = lookup_field_corpus(
         search,
-        corpus,
-        entry_segments=entry_segments,
+        workspace_id=workspace_id,
+        dataset_id=dataset_id,
+        version_id=version_id,
+        field_name=source_field,
     )
+    if corpus is None:
+        return None
+    entry_ids = list(entry_segments.keys())
+    existing = load_entry_segment_counts(search, corpus, entry_ids=entry_ids)
+    if not all(existing.get(entry_id, 0) > 0 for entry_id in entry_ids):
+        return None
+    return corpus, {entry_id: existing[entry_id] for entry_id in entry_ids}
 
 
 def _score_entries(

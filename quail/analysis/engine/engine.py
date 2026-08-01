@@ -478,14 +478,32 @@ class QueryEngine:
         ):
             return search_scores[score_key].get(entry_id)
         value: Any = self._read_field_value(expression.root, entry_id)
-        for operation in expression.operations:
+        for index, operation in enumerate(expression.operations):
+            source_field = None
+            if operation.kind == "Lexical":
+                source_field = self._warmed_lexical_source_field(
+                    expression, prefix_count=index
+                )
             value = self._apply_operation(
                 operation,
                 value,
                 root=expression.root,
                 search_scores=search_scores,
+                source_field=source_field,
             )
         return value
+
+    def _warmed_lexical_source_field(
+        self, expression: Expression, *, prefix_count: int
+    ) -> str | None:
+        """Source field name for warm reuse when Lexical has no transforming prefixes."""
+
+        if prefix_count != 0:
+            return None
+        resolved = self.resolve_field(expression.root)
+        if resolved.kind != "source":
+            return None
+        return resolved.name
 
     def _apply_operation(
         self,
@@ -494,6 +512,7 @@ class QueryEngine:
         *,
         root: Field | None = None,
         search_scores: dict[str, dict[str, float | None]] | None = None,
+        source_field: str | None = None,
     ) -> Any:
         kind = operation.kind
         if kind == "Value":
@@ -558,6 +577,7 @@ class QueryEngine:
                 ),
                 input_aggregation=operation.params.get("input_aggregation"),
                 target_aggregation=operation.params.get("target_aggregation"),
+                source_field=source_field,
             )
         if kind == "Semantic":
             if self._similarity is None:
@@ -836,6 +856,11 @@ class QueryEngine:
                             "Set core.search_database, re-run quail, then retry the whole exec."
                         ),
                     )
+                source_field = None
+                if not prefix_ops:
+                    resolved = self.resolve_field(expression.root)
+                    if resolved.kind == "source":
+                        source_field = resolved.name
                 scored = {
                     entry_id: score
                     for entry_id, score in self._lexical.lexical_scores_for_entries(
@@ -851,6 +876,7 @@ class QueryEngine:
                         ),
                         input_aggregation=operation.params.get("input_aggregation"),
                         target_aggregation=operation.params.get("target_aggregation"),
+                        source_field=source_field,
                     ).items()
                 }
             if cached is None:
