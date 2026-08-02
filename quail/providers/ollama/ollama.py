@@ -47,7 +47,7 @@ def _post_json(url: str, payload: dict[str, Any], *, headers: dict[str, str]) ->
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
+        with urllib.request.urlopen(request, timeout=300) as response:
             raw = response.read()
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", errors="replace")[:500]

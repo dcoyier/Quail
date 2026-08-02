@@ -42,6 +42,8 @@ def load_csv_dataset(path: str | Path) -> CsvDataset:
 
     try:
         text = payload.decode("utf-8-sig")
+        # Large article bodies exceed Python's default CSV field size (128 KiB).
+        csv.field_size_limit(max(csv.field_size_limit(), MAX_CSV_BYTES))
         reader = csv.DictReader(io.StringIO(text, newline=""), strict=True)
         headers = reader.fieldnames
         if headers is None:
