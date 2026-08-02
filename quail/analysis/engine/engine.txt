@@ -21,14 +21,16 @@ check_bound_field_kind(field):
 retrieve(plan):
   For fields units, evaluate the field group and apply limit/order.
   Otherwise evaluate entry ids.
+  For Unit("values", field), collect distinct present values over the full
+  entry group via _distinct_present_values, then apply limit/order to that
+  distinct sequence (ranking is rejected at plan time).
   For Unit("entries", field), keep only entries where the field is present.
   Then apply ranking and limit/order.
-  Materialize Expression values, Entry handles, present field values, or distinct values.
-  Distinct values use _distinct_value_key (JSON with sorted keys, else repr).
+  Materialize Expression values, Entry handles, or present field values.
 
 count(plan):
   Same candidate sets as retrieve, but give back the length.
-  Distinct values-unit counts use the same _distinct_value_key.
+  Values-unit counts use len(_distinct_present_values(...)).
 
 create_field(plan):
   Reject source-name collision.
@@ -61,6 +63,16 @@ Field-scoped member groups resolve each member through resolve_field against the
 catalog (kind stamped; unknown or kind-mismatched names raise).
 Field reads bulk-load each referenced field once into an entry_id map; overlay
 wins. Ranking tie-breaks with a precomputed position map.
+
+_apply_limit(items, limit, order):
+  Give back top, bottom, or middle slice of items by order.
+  Empty items give back [].
+
+_distinct_present_values(field, entry_ids):
+  Walk entry_ids in order.
+  Skip None.
+  Keep first-seen values by _distinct_value_key.
+  Give back that distinct list.
 
 _distinct_value_key(value):
   Give back json.dumps(value, sort_keys=True) when the value is JSON-serializable.

@@ -86,6 +86,12 @@ class QueryEngine:
 
         search_scores = self._search_scores
         entry_ids = self._evaluate_entry_group(plan.group, search_scores=search_scores)
+        if isinstance(plan.unit, Unit) and plan.unit.scope == "values":
+            assert plan.unit.field is not None
+            # Deduplicate the full group first; limit/order apply to distinct values.
+            values = self._distinct_present_values(plan.unit.field, entry_ids)
+            return self._apply_limit(values, plan.limit, plan.order)
+
         if (
             isinstance(plan.unit, Unit)
             and plan.unit.scope == "entries"
@@ -112,20 +118,6 @@ class QueryEngine:
             if plan.unit.field is None:
                 return [self._make_entry(entry_id) for entry_id in entry_ids]
             return [self._read_field_value(plan.unit.field, entry_id) for entry_id in entry_ids]
-        if plan.unit.scope == "values":
-            assert plan.unit.field is not None
-            seen: set[str] = set()
-            values: list[Any] = []
-            for entry_id in entry_ids:
-                value = self._read_field_value(plan.unit.field, entry_id)
-                if value is None:
-                    continue
-                key = _distinct_value_key(value)
-                if key in seen:
-                    continue
-                seen.add(key)
-                values.append(value)
-            return values
         raise QuailSyntaxError(f"Unsupported unit scope: {plan.unit.scope}")
 
     def count(self, plan: CountPlan) -> int:
@@ -146,13 +138,7 @@ class QueryEngine:
             )
         if plan.unit.scope == "values":
             assert plan.unit.field is not None
-            seen: set[str] = set()
-            for entry_id in entry_ids:
-                value = self._read_field_value(plan.unit.field, entry_id)
-                if value is None:
-                    continue
-                seen.add(_distinct_value_key(value))
-            return len(seen)
+            return len(self._distinct_present_values(plan.unit.field, entry_ids))
         raise QuailSyntaxError(f"Unsupported unit scope: {plan.unit.scope}")
 
     def create_field(self, plan: CreateFieldPlan) -> Field:
@@ -936,6 +922,22 @@ class QueryEngine:
             return list(items)
         start = max(0, (len(items) - limit) // 2)
         return items[start : start + limit]
+
+    def _distinct_present_values(self, field: Field, entry_ids: list[str]) -> list[Any]:
+        """First-seen distinct present values over entry_ids (None excluded)."""
+
+        seen: set[str] = set()
+        values: list[Any] = []
+        for entry_id in entry_ids:
+            value = self._read_field_value(field, entry_id)
+            if value is None:
+                continue
+            key = _distinct_value_key(value)
+            if key in seen:
+                continue
+            seen.add(key)
+            values.append(value)
+        return values
 
 
 def _expression_score_key(expression: Expression) -> str:

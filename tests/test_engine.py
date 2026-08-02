@@ -324,6 +324,53 @@ def test_distinct_values_normalize_dict_key_order(tmp_path: Path) -> None:
         )
 
 
+def test_values_limit_applies_after_full_group_dedupe(tmp_path: Path) -> None:
+    """limit must not truncate entries before distinct collection (Garden Gate stress)."""
+
+    csv_path = tmp_path / "authors.csv"
+    # Five shared "170", then five unique authors — old bug returned only ["170"] at limit=5.
+    rows = ["id,author"] + [f"e{i},170" for i in range(1, 6)]
+    rows += [f"e{i},a{i}" for i in range(6, 11)]
+    csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    db = open_core_db(tmp_path / "core.turso")
+    import_csv_dataset(db, "ws", "authors", csv_path, activate=True)
+    session = create_session(db, "ws")
+    with db:
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            unit = Unit("values", Field("author"))
+            assert dispatch_call(engine, "count", (), {"unit": unit}) == 6
+            top = dispatch_call(engine, "retrieve", (), {"unit": unit, "limit": 5, "order": "top"})
+            assert top == ["170", "a6", "a7", "a8", "a9"]
+            bottom = dispatch_call(
+                engine, "retrieve", (), {"unit": unit, "limit": 3, "order": "bottom"}
+            )
+            assert bottom == ["a8", "a9", "a10"]
+            middle = dispatch_call(
+                engine, "retrieve", (), {"unit": unit, "limit": 2, "order": "middle"}
+            )
+            assert middle == ["a7", "a8"]
+            empty = dispatch_call(
+                engine,
+                "retrieve",
+                (),
+                {
+                    "unit": unit,
+                    "group": G0.where(Expression(Field("author"), Value()) == "missing"),
+                    "limit": 5,
+                },
+            )
+            assert empty == []
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="authors",
+            expected_revision=0,
+            driver=driver,
+        )
+
+
 def test_field_group_members_resolve_against_catalog(tmp_path: Path) -> None:
     db, session = _seed(tmp_path)
     with db:

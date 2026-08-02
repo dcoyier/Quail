@@ -171,7 +171,8 @@ not a value predicate.
 - `Unit("entries")` — entries (also `entries`)
 - `Unit("entries", field)` — present values of `field`, aligned to entries
 - `Unit("fields")` — fields (also `fields`; use with a field group like `G1`)
-- `Unit("values", field)` — distinct present values
+- `Unit("values", field)` — distinct present values over the full group;
+  `limit` / `order` apply to that distinct sequence (not to entries first)
 
 ### `Entry` (no public constructor)
 
@@ -267,7 +268,7 @@ count(unit=entries, group=G0)
 | entries | entry group | `Entry` | yes |
 | fields | field group | `Field` | no |
 | `Unit("entries", field)` | entry group | present values | yes |
-| `Unit("values", field)` | entry group | distinct values | no |
+| `Unit("values", field)` | entry group | distinct values (full group, then limit/order) | no |
 | `Expression` | entry group | computed values | yes |
 
 ---
