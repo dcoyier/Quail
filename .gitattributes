@@ -1,3 +1,0 @@
-*.turso filter=lfs diff=lfs merge=lfs -text
-data/vectors/*.jsonl.gz filter=lfs diff=lfs merge=lfs -text
-data/articles.csv filter=lfs diff=lfs merge=lfs -text
