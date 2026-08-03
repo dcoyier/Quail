@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from typing import Any
 
@@ -41,7 +42,13 @@ async def _run(url: str, query: str, limit: int) -> int:
     from mcp import ClientSession
     from mcp.client.streamable_http import streamable_http_client
 
-    async with streamable_http_client(url) as (read, write, _get_sid):
+    # terminate_on_close=False: ChatGPT Agent saw hangs on DELETE /mcp teardown
+    # after a successful exec; smoke cares about tool results, not session delete.
+    async with streamable_http_client(url, terminate_on_close=False) as (
+        read,
+        write,
+        _get_sid,
+    ):
         async with ClientSession(read, write) as session:
             await session.initialize()
             tools = await session.list_tools()
@@ -106,6 +113,7 @@ print("LEXICAL", len(lex_hits))
                 print("SMOKE_MCP_FAIL missing SEMANTIC in printed_output", file=sys.stderr)
                 return 1
             print("SMOKE_MCP_OK")
+            sys.stdout.flush()
             return 0
 
 
@@ -123,10 +131,17 @@ def main() -> int:
     p.add_argument("--limit", type=int, default=5)
     args = p.parse_args()
     try:
-        return asyncio.run(_run(args.url, args.query, args.limit))
+        rc = asyncio.run(_run(args.url, args.query, args.limit))
     except Exception as exc:
         print(f"SMOKE_MCP_FAIL {exc}", file=sys.stderr)
         return 1
+    if rc == 0:
+        # Force-exit so a hung MCP transport teardown cannot block smoke_all.sh
+        # from printing SMOKE_ALL_OK (seen once on ChatGPT Agent after success).
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0)
+    return rc
 
 
 if __name__ == "__main__":

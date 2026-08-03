@@ -127,31 +127,35 @@ resolve_script() {
   fi
 }
 
-echo "== in-process semantic smoke (exec_script) =="
-SMOKE_PY="$(resolve_script smoke_semantic.py)"
-python3 "$SMOKE_PY" --config "$(cd "$PACK" && pwd)/quail.toml"
-
-echo "== start quail run (unrestricted MCP on :8000) =="
 PACK_ABS="$(cd "$PACK" && pwd)"
 CONFIG="$PACK_ABS/quail.toml"
 QUAIL_LOG="${QUAIL_RUN_LOG:-/tmp/quail-run-smoke.log}"
-# Stop a leftover smoke server if we own the pid file.
-if [[ -f /tmp/quail-run-smoke.pid ]]; then
-  oldpid="$(cat /tmp/quail-run-smoke.pid || true)"
-  if [[ -n "${oldpid:-}" ]] && kill -0 "$oldpid" 2>/dev/null; then
-    kill "$oldpid" 2>/dev/null || true
-    sleep 1
-  fi
-  rm -f /tmp/quail-run-smoke.pid
-fi
-# If something else already owns :8000, reuse it (do not kill foreign processes).
+
+# Detect an already-running MCP server before opening the DBs in-process.
+# Turso locking: in-process smoke_semantic + live `quail run` cannot share the
+# pack DB (ChatGPT Agent hit Failed locking file on re-run).
 reuse=0
 code="$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 "http://127.0.0.1:8000/mcp" || true)"
 if [[ -n "$code" && "$code" != "000" ]]; then
   echo "reusing existing MCP listener on :8000 (http=$code)"
   reuse=1
 fi
+
 if [[ "$reuse" -eq 0 ]]; then
+  echo "== in-process semantic smoke (exec_script) =="
+  SMOKE_PY="$(resolve_script smoke_semantic.py)"
+  python3 "$SMOKE_PY" --config "$CONFIG"
+
+  echo "== start quail run (unrestricted MCP on :8000) =="
+  # Stop a leftover smoke server if we own the pid file.
+  if [[ -f /tmp/quail-run-smoke.pid ]]; then
+    oldpid="$(cat /tmp/quail-run-smoke.pid || true)"
+    if [[ -n "${oldpid:-}" ]] && kill -0 "$oldpid" 2>/dev/null; then
+      kill "$oldpid" 2>/dev/null || true
+      sleep 1
+    fi
+    rm -f /tmp/quail-run-smoke.pid
+  fi
   : >"$QUAIL_LOG"
   nohup quail run --config "$CONFIG" >"$QUAIL_LOG" 2>&1 &
   echo $! >/tmp/quail-run-smoke.pid
@@ -172,6 +176,8 @@ if [[ "$reuse" -eq 0 ]]; then
     tail -n 80 "$QUAIL_LOG" >&2 || true
     exit 1
   fi
+else
+  echo "== skip in-process semantic smoke (MCP already owns pack DB) =="
 fi
 
 echo "== MCP quail_setup + quail_exec Semantic smoke =="
