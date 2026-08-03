@@ -8,23 +8,47 @@
 set -euo pipefail
 
 BASE="${1:-/mnt/data}"
-PACK="$BASE/psychology-base-quail"
-OLLAMA_RT="$BASE/ollama-runtime"
-MODEL="$BASE/embeddinggemma-q8-model"
-WHEEL_DIR="$BASE/quail-wheel"
+
+# ChatGPT often unzips as "name(1)/" when the stem already exists — accept that.
+pick_dir() {
+  local base="$1" stem="$2"
+  local candidate
+  if [[ -d "$base/$stem" ]]; then
+    printf '%s\n' "$base/$stem"
+    return 0
+  fi
+  # Prefer highest numeric suffix if several copies exist.
+  # Avoid pipefail trip when the glob matches nothing.
+  candidate="$(find "$base" -maxdepth 1 -type d -name "${stem}(*)" 2>/dev/null | sort -V | tail -1 || true)"
+  if [[ -n "${candidate:-}" && -d "$candidate" ]]; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+  return 1
+}
+
+PACK="$(pick_dir "$BASE" psychology-mini-quail || pick_dir "$BASE" psychology-base-quail || true)"
+OLLAMA_RT="$(pick_dir "$BASE" ollama-runtime || true)"
+MODEL="$(pick_dir "$BASE" embeddinggemma-q8-model || true)"
+WHEEL_DIR="$(pick_dir "$BASE" quail-wheel || true)"
 
 echo "SMOKE_BASE=$BASE"
+echo "PACK=${PACK:-MISSING}"
+echo "OLLAMA_RT=${OLLAMA_RT:-MISSING}"
+echo "MODEL=${MODEL:-MISSING}"
+echo "WHEEL_DIR=${WHEEL_DIR:-MISSING}"
 
-if [[ ! -d "$PACK" ]]; then
-  echo "missing $PACK — unzip psychology-base-quail.zip first" >&2
+if [[ -z "${PACK:-}" || ! -d "$PACK" ]]; then
+  echo "missing psychology-mini-quail or psychology-base-quail under $BASE" >&2
+  ls -la "$BASE" >&2 || true
   exit 2
 fi
-if [[ ! -d "$OLLAMA_RT" ]]; then
-  echo "missing $OLLAMA_RT — unzip ollama-runtime.zip first" >&2
+if [[ -z "${OLLAMA_RT:-}" || ! -d "$OLLAMA_RT" ]]; then
+  echo "missing ollama-runtime under $BASE" >&2
   exit 2
 fi
-if [[ ! -d "$MODEL" ]]; then
-  echo "missing $MODEL — unzip embeddinggemma-q8-model.zip first" >&2
+if [[ -z "${MODEL:-}" || ! -d "$MODEL" ]]; then
+  echo "missing embeddinggemma-q8-model under $BASE" >&2
   exit 2
 fi
 
