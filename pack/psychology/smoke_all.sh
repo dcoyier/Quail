@@ -114,12 +114,69 @@ assert isinstance(emb, list) and len(emb) == 1 and len(emb[0]) == 768, body
 print("EMBED_API_OK dim=768")
 PY
 
-echo "== semantic retrieve smoke =="
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SMOKE_PY="$SCRIPT_DIR/smoke_semantic.py"
-if [[ ! -f "$SMOKE_PY" ]]; then
-  # Also accept copy shipped inside quail-wheel/
-  SMOKE_PY="$WHEEL_DIR/smoke_semantic.py"
-fi
+# Prefer scripts beside this file; fall back to copies inside quail-wheel/.
+resolve_script() {
+  local name="$1"
+  if [[ -f "$SCRIPT_DIR/$name" ]]; then
+    printf '%s\n' "$SCRIPT_DIR/$name"
+  elif [[ -n "${WHEEL_DIR:-}" && -f "$WHEEL_DIR/$name" ]]; then
+    printf '%s\n' "$WHEEL_DIR/$name"
+  else
+    return 1
+  fi
+}
+
+echo "== in-process semantic smoke (exec_script) =="
+SMOKE_PY="$(resolve_script smoke_semantic.py)"
 python3 "$SMOKE_PY" --config "$(cd "$PACK" && pwd)/quail.toml"
+
+echo "== start quail run (unrestricted MCP on :8000) =="
+PACK_ABS="$(cd "$PACK" && pwd)"
+CONFIG="$PACK_ABS/quail.toml"
+QUAIL_LOG="${QUAIL_RUN_LOG:-/tmp/quail-run-smoke.log}"
+# Stop a leftover smoke server if we own the pid file.
+if [[ -f /tmp/quail-run-smoke.pid ]]; then
+  oldpid="$(cat /tmp/quail-run-smoke.pid || true)"
+  if [[ -n "${oldpid:-}" ]] && kill -0 "$oldpid" 2>/dev/null; then
+    kill "$oldpid" 2>/dev/null || true
+    sleep 1
+  fi
+  rm -f /tmp/quail-run-smoke.pid
+fi
+# If something else already owns :8000, reuse it (do not kill foreign processes).
+reuse=0
+code="$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 "http://127.0.0.1:8000/mcp" || true)"
+if [[ -n "$code" && "$code" != "000" ]]; then
+  echo "reusing existing MCP listener on :8000 (http=$code)"
+  reuse=1
+fi
+if [[ "$reuse" -eq 0 ]]; then
+  : >"$QUAIL_LOG"
+  nohup quail run --config "$CONFIG" >"$QUAIL_LOG" 2>&1 &
+  echo $! >/tmp/quail-run-smoke.pid
+  echo "quail_run_pid=$(cat /tmp/quail-run-smoke.pid)"
+  # Wait until the MCP route answers (406 Not Acceptable is fine for bare GET).
+  ready=0
+  for _ in $(seq 1 60); do
+    code="$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 "http://127.0.0.1:8000/mcp" || true)"
+    if [[ -n "$code" && "$code" != "000" ]]; then
+      echo "MCP_LISTEN_OK http=$code"
+      ready=1
+      break
+    fi
+    sleep 0.5
+  done
+  if [[ "$ready" -ne 1 ]]; then
+    echo "quail run failed to listen on :8000" >&2
+    tail -n 80 "$QUAIL_LOG" >&2 || true
+    exit 1
+  fi
+fi
+
+echo "== MCP quail_setup + quail_exec Semantic smoke =="
+SMOKE_MCP="$(resolve_script smoke_mcp.py)"
+python3 "$SMOKE_MCP" --url "http://127.0.0.1:8000/mcp"
 echo "SMOKE_ALL_OK"
+echo "MCP remains at http://127.0.0.1:8000/mcp (quail run)."
+echo "For eval: leave it up; call quail_setup then quail_exec for the one question."

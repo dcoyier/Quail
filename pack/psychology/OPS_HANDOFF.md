@@ -289,18 +289,76 @@ Still TBD: how Quail binary/wheel lands in the VM (pip from OpenAI proxy vs uplo
 
 ---
 
-## I. Suggested next actions (in order)
+## I. Unrestricted MCP smoke (2026-08-03, current)
 
-1. Keep this handoff committed on `psychology`.
-2. Build `ollama-runtime.zip` + `embeddinggemma-q8-model.zip` on this VM from the local Ollama install / q8-only blobs.
-3. Mirror to R2 under `packs/` (optional but helpful for CU).
-4. Computer-use: upload both zips to ChatGPT Library (Sonnet CU OK).
-5. New chat smoke: assemble pack + start Ollama + `api/tags` shows q8 model.
-6. Figure Quail install in-VM; then one-question retrieval smoke.
-7. Later: other domains with the same embed-subagent pattern; RAG condition packs; eval harness.
+In-process `smoke_semantic.py` only proves `exec_script`. Production-shaped path is:
+
+1. `quail run --config <pack>/quail.toml` → streamable-http MCP at `http://127.0.0.1:8000/mcp`
+2. MCP client: `quail_setup` → `quail_exec` with `Semantic(...)` / `Lexical(...)`
+
+Shipped helpers (also inside `quail-wheel.zip`):
+
+| Script | Role |
+|--------|------|
+| `smoke_all.sh` | assemble → install wheel → start Ollama → embed API → in-process smoke → **start `quail run`** → MCP smoke |
+| `smoke_semantic.py` | host `exec_script` Lexical/Semantic (narrow) |
+| `smoke_mcp.py` | MCP SDK `streamable_http_client` → setup + exec |
+
+Proven locally on this VM against mini pack: `SMOKE_MCP_OK` with cognitive-dissonance hits via `quail_exec`.
+
+### Attach budget
+
+~512MB **per message**, not Library storage. Full pack (~250) + model (~302) exceeds one message; **split across messages in the same chat** works. Mini pack (~13MB, 800 rows) is pipeline smoke only — not eval quality.
+
+### Agent smoke prompt (MCP)
+
+Attach from Library (split messages if needed): `psychology-mini-quail.zip` or `psychology-base-quail.zip`, `ollama-runtime.zip`, `embeddinggemma-q8-model.zip`, `quail-wheel.zip`.
+
+```text
+Unzip all attached zips under /mnt/data/ (tolerate name(N)/ folders).
+Run:
+  bash /mnt/data/quail-wheel*/smoke_all.sh /mnt/data
+  # if nested: bash /mnt/data/quail-wheel*/quail-wheel/smoke_all.sh /mnt/data
+Report lines containing: ASSEMBLE_OK, EMBED_API_OK, SMOKE_SEMANTIC_OK, MCP_SETUP_OK, SMOKE_MCP_OK, SMOKE_ALL_OK.
+Leave quail run up at http://127.0.0.1:8000/mcp.
+```
+
+### Eval prompt shape (after smoke)
+
+Server already running. One question per chat:
+
+```text
+Quail MCP is at http://127.0.0.1:8000/mcp (unrestricted local).
+Use MCP tools: quail_setup once, then quail_exec with Semantic/Lexical retrieve
+against dataset articles. Answer ONLY this question using Quail retrieval
+(print evidence ids + short quotes). Do not browse the open web.
+QUESTION: <ONE QUESTION>
+```
+
+Whether ChatGPT natively attaches to localhost MCP is still **unproven**; `smoke_mcp.py` proves the server. If native connect fails, the Agent can drive tools via `python3 smoke_mcp.py`-style calls or inline MCP client code.
+
+### R2 mirrors (CU → Library)
+
+| Object | URL |
+|--------|-----|
+| psychology-base-quail.zip | `https://pub-cc081ad11c2848bea7efb624147a8ae4.r2.dev/packs/psychology-base-quail.zip` |
+| psychology-mini-quail.zip | `https://pub-cc081ad11c2848bea7efb624147a8ae4.r2.dev/packs/psychology-mini-quail.zip` |
+| ollama-runtime.zip | `https://pub-cc081ad11c2848bea7efb624147a8ae4.r2.dev/packs/ollama-runtime.zip` |
+| embeddinggemma-q8-model.zip | `https://pub-cc081ad11c2848bea7efb624147a8ae4.r2.dev/packs/embeddinggemma-q8-model.zip` |
+| quail-wheel.zip | `https://pub-cc081ad11c2848bea7efb624147a8ae4.r2.dev/packs/quail-wheel.zip` |
 
 ---
 
-## J. Alternative path (parked)
+## J. Suggested next actions (in order)
+
+1. Re-upload refreshed `quail-wheel.zip` (with `smoke_mcp.py`) to ChatGPT Library.
+2. Agent chat: run `smoke_all.sh` → confirm `SMOKE_MCP_OK`.
+3. Same chat or follow-up: one-question eval via MCP tools (native or scripted).
+4. Switch attach to **full** `psychology-base-quail.zip` (multi-message) for production-quality retrieval.
+5. Later: other domains; RAG condition packs; harness that opens one chat per question.
+
+---
+
+## K. Alternative path (parked)
 
 Hosted Quail MCP behind a tunnel so the Agent never needs DBs/models in-VM. Still valid, but the current bet is **fully local Agent VM** via Library zips so the eval stays closer to “agent with tools on a sealed machine.”
