@@ -1,10 +1,9 @@
 # Articles workspace
 
-Local Quail deployment for the articles collection.
+Local Quail deployment for the sustainable_living articles collection.
 
 ```sh
-bash assemble.sh
-# Start Ollama with EmbeddingGemma q8 (bundled model store), then:
+bash pack/sustainable_living/assemble_data.sh
 quail run --config "$(pwd)/quail.toml"
 ```
 
