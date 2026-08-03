@@ -308,7 +308,7 @@ Library zips only — no handoff, no smoke scripts, no “eval” framing:
 | `embeddinggemma-q8-model.zip` | q8 model store for this pack’s profile |
 | `quail-wheel.zip` | Quail wheel + offline `deps/` + `install_quail.sh` + `start.sh` |
 
-`start.sh` assembles the pack, installs Quail, starts Ollama, starts `quail run`, prints `READY mcp=http://127.0.0.1:8000/mcp`.
+`start.sh` is pack-agnostic: finds the sibling dir with `quail.toml` + `assemble.sh` (or take `PACK_DIR` as 2nd arg). Same wheel/`start.sh` can serve future domain packs (`<domain>-quail/`). Assembles, installs Quail, starts Ollama, starts `quail run`, prints `READY mcp=http://127.0.0.1:8000/mcp`.
 
 MCP path was proven once (setup + Semantic `quail_exec` + live `/api/embed`). Smoke harness removed; further setup failures surface in the real chat.
 

@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 # Start local Quail against an assembled pack + bundled Ollama embedder.
-# Expects sibling unzipped dirs under BASE (default /mnt/data):
-#   psychology-base-quail/   (or another pack dir with quail.toml + assemble.sh)
+#
+# Usage: start.sh [BASE] [PACK_DIR]
+#   BASE     directory with unzipped siblings (default /mnt/data)
+#   PACK_DIR optional pack path or basename under BASE; if omitted, pick the
+#            unique sibling that contains both quail.toml and assemble.sh
+#
+# Sibling layout under BASE:
+#   <domain>-quail/          pack (quail.toml + assemble.sh)
 #   ollama-runtime/
 #   embeddinggemma-q8-model/
-#   quail-wheel/
+#   quail-wheel/             (this script’s home)
 set -euo pipefail
 
 BASE="${1:-/mnt/data}"
+PACK_ARG="${2:-}"
 
 pick_dir() {
   local base="$1" stem="$2"
@@ -24,7 +31,90 @@ pick_dir() {
   return 1
 }
 
-PACK="$(pick_dir "$BASE" psychology-base-quail || pick_dir "$BASE" psychology-mini-quail || true)"
+is_pack_dir() {
+  local d="$1"
+  [[ -f "$d/quail.toml" && -f "$d/assemble.sh" ]]
+}
+
+# Nested unzip: quail-wheel(N)/quail-wheel/
+resolve_nested() {
+  local d="$1"
+  if [[ -d "$d/quail-wheel" ]]; then
+    printf '%s\n' "$d/quail-wheel"
+  else
+    printf '%s\n' "$d"
+  fi
+}
+
+find_pack() {
+  local base="$1"
+  local -a hits=()
+  local d name
+  while IFS= read -r -d '' d; do
+    name="$(basename "$d")"
+    case "$name" in
+      ollama-runtime|ollama-runtime\(*\)|embeddinggemma-q8-model|embeddinggemma-q8-model\(*\)|quail-wheel|quail-wheel\(*\))
+        continue
+        ;;
+    esac
+    # Prefer inner pack if zip nested as name(N)/name/
+    if is_pack_dir "$d"; then
+      hits+=("$d")
+    else
+      for inner in "$d"/*; do
+        [[ -d "$inner" ]] || continue
+        if is_pack_dir "$inner"; then
+          hits+=("$inner")
+        fi
+      done
+    fi
+  done < <(find "$base" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+
+  if [[ ${#hits[@]} -eq 1 ]]; then
+    printf '%s\n' "${hits[0]}"
+    return 0
+  fi
+  if [[ ${#hits[@]} -eq 0 ]]; then
+    return 1
+  fi
+  echo "multiple pack dirs under $base; pass PACK_DIR as second arg:" >&2
+  printf '  %s\n' "${hits[@]}" >&2
+  return 1
+}
+
+resolve_pack() {
+  local base="$1" arg="$2"
+  if [[ -n "$arg" ]]; then
+    if [[ -d "$arg" ]] && is_pack_dir "$arg"; then
+      printf '%s\n' "$(cd "$arg" && pwd)"
+      return 0
+    fi
+    if [[ -d "$base/$arg" ]] && is_pack_dir "$base/$arg"; then
+      printf '%s\n' "$(cd "$base/$arg" && pwd)"
+      return 0
+    fi
+    # ChatGPT name(N) suffix
+    local candidate
+    candidate="$(find "$base" -maxdepth 1 -type d -name "${arg}(*)" 2>/dev/null | sort -V | tail -1 || true)"
+    if [[ -n "${candidate:-}" ]] && is_pack_dir "$candidate"; then
+      printf '%s\n' "$(cd "$candidate" && pwd)"
+      return 0
+    fi
+    if [[ -n "${candidate:-}" ]]; then
+      for inner in "$candidate"/*; do
+        if [[ -d "$inner" ]] && is_pack_dir "$inner"; then
+          printf '%s\n' "$(cd "$inner" && pwd)"
+          return 0
+        fi
+      done
+    fi
+    echo "not a pack dir (need quail.toml + assemble.sh): $arg" >&2
+    return 1
+  fi
+  find_pack "$base"
+}
+
+PACK="$(resolve_pack "$BASE" "$PACK_ARG" || true)"
 OLLAMA_RT="$(pick_dir "$BASE" ollama-runtime || true)"
 MODEL="$(pick_dir "$BASE" embeddinggemma-q8-model || true)"
 WHEEL_DIR="$(pick_dir "$BASE" quail-wheel || true)"
@@ -36,7 +126,7 @@ echo "MODEL=${MODEL:-MISSING}"
 echo "WHEEL_DIR=${WHEEL_DIR:-MISSING}"
 
 if [[ -z "${PACK:-}" || ! -d "$PACK" ]]; then
-  echo "missing pack directory under $BASE" >&2
+  echo "missing pack under $BASE (dir with quail.toml + assemble.sh)" >&2
   ls -la "$BASE" >&2 || true
   exit 2
 fi
@@ -49,8 +139,8 @@ if [[ -z "${MODEL:-}" || ! -d "$MODEL" ]]; then
   exit 2
 fi
 
-if [[ -n "${WHEEL_DIR:-}" && -d "$WHEEL_DIR/quail-wheel" ]]; then
-  WHEEL_DIR="$WHEEL_DIR/quail-wheel"
+if [[ -n "${WHEEL_DIR:-}" ]]; then
+  WHEEL_DIR="$(resolve_nested "$WHEEL_DIR")"
 fi
 
 echo "== assemble pack =="
