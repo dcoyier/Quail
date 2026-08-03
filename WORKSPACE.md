@@ -1,10 +1,9 @@
 # Articles workspace
 
-Local Quail deployment for the articles collection.
+Local Quail deployment for the economics articles collection.
 
 ```sh
-bash assemble.sh
-# Start Ollama with EmbeddingGemma q8 (bundled model store), then:
+bash pack/economics/assemble_data.sh
 quail run --config "$(pwd)/quail.toml"
 ```
 
