@@ -56,17 +56,33 @@ echo "== assemble pack =="
 (cd "$PACK" && bash assemble.sh)
 
 echo "== install quail wheel (if present) =="
+# Prefer nested quail-wheel/ if ChatGPT unzipped zip-into-folder.
+if [[ -n "${WHEEL_DIR:-}" && -d "$WHEEL_DIR/quail-wheel" ]]; then
+  WHEEL_DIR="$WHEEL_DIR/quail-wheel"
+fi
 if ! python3 -c "import quail" >/dev/null 2>&1; then
-  if [[ ! -d "$WHEEL_DIR" ]]; then
-    echo "quail not importable and missing $WHEEL_DIR" >&2
+  if [[ -z "${WHEEL_DIR:-}" || ! -d "$WHEEL_DIR" ]]; then
+    echo "quail not importable and missing wheel dir" >&2
     exit 2
   fi
   WHL=$(ls "$WHEEL_DIR"/quail-*.whl | head -1)
+  DEPS="$WHEEL_DIR/deps"
+  echo "python=$(python3 -V 2>&1)"
+  echo "whl=$WHL"
+  echo "deps=$DEPS"
   if python3 -m pip --version >/dev/null 2>&1; then
     python3 -m pip install -q --upgrade pip
-    python3 -m pip install -q "$WHL"
+    if [[ -d "$DEPS" ]]; then
+      python3 -m pip install -q --no-index --find-links "$DEPS" "$WHL"
+    else
+      python3 -m pip install -q "$WHL"
+    fi
   elif command -v uv >/dev/null 2>&1; then
-    uv pip install --system -q "$WHL"
+    if [[ -d "$DEPS" ]]; then
+      uv pip install --system -q --no-index --find-links "$DEPS" "$WHL"
+    else
+      uv pip install --system -q "$WHL"
+    fi
   else
     echo "need pip or uv to install $WHL" >&2
     exit 2
