@@ -1,3 +1,11 @@
+# OPS_HANDOFF — Cursor operators only
+
+**Do not attach, paste, or ship this file to ChatGPT Agent.**
+ChatGPT gets: pack zip + ollama/model/wheel + `AGENT.md` / `boot_eval.sh` only.
+Smoke scripts (`smoke_*.sh/py`) are Cursor pipeline checks — not eval trial runtime.
+
+---
+
 # Psychology pack + ChatGPT Agent — operational handoff
 
 Last updated: 2026-08-03. Write this down so context compaction does not erase how we got here.

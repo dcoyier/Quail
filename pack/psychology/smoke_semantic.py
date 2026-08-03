@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""One-shot lexical + semantic smoke against an assembled psychology pack.
+"""Cursor-only in-process Lexical/Semantic smoke (exec_script).
 
-Requires: Ollama serving embeddinggemma:300m-qat-q8_0 on 127.0.0.1:11434,
-and `quail` installed so this script can import it.
+Do NOT ship in ChatGPT eval wheel. Do NOT run during scored trials.
+
+Requires: Ollama embeddinggemma:300m-qat-q8_0 on 127.0.0.1:11434, and `quail`.
 """
 from __future__ import annotations
 

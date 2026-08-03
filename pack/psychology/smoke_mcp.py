@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Smoke unrestricted MCP: quail_setup + quail_exec Semantic retrieve.
+"""Cursor-only MCP smoke: canned Semantic retrieve via quail_setup + quail_exec.
 
-Requires: `quail run` serving streamable-http at --url (default
-http://127.0.0.1:8000/mcp), Ollama embeddinggemma on :11434, and `mcp` installed
-(shipped in quail-wheel/deps).
+Do NOT ship in ChatGPT eval wheel. Do NOT run during scored trials
+(canned query would pollute the session / leak probe behavior).
+
+Requires: `quail run` at --url (default http://127.0.0.1:8000/mcp),
+Ollama embeddinggemma on :11434, and `mcp` installed.
 """
 from __future__ import annotations
 
