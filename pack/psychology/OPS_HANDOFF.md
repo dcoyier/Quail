@@ -1,8 +1,8 @@
 # OPS_HANDOFF — Cursor operators only
 
 **Do not attach, paste, or ship this file to ChatGPT Agent.**
-ChatGPT gets: pack zip + ollama/model/wheel + `AGENT.md` / `boot_eval.sh` only.
-Smoke scripts (`smoke_*.sh/py`) are Cursor pipeline checks — not eval trial runtime.
+ChatGPT sees a normal local Quail install: pack + Ollama + wheel/`start.sh`.
+No eval briefs, no smoke harness, no operator notes in the Agent zips.
 
 ---
 
@@ -297,76 +297,47 @@ Still TBD: how Quail binary/wheel lands in the VM (pip from OpenAI proxy vs uplo
 
 ---
 
-## I. Unrestricted MCP smoke (2026-08-03, current)
+## I. What ChatGPT gets (generic Quail)
 
-In-process `smoke_semantic.py` only proves `exec_script`. Production-shaped path is:
+Library zips only — no handoff, no smoke scripts, no “eval” framing:
 
-1. `quail run --config <pack>/quail.toml` → streamable-http MCP at `http://127.0.0.1:8000/mcp`
-2. MCP client: `quail_setup` → `quail_exec` with `Semantic(...)` / `Lexical(...)`
+| Zip | Role |
+|-----|------|
+| `psychology-base-quail.zip` | Full warmed pack (`quail.toml`, DBs, `assemble.sh`, short `WORKSPACE.md`) |
+| `ollama-runtime.zip` | CPU Ollama + `run_ollama.sh` |
+| `embeddinggemma-q8-model.zip` | q8 model store for this pack’s profile |
+| `quail-wheel.zip` | Quail wheel + offline `deps/` + `install_quail.sh` + `start.sh` |
 
-Shipped helpers (also inside `quail-wheel.zip`):
+`start.sh` assembles the pack, installs Quail, starts Ollama, starts `quail run`, prints `READY mcp=http://127.0.0.1:8000/mcp`.
 
-| Script | Role |
-|--------|------|
-| `smoke_all.sh` | assemble → install wheel → start Ollama → embed API → in-process smoke → **start `quail run`** → MCP smoke |
-| `smoke_semantic.py` | host `exec_script` Lexical/Semantic (narrow) |
-| `smoke_mcp.py` | MCP SDK `streamable_http_client` → setup + exec |
-
-Proven locally on this VM against mini pack: `SMOKE_MCP_OK` with cognitive-dissonance hits via `quail_exec`.
+MCP path was proven once (setup + Semantic `quail_exec` + live `/api/embed`). Smoke harness removed; further setup failures surface in the real chat.
 
 ### Attach budget
 
-~512MB **per message**, not Library storage. Full pack (~250) + model (~302) exceeds one message; **split across messages in the same chat** works. Mini pack (~13MB, 800 rows) is pipeline smoke only — not eval quality.
-
-### Agent smoke prompt (MCP)
-
-Attach from Library (split messages if needed): `psychology-mini-quail.zip` or `psychology-base-quail.zip`, `ollama-runtime.zip`, `embeddinggemma-q8-model.zip`, `quail-wheel.zip`.
-
-```text
-Unzip all attached zips under /mnt/data/ (tolerate name(N)/ folders).
-Run:
-  bash /mnt/data/quail-wheel*/smoke_all.sh /mnt/data
-  # if nested: bash /mnt/data/quail-wheel*/quail-wheel/smoke_all.sh /mnt/data
-Report lines containing: ASSEMBLE_OK, EMBED_API_OK, SMOKE_SEMANTIC_OK, MCP_SETUP_OK, SMOKE_MCP_OK, SMOKE_ALL_OK.
-Leave quail run up at http://127.0.0.1:8000/mcp.
-```
-
-### Eval prompt shape (after smoke)
-
-Server already running. One question per chat:
-
-```text
-Quail MCP is at http://127.0.0.1:8000/mcp (unrestricted local).
-Use MCP tools: quail_setup once, then quail_exec with Semantic/Lexical retrieve
-against dataset articles. Answer ONLY this question using Quail retrieval
-(print evidence ids + short quotes). Do not browse the open web.
-QUESTION: <ONE QUESTION>
-```
-
-Whether ChatGPT natively attaches to localhost MCP is still **unproven**; `smoke_mcp.py` proves the server. If native connect fails, the Agent can drive tools via `python3 smoke_mcp.py`-style calls or inline MCP client code.
+~512MB **per message**. Full pack + model may need split across messages in the same chat.
 
 ### R2 mirrors (CU → Library)
 
 | Object | URL |
 |--------|-----|
 | psychology-base-quail.zip | `https://pub-cc081ad11c2848bea7efb624147a8ae4.r2.dev/packs/psychology-base-quail.zip` |
-| psychology-mini-quail.zip | `https://pub-cc081ad11c2848bea7efb624147a8ae4.r2.dev/packs/psychology-mini-quail.zip` |
+| psychology-mini-quail.zip | `https://pub-cc081ad11c2848bea7efb624147a8ae4.r2.dev/packs/psychology-mini-quail.zip` (dev only; not for scored trials) |
 | ollama-runtime.zip | `https://pub-cc081ad11c2848bea7efb624147a8ae4.r2.dev/packs/ollama-runtime.zip` |
 | embeddinggemma-q8-model.zip | `https://pub-cc081ad11c2848bea7efb624147a8ae4.r2.dev/packs/embeddinggemma-q8-model.zip` |
 | quail-wheel.zip | `https://pub-cc081ad11c2848bea7efb624147a8ae4.r2.dev/packs/quail-wheel.zip` |
 
+Harness prompts (one question, no web, etc.) live **outside** the Agent zips — Cursor/CU paste only. Pack contents stay generic Quail.
+
 ---
 
-## J. Suggested next actions (in order)
+## J. Next
 
-1. Re-upload refreshed `quail-wheel.zip` (with `smoke_mcp.py`) to ChatGPT Library.
-2. Agent chat: run `smoke_all.sh` → confirm `SMOKE_MCP_OK`.
-3. Same chat or follow-up: one-question eval via MCP tools (native or scripted).
-4. Switch attach to **full** `psychology-base-quail.zip` (multi-message) for production-quality retrieval.
-5. Later: other domains; RAG condition packs; harness that opens one chat per question.
+1. Re-upload refreshed wheel + base pack from R2 to Library.
+2. Run real one-question chats (harness prompt from outside the pack).
+3. Later: other domains; RAG condition; harness automation.
 
 ---
 
 ## K. Alternative path (parked)
 
-Hosted Quail MCP behind a tunnel so the Agent never needs DBs/models in-VM. Still valid, but the current bet is **fully local Agent VM** via Library zips so the eval stays closer to “agent with tools on a sealed machine.”
+Hosted Quail MCP behind a tunnel so the Agent never needs DBs/models in-VM. Still valid; current bet is fully local Agent VM via Library zips.

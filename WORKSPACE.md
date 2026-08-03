@@ -1,14 +1,11 @@
 # Articles workspace
 
-Psychology articles pack — **base Quail** eval condition.
-
-After Library zips are under `/mnt/data`, boot with:
+Local Quail deployment for the articles collection.
 
 ```sh
-bash /mnt/data/quail-wheel*/boot_eval.sh /mnt/data
+bash assemble.sh
+# Start Ollama with EmbeddingGemma q8 (bundled model store), then:
+quail run --config "$(pwd)/quail.toml"
 ```
 
-Read `AGENT.md` in the wheel (or this pack) for the trial contract.
-
-MCP after `EVAL_READY`: `http://127.0.0.1:8000/mcp`.
-One chat = one question. Quail retrieval only; no open web.
+MCP: `http://127.0.0.1:8000/mcp`.
