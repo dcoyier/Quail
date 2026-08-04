@@ -1,9 +1,9 @@
-# Articles workspace
+# stackoverflow articles
 
-Local Quail deployment for the stackoverflow articles collection.
+Sealed Bright-Pro documents dataset for local Quail.
 
 ```sh
-bash pack/stackoverflow/assemble_data.sh
+bash assemble.sh
 quail run --config "$(pwd)/quail.toml"
 ```
 
