@@ -6,7 +6,8 @@ WarmDatasetResult remembers one process summary for a dataset version, including
 build_fingerprint.
 
 There is a private search-build schema version constant (bumped when Lexical
-artifact layout changes, e.g. per-field corpora).
+or embedding artifact layout changes).
+There is a fixed embedding-segment write batch of 1,000 rows.
 
 search_build_fingerprint(lexical_fields, profile):
   SHA-256 of canonical JSON covering schema version, lexical field list
@@ -17,8 +18,8 @@ get_warm_receipt / put_warm_receipt:
   put_warm_receipt takes build_fingerprint and stores it in the profile_hash column.
 
 clear_search_version:
-  Drop every per-field Lexical corpus for the version, all vectors, and the
-  warm receipt.
+  Drop every per-field Lexical corpus for the version, all vectors, all compact
+  embedding segment mappings, and the warm receipt.
 
 collect_field_corpora:
   Read source fields for every entry (all fields, or field_names when set).
@@ -33,8 +34,9 @@ collect_corpus_texts:
 warm_dataset:
   Optionally clear the version.
   Compute the search-build fingerprint from lexical_fields and profile.
-  If an existing receipt has a different fingerprint, delete all vectors for
-  the version.
+  If an existing receipt has a different fingerprint, keep vectors only when
+  the existing pinned profile_hash still equals the desired embedding profile.
+  Delete compact embedding field/segment artifacts so they are rebuilt.
   Collect per-field corpora for Lexical using lexical_fields when set
   (else all fields).
   Write a not-ready warm receipt before Lexical rebuild so a mid-pass failure
@@ -47,8 +49,21 @@ warm_dataset:
   then embed unique missing texts in batches with at most
   max_concurrent_embed_requests in flight (provider calls only; cache writes
   stay on the main thread).
+  Replace the compact source-field entry/segment-to-text-hash mappings after
+  embeddings succeed.
   Write a ready warm receipt storing the search-build fingerprint.
   Give back WarmDatasetResult.
+
+_replace_embedding_segments:
+  Delete prior field registrations and mappings for the dataset version.
+  Register every configured embedding source field, including empty fields.
+  Give each field registration a compact integer field_id.
+  For each configured embedding source field, remember field_id, entry id,
+  segment index, and text_hash.
+  Do not copy source text or vector blobs.
+  Write mappings in fixed-size batches so process memory does not grow with the
+  mapping row count.
+  Commit the replacement.
 
 require_warm_ready(search, workspace_id, dataset_id, version_id, profile,
   lexical_fields default None):
