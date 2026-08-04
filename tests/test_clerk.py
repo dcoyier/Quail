@@ -377,22 +377,20 @@ default_workspace = "acme"
         with bearer_token("alice-token"):
             started = _as_dict(await server.call_tool("quail_start_session", {}))
             session_id = started["session_id"]
-            ok = await server.call_tool(
+            unavailable = await server.call_tool(
                 "get_entry",
                 {
                     "session_id": session_id,
-                    "dataset_id": "notes",
-                    "entry_id": "e1",
+                    "result_handle": "not-issued-by-search",
                 },
             )
-            assert not _is_error(ok)
+            assert _is_error(unavailable)
         with bearer_token("bob-token"):
             stolen = await server.call_tool(
                 "get_entry",
                 {
                     "session_id": session_id,
-                    "dataset_id": "notes",
-                    "entry_id": "e1",
+                    "result_handle": "not-issued-by-search",
                 },
             )
             assert _is_error(stolen)

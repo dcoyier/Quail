@@ -156,7 +156,9 @@ def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
         assert "dataset_id" in tools["search"].inputSchema["properties"]
         assert "query" in tools["search"].inputSchema["properties"]
         assert "top_k" in tools["search"].inputSchema["properties"]
-        assert "entry_id" in tools["get_entry"].inputSchema["properties"]
+        assert "result_handle" in tools["get_entry"].inputSchema["properties"]
+        assert "entry_id" not in tools["get_entry"].inputSchema["properties"]
+        assert "dataset_id" not in tools["get_entry"].inputSchema["properties"]
         assert "message" in tools["provide_feedback"].inputSchema["properties"]
 
     asyncio.run(run())
@@ -243,16 +245,17 @@ def test_search_and_get_entry_round_trip(tmp_path: Path) -> None:
             assert len(result["hits"]) >= 1
             assert result["hits"][0]["rank"] == 1
             assert "entry_id" in result["hits"][0]
+            assert "result_handle" in result["hits"][0]
             assert "text" in result["hits"][0]
             entry_id = result["hits"][0]["entry_id"]
+            result_handle = result["hits"][0]["result_handle"]
             entry = _as_dict(
                 await _call(
                     server,
                     "get_entry",
                     {
                         "session_id": session_id,
-                        "dataset_id": "notes",
-                        "entry_id": entry_id,
+                        "result_handle": result_handle,
                     },
                 )
             )
@@ -314,7 +317,7 @@ def test_search_unknown_dataset_error_class(tmp_path: Path) -> None:
         runtime.close()
 
 
-def test_get_entry_unknown_entry(tmp_path: Path) -> None:
+def test_get_entry_rejects_raw_or_invented_entry_id(tmp_path: Path) -> None:
     server, _, _ = _seed(tmp_path)
 
     async def run() -> None:
@@ -324,15 +327,50 @@ def test_get_entry_unknown_entry(tmp_path: Path) -> None:
             "get_entry",
             {
                 "session_id": started["session_id"],
-                "dataset_id": "notes",
-                "entry_id": "missing",
+                "result_handle": "basking/Baskinginreflectedglory_4.txt",
             },
         )
         assert _is_error(result)
         payload = _as_dict(result)
         assert payload["diagnostic"]["error_class"] == "QuailScopeError"
+        assert "rerun search" in payload["diagnostic"]["repair_hint"].lower()
 
     asyncio.run(run())
+
+
+def test_get_entry_rejects_handle_from_another_session(tmp_path: Path) -> None:
+    server, runtime = _seed_with_search(tmp_path)
+    try:
+
+        async def run() -> None:
+            first = _as_dict(await _call(server, "quail_start_session"))
+            second = _as_dict(await _call(server, "quail_start_session"))
+            searched = _as_dict(
+                await _call(
+                    server,
+                    "search",
+                    {
+                        "session_id": first["session_id"],
+                        "dataset_id": "notes",
+                        "query": "hydrangea",
+                    },
+                )
+            )
+            result = await _call(
+                server,
+                "get_entry",
+                {
+                    "session_id": second["session_id"],
+                    "result_handle": searched["hits"][0]["result_handle"],
+                },
+            )
+            assert _is_error(result)
+            payload = _as_dict(result)
+            assert payload["diagnostic"]["error_class"] == "QuailScopeError"
+
+        asyncio.run(run())
+    finally:
+        runtime.close()
 
 
 def test_provide_feedback_appends_jsonl(tmp_path: Path) -> None:
