@@ -1,9 +1,9 @@
-# Articles workspace
+# earth_science articles
 
-Local Quail deployment for the earth_science articles collection.
+Sealed Bright-Pro documents dataset for local Quail.
 
 ```sh
-bash pack/earth_science/assemble_data.sh
+bash assemble.sh
 quail run --config "$(pwd)/quail.toml"
 ```
 
