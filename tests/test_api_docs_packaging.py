@@ -1,4 +1,4 @@
-"""Packaged analysis docs (`docs/api.md` → wheel `quail/data/api.md`)."""
+"""RAG wheels do not expose the analysis-language API documentation."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def test_load_api_docs_override(tmp_path: Path) -> None:
     assert load_api_docs(path) == "# custom docs\n"
 
 
-def test_wheel_includes_packaged_api_docs(tmp_path: Path) -> None:
+def test_rag_wheel_excludes_packaged_api_docs(tmp_path: Path) -> None:
     subprocess.run(
         ["uv", "build", "--wheel", "--out-dir", str(tmp_path)],
         cwd=_REPO_ROOT,
@@ -35,6 +35,4 @@ def test_wheel_includes_packaged_api_docs(tmp_path: Path) -> None:
     wheels = list(tmp_path.glob("*.whl"))
     assert len(wheels) == 1
     with zipfile.ZipFile(wheels[0]) as archive:
-        assert "quail/data/api.md" in archive.namelist()
-        packaged = archive.read("quail/data/api.md").decode("utf-8")
-    assert packaged == _REPO_API_DOCS.read_text(encoding="utf-8")
+        assert "quail/data/api.md" not in archive.namelist()

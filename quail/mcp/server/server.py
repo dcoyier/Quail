@@ -36,7 +36,7 @@ from quail.mcp.oauth import (
     register_clerk_oauth_discovery,
 )
 from quail.mcp.offload import run_blocking
-from quail.mcp.rag_baseline import get_entry_payload, run_search
+from quail.mcp.rag_baseline import ResultHandleRegistry, get_entry_payload, run_search
 from quail.mcp.results import (
     error_result,
     success_result,
@@ -58,6 +58,10 @@ _DATASET_INFO_FALLBACK = (
 
 _DEFAULT_SEARCH_REPAIR = (
     "Fix the diagnostic, keep the same session_id, and retry search."
+)
+
+_RESULT_HANDLE_REPAIR = (
+    "Rerun search in the current session and pass one of its result_handle values."
 )
 
 
@@ -275,6 +279,8 @@ def _register_unrestricted_tools(
     *,
     connector_catalog: Any | None = None,
 ) -> None:
+    result_handles = ResultHandleRegistry()
+
     @server.tool(title="Set up Quail workspace")
     async def quail_setup() -> CallToolResult:
         """Cold-start this workspace for retrieval: return the dataset catalog and a
@@ -398,9 +404,10 @@ def _register_unrestricted_tools(
     ) -> CallToolResult:
         """Retrieve ranked entries for a natural-language query (hybrid lexical+semantic).
 
-        Optional top_k (default 8, max 20). Returns hits with entry_id, rank, and
-        text snippet. Reuse session_id serially. Answer from these hits; use
-        get_entry when you need the full row.
+        Optional top_k (default 8, max 20). Returns hits with canonical entry_id,
+        opaque result_handle, rank, and text snippet. Reuse session_id serially.
+        Answer from these hits; use get_entry with result_handle when you need
+        the full row.
         """
 
         def work() -> CallToolResult:
@@ -416,6 +423,13 @@ def _register_unrestricted_tools(
                         top_k=top_k,
                         search_runtime=context.search_runtime,
                     )
+                    for hit in payload["hits"]:
+                        hit["result_handle"] = result_handles.issue(
+                            session_id=session.id,
+                            workspace_id=context.workspace_id,
+                            dataset_id=dataset_id,
+                            entry_id=hit["entry_id"],
+                        )
             except Exception as error:
                 return error_result(
                     error=error,
@@ -429,24 +443,33 @@ def _register_unrestricted_tools(
     @server.tool(title="Get entry")
     async def get_entry(
         session_id: str,
-        dataset_id: str,
-        entry_id: str,
+        result_handle: str,
     ) -> CallToolResult:
-        """Return the full field map for one entry_id (usually from search hits)."""
+        """Open one search hit by its result_handle and return the full field map.
+
+        Use a result_handle returned by search in this session. Raw or guessed
+        entry IDs are not accepted. If the handle is unavailable, rerun search
+        in the current session.
+        """
 
         def work() -> CallToolResult:
             try:
                 with open_core_db(context.db_path) as db:
                     session = require_active_session(db, session_id)
+                    record = result_handles.resolve(
+                        result_handle,
+                        session_id=session.id,
+                        workspace_id=context.workspace_id,
+                    )
                     payload = get_entry_payload(
                         db,
                         workspace_id=context.workspace_id,
                         session=session,
-                        dataset_id=dataset_id,
-                        entry_id=entry_id,
+                        dataset_id=record.dataset_id,
+                        entry_id=record.entry_id,
                     )
             except Exception as error:
-                return error_result(error=error)
+                return error_result(error=error, repair_hint=_RESULT_HANDLE_REPAIR)
             return success_result(payload)
 
         return await run_blocking(work)
@@ -497,6 +520,8 @@ def _register_clerk_tools(
     *,
     connector_catalog: Any | None = None,
 ) -> None:
+    result_handles = ResultHandleRegistry()
+
     def _auth(ctx: Context | None) -> AllowlistedPrincipal | CallToolResult:
         try:
             return authenticate_bearer(
@@ -740,8 +765,10 @@ def _register_clerk_tools(
     ) -> CallToolResult:
         """Retrieve ranked entries for a natural-language query in the active workspace.
 
-        Reuse one session_id serially; do not overlap search calls on the same
-        session_id. After switching workspace, start a new session first.
+        Returns canonical entry_id values for citation and opaque result_handle
+        values for get_entry. Reuse one session_id serially; do not overlap search
+        calls on the same session_id. After switching workspace, start a new
+        session first.
         """
 
         def work() -> CallToolResult:
@@ -769,6 +796,13 @@ def _register_clerk_tools(
                         top_k=top_k,
                         search_runtime=runtime.search_runtime,
                     )
+                    for hit in payload["hits"]:
+                        hit["result_handle"] = result_handles.issue(
+                            session_id=session.id,
+                            workspace_id=workspace_id,
+                            dataset_id=dataset_id,
+                            entry_id=hit["entry_id"],
+                        )
             except Exception as error:
                 return error_result(
                     error=error,
@@ -782,11 +816,10 @@ def _register_clerk_tools(
     @server.tool(title="Get entry")
     async def get_entry(
         session_id: str,
-        dataset_id: str,
-        entry_id: str,
+        result_handle: str,
         ctx: Context | None = None,
     ) -> CallToolResult:
-        """Return the full field map for one entry_id in the active workspace."""
+        """Open one current-session search hit by result_handle."""
 
         def work() -> CallToolResult:
             principal = _auth(ctx)
@@ -804,15 +837,20 @@ def _register_clerk_tools(
                     )
                     if session.workspace_id != workspace_id:
                         raise ValueError("Session does not belong to the active workspace")
+                    record = result_handles.resolve(
+                        result_handle,
+                        session_id=session.id,
+                        workspace_id=workspace_id,
+                    )
                     payload = get_entry_payload(
                         db,
                         workspace_id=workspace_id,
                         session=session,
-                        dataset_id=dataset_id,
-                        entry_id=entry_id,
+                        dataset_id=record.dataset_id,
+                        entry_id=record.entry_id,
                     )
             except Exception as error:
-                return error_result(error=error)
+                return error_result(error=error, repair_hint=_RESULT_HANDLE_REPAIR)
             return success_result(payload)
 
         return await run_blocking(work)

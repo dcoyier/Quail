@@ -1,0 +1,28 @@
+ResultHandleRecord is the server-side identity bound to one opaque result handle.
+
+A ResultHandleRecord remembers:
+  session_id
+  workspace_id
+  dataset_id
+  entry_id
+
+ResultHandleRegistry mints and resolves process-local, session-bound result handles.
+
+To create ResultHandleRegistry:
+  Remember an empty mapping from handles to ResultHandleRecord values.
+  Remember an empty mapping from result identities to handles.
+  Remember a lock for concurrent tool calls.
+
+issue(session_id, workspace_id, dataset_id, entry_id):
+  Under the lock, reuse a handle already issued for the same four values.
+  Otherwise create a random URL-safe handle with 32 bytes of entropy.
+  If that handle already exists, create another.
+  Remember both mappings and give back the handle.
+
+resolve(result_handle, session_id, workspace_id):
+  Require result_handle is a non-empty string.
+  Under the lock, look up its ResultHandleRecord.
+  Require the record exists and belongs to the given session and workspace.
+  Otherwise raise a scope error telling the caller to rerun search in the current
+  session and use a result_handle it returns.
+  Give back the record.

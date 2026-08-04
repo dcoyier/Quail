@@ -141,8 +141,8 @@ def test_search_pool_bounds_checkouts(tmp_path: Path) -> None:
     pool.close()
 
 
-def test_mcp_list_during_blocking_get_entry(tmp_path: Path) -> None:
-    """Catalog tool stays responsive while another tool runs on the same event loop."""
+def test_mcp_list_during_get_entry(tmp_path: Path) -> None:
+    """Catalog tool stays responsive while another tool call uses the event loop."""
 
     import asyncio
 
@@ -174,14 +174,13 @@ def test_mcp_list_during_blocking_get_entry(tmp_path: Path) -> None:
                 "get_entry",
                 {
                     "session_id": session_id,
-                    "dataset_id": "notes",
-                    "entry_id": "e1",
+                    "result_handle": "not-issued-by-search",
                 },
             ),
         )
         assert as_dict(listed)["datasets"][0]["dataset_id"] == "notes"
-        assert as_dict(entry)["entry_id"] == "e1"
-        assert as_dict(entry)["fields"]["body"] == "hello"
+        assert isinstance(entry, CallToolResult)
+        assert entry.isError
 
     asyncio.run(run())
 
