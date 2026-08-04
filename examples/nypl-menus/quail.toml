@@ -1,0 +1,31 @@
+[core]
+database = "data/quail.turso"
+search_database = "data/quail-search.turso"
+feedback = "data/feedback.jsonl"
+
+[auth]
+mode = "unrestricted"
+workspace = "nypl-menus"
+
+[hosting]
+bind = "127.0.0.1"
+port = 8000
+
+[[datasets]]
+id = "nypl_items"
+source = "data/nypl_items.csv"
+name = "NYPL menu dish lines (1850s-2000s)"
+
+[[datasets]]
+id = "nypl_menu_docs"
+source = "data/nypl_menu_docs.csv"
+name = "NYPL menus as documents (1850s-2000s)"
+
+# Embedding profiles to be decided (see README): likely Ollama on
+# nypl_menu_docs.menu_text first; item-grain embedding is a separate call.
+# [datasets.embedding]
+# provider = "ollama"
+# model = "embeddinggemma:latest"
+# dimensions = 768
+# revision = "embeddinggemma-local-v1"
+# fields = ["menu_text"]
