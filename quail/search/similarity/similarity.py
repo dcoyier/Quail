@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -65,33 +66,11 @@ class SimilarityService:
     ) -> dict[str, float | None]:
         """Score many entries with one embed pass and Turso batch cosine."""
 
-        profile = get_embedding_pin(
-            self.search,
+        profile, profile_key = self._profile_for(
             workspace_id=workspace_id,
             dataset_id=dataset_id,
             version_id=version_id,
         )
-        if profile is None:
-            raise QuailRuntimeError(
-                "Semantic requires a pinned dataset embedding profile for this version",
-                repair_hint=(
-                    "Add [datasets.embedding] for this dataset, re-run quail apply/run, "
-                    "then retry the whole exec."
-                ),
-            )
-        profile_key = get_pinned_profile_hash(
-            self.search,
-            workspace_id=workspace_id,
-            dataset_id=dataset_id,
-            version_id=version_id,
-        )
-        if profile_key is None:
-            raise QuailRuntimeError(
-                "Semantic requires a stored pin profile_hash for this version",
-                repair_hint=(
-                    "Re-run quail apply/run to refresh the embedding pin, then retry."
-                ),
-            )
 
         target_texts = _target_texts(query_record)
         if not target_texts:
@@ -156,6 +135,117 @@ class SimilarityService:
         for entry_id in corpus_by_entry:
             results.setdefault(entry_id, None)
         return results
+
+    def semantic_scores_for_source_entries(
+        self,
+        *,
+        workspace_id: str,
+        dataset_id: str,
+        version_id: str,
+        entry_ids: Sequence[str],
+        source_field: str,
+        all_entries: bool,
+        query_record: dict[str, Any],
+        input_aggregation: str | None,
+        target_aggregation: str | None,
+    ) -> dict[str, float | None] | None:
+        """Score a warmed source field without loading source text into the exec."""
+
+        profile, profile_key = self._profile_for(
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+        )
+        registration = self.search.connection.execute(
+            """
+            SELECT field_id
+            FROM quail_embedding_fields
+            WHERE workspace_id = ?
+              AND dataset_id = ?
+              AND version_id = ?
+              AND profile_hash = ?
+              AND field_name = ?
+            LIMIT 1
+            """,
+            (workspace_id, dataset_id, version_id, profile_key, source_field),
+        ).fetchone()
+        if registration is None:
+            return None
+        field_id = int(registration[0])
+
+        target_texts = _target_texts(query_record)
+        if not target_texts:
+            raise QuailRuntimeError("Semantic query produced no text targets")
+        self._ensure_texts(
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+            profile=profile,
+            profile_hash=profile_key,
+            texts=target_texts,
+        )
+        target_blobs = [
+            self._require_blob(
+                workspace_id=workspace_id,
+                dataset_id=dataset_id,
+                version_id=version_id,
+                profile_hash=profile_key,
+                digest=text_hash(text),
+                dimensions=profile.dimensions,
+            )
+            for text in target_texts
+        ]
+        source_scores = self._score_source_entries_turso(
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+            profile_hash=profile_key,
+            field_id=field_id,
+            entry_ids=entry_ids,
+            all_entries=all_entries,
+            target_blobs=target_blobs,
+            target_mode=target_aggregation or "total",
+            input_mode=input_aggregation or "total",
+        )
+        results: dict[str, float | None] = {entry_id: None for entry_id in entry_ids}
+        results.update(source_scores)
+        return results
+
+    def _profile_for(
+        self,
+        *,
+        workspace_id: str,
+        dataset_id: str,
+        version_id: str,
+    ) -> tuple[EmbeddingProfile, str]:
+        profile = get_embedding_pin(
+            self.search,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+        )
+        if profile is None:
+            raise QuailRuntimeError(
+                "Semantic requires a pinned dataset embedding profile for this version",
+                repair_hint=(
+                    "Add [datasets.embedding] for this dataset, re-run quail apply/run, "
+                    "then retry the whole exec."
+                ),
+            )
+        profile_key = get_pinned_profile_hash(
+            self.search,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+        )
+        if profile_key is None:
+            raise QuailRuntimeError(
+                "Semantic requires a stored pin profile_hash for this version",
+                repair_hint=(
+                    "Re-run quail apply/run to refresh the embedding pin, then retry."
+                ),
+            )
+        return profile, profile_key
 
     def _ensure_texts(
         self,
@@ -316,6 +406,80 @@ class SimilarityService:
             ) from error
 
         return {key: _aggregate(scores, target_mode) for key, scores in pairwise.items()}
+
+    def _score_source_entries_turso(
+        self,
+        *,
+        workspace_id: str,
+        dataset_id: str,
+        version_id: str,
+        profile_hash: str,
+        field_id: int,
+        entry_ids: Sequence[str],
+        all_entries: bool,
+        target_blobs: Sequence[bytes],
+        target_mode: str,
+        input_mode: str,
+    ) -> dict[str, float]:
+        if not entry_ids or not target_blobs:
+            return {}
+
+        score_columns = ",\n                       ".join(
+            "-vector_distance_dot(v.vector, ?)" for _ in target_blobs
+        )
+        candidate_clause = ""
+        parameters: list[Any] = [
+            *target_blobs,
+            workspace_id,
+            dataset_id,
+            version_id,
+            profile_hash,
+            field_id,
+        ]
+        if not all_entries:
+            candidate_clause = "AND s.entry_id IN (SELECT value FROM json_each(?))"
+            parameters.append(
+                json.dumps(list(entry_ids), separators=(",", ":"), allow_nan=False)
+            )
+        try:
+            rows = self.search.connection.execute(
+                f"""
+                SELECT s.entry_id,
+                       {score_columns}
+                FROM quail_embedding_segments AS s
+                JOIN quail_embedding_vectors AS v
+                  ON v.workspace_id = ?
+                 AND v.dataset_id = ?
+                 AND v.version_id = ?
+                 AND v.profile_hash = ?
+                 AND v.text_hash = s.text_hash
+                WHERE s.field_id = ?
+                  {candidate_clause}
+                """,
+                tuple(parameters),
+            )
+            totals: dict[str, float] = {}
+            counts: dict[str, int] = {}
+            for row in rows:
+                entry_id = str(row[0])
+                segment_score = _aggregate(
+                    tuple(_finite_score(value) for value in row[1:]), target_mode
+                )
+                totals[entry_id] = totals.get(entry_id, 0.0) + segment_score
+                if input_mode == "avg":
+                    counts[entry_id] = counts.get(entry_id, 0) + 1
+        except Exception as error:
+            raise QuailRuntimeError(
+                "Turso vector cosine scoring failed",
+                repair_hint="Retry the whole exec; if it persists, rebuild the search database.",
+            ) from error
+
+        if input_mode == "avg":
+            return {
+                entry_id: total / counts[entry_id]
+                for entry_id, total in totals.items()
+            }
+        return totals
 
     def _client_for(self, profile: EmbeddingProfile) -> EmbeddingClient:
         key = profile.profile_hash()
