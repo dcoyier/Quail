@@ -1,0 +1,31 @@
+[core]
+database = "data/quail.turso"
+feedback = "data/feedback.jsonl"
+search_database = "data/quail-search.turso"
+
+[auth]
+mode = "unrestricted"
+workspace = "local"
+
+[hosting]
+bind = "127.0.0.1"
+port = 8000
+
+[providers.ollama]
+base_url = "http://127.0.0.1:11434"
+
+[search.warm]
+embed_batch_size = 64
+max_concurrent_embed_requests = 1
+
+[[datasets]]
+id = "articles"
+source = "data/articles.csv"
+name = "Articles"
+
+[datasets.embedding]
+provider = "ollama"
+model = "embeddinggemma:300m-qat-q8_0"
+dimensions = 768
+revision = "embeddinggemma-300m-qat-q8-v1"
+fields = ["body"]
