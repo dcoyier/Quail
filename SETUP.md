@@ -1,6 +1,13 @@
 # stackoverflow articles
 
+Attach both zips and unzip into the same folder:
+  1) stackoverflow-base-quail.zip
+  2) stackoverflow-search-parts.zip
+
+Then:
+
 ```sh
+pip install --no-index --find-links=./deps ./quail-0.11.0a0-py3-none-any.whl
 bash assemble.sh
 quail run --config "$(pwd)/quail.toml"
 ```
