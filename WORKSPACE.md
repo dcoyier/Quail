@@ -1,9 +1,9 @@
-# Articles workspace
+# sustainable_living articles
 
-Local Quail deployment for the sustainable_living articles collection.
+Sealed Bright-Pro documents dataset for local Quail.
 
 ```sh
-bash pack/sustainable_living/assemble_data.sh
+bash assemble.sh
 quail run --config "$(pwd)/quail.toml"
 ```
 
