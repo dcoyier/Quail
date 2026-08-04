@@ -1,10 +1,9 @@
-# Articles workspace
+# psychology articles
 
-Local Quail deployment for the articles collection.
+Sealed Bright-Pro documents dataset for local Quail.
 
 ```sh
 bash assemble.sh
-# Start Ollama with EmbeddingGemma q8 (bundled model store), then:
 quail run --config "$(pwd)/quail.toml"
 ```
 

@@ -1,29 +1,24 @@
 #!/usr/bin/env bash
-# Assemble chunked pack databases for normal git (no Git LFS).
+# Assemble chunked search Turso for this sealed dataset.
 set -euo pipefail
-
-root="$(cd "$(dirname "$0")/../.." && pwd)"
-cd "$root"
-
+cd "$(dirname "$0")"
+hash_file() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print $1}'
+  else shasum -a 256 "$1" | awk '{print $1}'; fi
+}
 parts=(data/quail-search.turso.part*)
 if [[ ${#parts[@]} -eq 0 || ! -f ${parts[0]} ]]; then
-  echo "missing data/quail-search.turso.part* under $root" >&2
+  echo "missing data/quail-search.turso.part*" >&2
   exit 1
 fi
-
 echo "assembling data/quail-search.turso from ${#parts[@]} parts..."
 cat data/quail-search.turso.part* > data/quail-search.turso
-
 expected="$(tr -d '[:space:]' < data/quail-search.turso.sha256)"
-actual="$(sha256sum data/quail-search.turso | awk '{print $1}')"
+actual="$(hash_file data/quail-search.turso)"
 if [[ "$actual" != "$expected" ]]; then
   echo "checksum mismatch for data/quail-search.turso" >&2
-  echo "  expected $expected" >&2
-  echo "  actual   $actual" >&2
   exit 1
 fi
-
 echo "ok  data/quail-search.turso  sha256=$actual"
-echo "ok  data/quail.turso         (single file)"
-echo "ok  data/articles.csv        (single file)"
+echo "ASSEMBLE_OK files=data/quail.turso,data/quail-search.turso,data/articles.csv"
 echo "ready: quail run --config \"\$(pwd)/quail.toml\""
