@@ -23,5 +23,7 @@ data/dishes.csv
 data/menu_docs.csv
 pack/menus/vectors/_vector_cache.sqlite
 pack/menus/vectors/_vector_cache.sqlite-*
+pack/menu_docs/vectors/_vector_cache.sqlite
+pack/menu_docs/vectors/_vector_cache.sqlite-*
 # Private counsel tracker — keep local, not in the public tree.
 docs/compliance.md

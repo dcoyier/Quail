@@ -1,0 +1,47 @@
+You are a dumb embed worker. Do not invent warm/process logic. Do not modify
+other shards or files.
+
+Branch: menus
+Repo: check out and pull the latest `menus` branch.
+
+SHARD_ID=00
+
+Your only job:
+1. Install Ollama if needed; start `ollama serve`; pull
+   `embeddinggemma:300m-qat-q8_0`.
+2. Run the embed worker for YOUR shard only.
+3. Verify the output gzip has the same number of lines as the input shard.
+4. `git add` ONLY your vector file, commit, and `git push` to `menus`.
+5. Stop. Report line counts and the commit SHA.
+
+Commands:
+
+  SHARD_ID=00
+  python pack/menu_docs/embed_worker.py \
+    --ensure-ollama \
+    --shard "pack/menu_docs/shards/shard-${SHARD_ID}.jsonl" \
+    --out "pack/menu_docs/vectors/shard-${SHARD_ID}.jsonl.gz" \
+    --model embeddinggemma:300m-qat-q8_0 \
+    --dimensions 768 \
+    --batch-size 32
+
+Verify:
+
+  SHARD_ID=00
+  python -c "import gzip; print(sum(1 for _ in gzip.open('pack/menu_docs/vectors/shard-${SHARD_ID}.jsonl.gz','rt')))"
+  wc -l "pack/menu_docs/shards/shard-${SHARD_ID}.jsonl"
+
+These two numbers must match. Shard 00 has 876 rows; shards 01 through 19
+have 875 rows each.
+
+Commit message:
+
+  Embed menu documents shard-00
+
+Push only:
+
+  pack/menu_docs/vectors/shard-00.jsonl.gz
+
+Replace every `00` above with your assigned two-digit shard id. If push rejects
+because another worker updated `menus`, run `git pull --rebase` and retry the
+push. Do not rewrite or stage other workers' vector files.
