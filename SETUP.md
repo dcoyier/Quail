@@ -1,5 +1,11 @@
 # earth_science articles
 
+Attach both zips and unzip into the same folder:
+  1) earth_science-base-quail.zip
+  2) earth_science-search-parts.zip
+
+Then:
+
 ```sh
 bash assemble.sh
 quail run --config "$(pwd)/quail.toml"
