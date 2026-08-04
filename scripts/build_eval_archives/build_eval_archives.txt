@@ -1,0 +1,44 @@
+There is an allowlist of base files:
+  SETUP.md
+  start.sh
+  assemble.sh
+  quail.toml
+
+There is a search-part prefix for data/quail-search.turso.part.
+There is a search checksum path data/quail-search.turso.sha256.
+
+_tracked_data(repo):
+  Ask Git for tracked files under data using zero-byte separators.
+  Give back their paths under repo.
+
+_arcname(root_name, relative):
+  Give back a POSIX archive path below root_name.
+
+_write_file(archive, source, arcname):
+  Require source is a file.
+  Add it to archive at arcname.
+
+_atomic_zip(output, writer):
+  Create the output directory when needed.
+  Write a deflated Zip64 archive to a unique temporary sibling.
+  Ask writer to add the allowlisted contents.
+  Atomically replace output only after the archive closes successfully.
+  Remove any leftover temporary archive.
+
+build_archives(repo, wheel, deps, output, optional search_output):
+  Resolve all input paths.
+  Use the base output filename without .zip as the archive root name.
+  Require wheel exists and deps contains dependency wheels.
+  Read tracked data paths from Git.
+  Identify search parts and their checksum.
+  Build the base archive from the four base files, the supplied Quail wheel,
+  dependency wheels, and tracked data.
+  Include no loose repository source, tests, examples, developer docs,
+  pyproject.toml, caches, or operating-system metadata.
+  When search_output is requested, omit search parts and their checksum from the
+  base archive. Require search parts exist. Build a second archive under the same
+  root name with SEARCH_PARTS.txt, the tracked search parts, and their checksum.
+
+main:
+  Parse --repo, --wheel, --deps, --output, and optional --search-output.
+  Build the requested archives.
