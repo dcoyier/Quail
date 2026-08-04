@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Warm a domain pack using precomputed EmbeddingGemma shard vectors.
 
-Vectors are loaded from shard-*.jsonl.gz into an on-disk SQLite cache first so
-large packs (100k+ unique texts) do not keep float maps in RAM during CSV
-import + warm.
+Vectors from one or more shard directories are loaded into an on-disk SQLite
+cache first so large packs (100k+ unique texts) do not keep float maps in RAM
+during CSV import + warm.
 """
 from __future__ import annotations
 
@@ -101,7 +101,14 @@ def build_vector_cache(paths: list[Path], cache_path: Path, dimensions: int) -> 
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--config", type=Path, required=True)
-    p.add_argument("--vectors-dir", type=Path, required=True)
+    p.add_argument(
+        "--vectors-dir",
+        dest="vector_dirs",
+        type=Path,
+        action="append",
+        required=True,
+        help="Shard directory; repeat to warm a config containing multiple corpora",
+    )
     p.add_argument(
         "--cache",
         type=Path,
@@ -112,9 +119,12 @@ def main() -> None:
     p.add_argument("--clear", action="store_true")
     args = p.parse_args()
 
-    paths = sorted(args.vectors_dir.glob("shard-*.jsonl.gz"))
-    if not paths:
-        raise SystemExit(f"no shard-*.jsonl.gz under {args.vectors_dir}")
+    paths: list[Path] = []
+    for vector_dir in args.vector_dirs:
+        directory_paths = sorted(vector_dir.glob("shard-*.jsonl.gz"))
+        if not directory_paths:
+            raise SystemExit(f"no shard-*.jsonl.gz under {vector_dir}")
+        paths.extend(directory_paths)
 
     config = load_config(args.config)
     dims = None
@@ -125,7 +135,7 @@ def main() -> None:
     if dims is None:
         raise SystemExit("no dataset embedding profile in config")
 
-    cache_path = args.cache or (args.vectors_dir / "_vector_cache.sqlite")
+    cache_path = args.cache or (args.vector_dirs[0] / "_vector_cache.sqlite")
     if args.reuse_cache and cache_path.exists():
         print(f"reusing vector cache {cache_path}", flush=True)
     else:

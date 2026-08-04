@@ -32,3 +32,18 @@ model = "embeddinggemma:300m-qat-q8_0"
 dimensions = 768
 revision = "embeddinggemma-300m-qat-q8-v1"
 fields = ["body"]
+
+[[datasets]]
+id = "menu_docs"
+source = "data/menu_docs.csv"
+name = "NYPL menus as documents (1850s-2000s)"
+
+[datasets.lexical]
+fields = ["body"]
+
+[datasets.embedding]
+provider = "ollama"
+model = "embeddinggemma:300m-qat-q8_0"
+dimensions = 768
+revision = "embeddinggemma-300m-qat-q8-v1"
+fields = ["body"]

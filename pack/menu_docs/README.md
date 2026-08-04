@@ -41,3 +41,19 @@ python pack/menu_docs/embed_worker.py \
 ```
 
 The input and output line counts must match before committing the vector file.
+
+## Combined warm
+
+Root `quail.toml` declares both `dishes` and `menu_docs`. Pass both vector
+directories to the shared warmer so a clean build can satisfy both datasets:
+
+```sh
+python pack/tools/warm_precomputed.py \
+  --config "$(pwd)/quail.toml" \
+  --vectors-dir "$(pwd)/pack/menus/vectors" \
+  --vectors-dir "$(pwd)/pack/menu_docs/vectors"
+```
+
+The verified result has 17,514 menu-document Lexical `body` texts and 17,501
+unique menu-document vectors. Seal the combined databases with
+`bash pack/menus/seal_data.sh`.
