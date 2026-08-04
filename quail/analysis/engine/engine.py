@@ -813,18 +813,18 @@ class QueryEngine:
                 continue
             operation = expression.operations[-1]
             prefix_ops = expression.operations[:-1]
-            corpus_by_entry: dict[str, Any] = {}
-            for entry_id in missing_ids:
-                if prefix_ops:
-                    corpus_by_entry[entry_id] = self._eval_expression(
-                        Expression(expression.root, *prefix_ops),
-                        entry_id,
-                        search_scores=search_scores,
-                    )
-                else:
-                    corpus_by_entry[entry_id] = self._read_field_value(
-                        expression.root, entry_id
-                    )
+            source_field = None
+            if not prefix_ops:
+                resolved = self.resolve_field(expression.root)
+                if resolved.kind == "source":
+                    source_field = resolved.name
+            all_entries = missing_ids == self._all_entry_ids()
+            query_record = self._resolved_search_query(
+                dict(operation.params["query"]),
+                root=expression.root,
+                operation_kind=operation.kind,
+                search_scores=search_scores,
+            )
             if operation.kind == "Semantic":
                 if self._similarity is None:
                     raise QuailRuntimeError(
@@ -834,20 +834,34 @@ class QueryEngine:
                             "re-run quail, then retry the whole exec."
                         ),
                     )
-                scored = self._similarity.semantic_scores_for_entries(
-                    workspace_id=self._scope.workspace_id,
-                    dataset_id=self._scope.dataset_id,
-                    version_id=self._scope.dataset_version_id,
-                    corpus_by_entry=corpus_by_entry,
-                    query_record=self._resolved_search_query(
-                        dict(operation.params["query"]),
-                        root=expression.root,
-                        operation_kind="Semantic",
-                        search_scores=search_scores,
-                    ),
-                    input_aggregation=operation.params.get("input_aggregation"),
-                    target_aggregation=operation.params.get("target_aggregation"),
-                )
+                scored = None
+                if source_field is not None:
+                    scored = self._similarity.semantic_scores_for_source_entries(
+                        workspace_id=self._scope.workspace_id,
+                        dataset_id=self._scope.dataset_id,
+                        version_id=self._scope.dataset_version_id,
+                        entry_ids=missing_ids,
+                        source_field=source_field,
+                        all_entries=all_entries,
+                        query_record=query_record,
+                        input_aggregation=operation.params.get("input_aggregation"),
+                        target_aggregation=operation.params.get("target_aggregation"),
+                    )
+                if scored is None:
+                    scored = self._similarity.semantic_scores_for_entries(
+                        workspace_id=self._scope.workspace_id,
+                        dataset_id=self._scope.dataset_id,
+                        version_id=self._scope.dataset_version_id,
+                        corpus_by_entry=self._corpus_by_entry(
+                            expression,
+                            prefix_ops,
+                            missing_ids,
+                            search_scores,
+                        ),
+                        query_record=query_record,
+                        input_aggregation=operation.params.get("input_aggregation"),
+                        target_aggregation=operation.params.get("target_aggregation"),
+                    )
             else:
                 if self._lexical is None:
                     raise QuailRuntimeError(
@@ -856,33 +870,63 @@ class QueryEngine:
                             "Set core.search_database, re-run quail, then retry the whole exec."
                         ),
                     )
-                source_field = None
-                if not prefix_ops:
-                    resolved = self.resolve_field(expression.root)
-                    if resolved.kind == "source":
-                        source_field = resolved.name
-                scored = {
-                    entry_id: score
-                    for entry_id, score in self._lexical.lexical_scores_for_entries(
+                lexical_scored = None
+                if source_field is not None:
+                    lexical_scored = self._lexical.lexical_scores_for_source_entries(
                         workspace_id=self._scope.workspace_id,
                         dataset_id=self._scope.dataset_id,
                         version_id=self._scope.dataset_version_id,
-                        corpus_by_entry=corpus_by_entry,
-                        query_record=self._resolved_search_query(
-                            dict(operation.params["query"]),
-                            root=expression.root,
-                            operation_kind="Lexical",
-                            search_scores=search_scores,
+                        entry_ids=missing_ids,
+                        source_field=source_field,
+                        all_entries=all_entries,
+                        query_record=query_record,
+                        input_aggregation=operation.params.get("input_aggregation"),
+                        target_aggregation=operation.params.get("target_aggregation"),
+                    )
+                if lexical_scored is None:
+                    lexical_scored = self._lexical.lexical_scores_for_entries(
+                        workspace_id=self._scope.workspace_id,
+                        dataset_id=self._scope.dataset_id,
+                        version_id=self._scope.dataset_version_id,
+                        corpus_by_entry=self._corpus_by_entry(
+                            expression,
+                            prefix_ops,
+                            missing_ids,
+                            search_scores,
                         ),
+                        query_record=query_record,
                         input_aggregation=operation.params.get("input_aggregation"),
                         target_aggregation=operation.params.get("target_aggregation"),
                         source_field=source_field,
-                    ).items()
-                }
+                    )
+                scored = dict(lexical_scored)
             if cached is None:
                 search_scores[key] = dict(scored)
             else:
                 cached.update(scored)
+
+    def _corpus_by_entry(
+        self,
+        expression: Expression,
+        prefix_ops: tuple[Operation, ...],
+        entry_ids: list[str],
+        search_scores: dict[str, dict[str, float | None]],
+    ) -> dict[str, Any]:
+        """Materialize corpus values only for dynamic/unwarmed search scoring."""
+
+        corpus_by_entry: dict[str, Any] = {}
+        for entry_id in entry_ids:
+            if prefix_ops:
+                corpus_by_entry[entry_id] = self._eval_expression(
+                    Expression(expression.root, *prefix_ops),
+                    entry_id,
+                    search_scores=search_scores,
+                )
+            else:
+                corpus_by_entry[entry_id] = self._read_field_value(
+                    expression.root, entry_id
+                )
+        return corpus_by_entry
 
     def _score_ranking(
         self,
