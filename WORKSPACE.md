@@ -1,9 +1,9 @@
-# Articles workspace
+# robotics articles
 
-Local Quail deployment for the robotics articles collection.
+Sealed Bright-Pro documents dataset for local Quail.
 
 ```sh
-bash pack/robotics/assemble_data.sh
+bash assemble.sh
 quail run --config "$(pwd)/quail.toml"
 ```
 
