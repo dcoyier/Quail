@@ -1,9 +1,9 @@
-# Articles workspace
+# biology articles
 
-Local Quail deployment for the biology articles collection.
+Sealed Bright-Pro documents dataset for local Quail.
 
 ```sh
-bash pack/biology/assemble_data.sh
+bash assemble.sh
 quail run --config "$(pwd)/quail.toml"
 ```
 
