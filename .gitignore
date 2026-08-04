@@ -17,6 +17,6 @@ build/
 *.turso-shm
 *.turso-wal
 examples/data/soak-*.jsonl
-examples/menus/data/
+examples/nypl-menus/data/
 # Private counsel tracker — keep local, not in the public tree.
 docs/compliance.md

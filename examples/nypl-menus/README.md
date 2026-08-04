@@ -8,8 +8,8 @@ historical restaurant menu transcriptions (~17.5k menus, ~1.33M dish lines,
 
 ```sh
 python prepare.py          # downloads the pinned export, writes data/*.csv
-quail process --config /absolute/path/to/examples/menus/quail.toml
-quail run     --config /absolute/path/to/examples/menus/quail.toml
+quail process --config /absolute/path/to/examples/nypl-menus/quail.toml
+quail run     --config /absolute/path/to/examples/nypl-menus/quail.toml
 ```
 
 `prepare.py` downloads the final NYPL S3 export (`2023_03_16`, pinned by

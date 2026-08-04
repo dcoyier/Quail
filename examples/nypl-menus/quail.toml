@@ -5,7 +5,7 @@ feedback = "data/feedback.jsonl"
 
 [auth]
 mode = "unrestricted"
-workspace = "menus"
+workspace = "nypl-menus"
 
 [hosting]
 bind = "127.0.0.1"
