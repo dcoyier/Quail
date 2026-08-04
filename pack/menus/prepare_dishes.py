@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Build dishes.csv + 20 unique stripped embedding shards for the NYPL dish pack.
+"""Build dishes.csv (+ optional shards) for the NYPL dish pack.
 
 Reads examples/nypl-menus/data/nypl_items.csv (from prepare.py there) and writes:
-  - data/dishes.csv — full item rows with dish_name renamed to body (stripped)
-  - pack/menus/shards/shard-XX.jsonl — unique {text_hash, body}
+  - data/dishes.csv — item rows with Quail-required `id` + stripped `body`
+  - pack/menus/shards/shard-XX.jsonl — unique {text_hash, body} (unless --skip-shards)
 
 text_hash = SHA-256 of stripped UTF-8 body (matches Quail CSV import + vectors).
 
 Usage (from repo root, after examples/nypl-menus/prepare.py has run):
   python pack/menus/prepare_dishes.py
-  python pack/menus/prepare_dishes.py --n-shards 20
+  python pack/menus/prepare_dishes.py --skip-shards   # CSV only; keep existing shards
 """
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ import argparse
 import csv
 import hashlib
 import json
-import sys
 from pathlib import Path
 
 csv.field_size_limit(10_000_000)
@@ -27,9 +26,10 @@ DEFAULT_ITEMS = ROOT / "examples" / "nypl-menus" / "data" / "nypl_items.csv"
 DEFAULT_CSV = ROOT / "data" / "dishes.csv"
 DEFAULT_SHARDS = Path(__file__).resolve().parent / "shards"
 
-# Keep analysis metadata; only the embed field is body (stripped dish_name).
+# Quail requires unique `id`. Slim column set keeps CSV import memory workable
+# for ~1.33M rows (page coords / sparse catalog fields stay in nypl_items).
 OUT_FIELDS = [
-    "item_id",
+    "id",
     "body",
     "price",
     "high_price",
@@ -37,16 +37,10 @@ OUT_FIELDS = [
     "date",
     "year",
     "location",
-    "sponsor",
     "event",
     "venue",
     "place",
-    "occasion",
     "currency",
-    "page_number",
-    "page_uuid",
-    "xpos",
-    "ypos",
 ]
 
 
@@ -60,6 +54,11 @@ def main() -> None:
     p.add_argument("--csv", type=Path, default=DEFAULT_CSV)
     p.add_argument("--shards-dir", type=Path, default=DEFAULT_SHARDS)
     p.add_argument("--n-shards", type=int, default=20)
+    p.add_argument(
+        "--skip-shards",
+        action="store_true",
+        help="only rebuild dishes.csv; do not rewrite pack/menus/shards",
+    )
     args = p.parse_args()
     if args.n_shards < 1:
         raise SystemExit("--n-shards must be >= 1")
@@ -82,10 +81,20 @@ def main() -> None:
             body = (row.get("dish_name") or "").strip()
             if not body:
                 empty += 1
-            out = {k: row.get(k, "") for k in OUT_FIELDS if k != "body"}
-            out["body"] = body
-            # item_id comes from source as item_id already
-            out["item_id"] = row.get("item_id", "")
+            out = {
+                "id": row.get("item_id", ""),
+                "body": body,
+                "price": row.get("price", ""),
+                "high_price": row.get("high_price", ""),
+                "menu_id": row.get("menu_id", ""),
+                "date": row.get("date", ""),
+                "year": row.get("year", ""),
+                "location": row.get("location", ""),
+                "event": row.get("event", ""),
+                "venue": row.get("venue", ""),
+                "place": row.get("place", ""),
+                "currency": row.get("currency", ""),
+            }
             writer.writerow(out)
             rows += 1
             if body:
@@ -95,6 +104,10 @@ def main() -> None:
         f"csv={args.csv} rows={rows} unique_hashes={len(unique)} empty_bodies={empty}",
         flush=True,
     )
+
+    if args.skip_shards:
+        print("skip-shards: left pack/menus/shards untouched", flush=True)
+        return
 
     items = sorted(unique.items(), key=lambda kv: kv[0])
     args.shards_dir.mkdir(parents=True, exist_ok=True)
@@ -117,7 +130,6 @@ def main() -> None:
                 )
         print(f"wrote {path} n={len(bucket)}", flush=True)
 
-    # Spot-check: every shard row hashes to its text_hash
     bad = 0
     for path in sorted(args.shards_dir.glob("shard-*.jsonl")):
         with path.open(encoding="utf-8") as f:

@@ -21,5 +21,7 @@ examples/nypl-menus/data/
 # Large generated pack CSVs (shards are committed under pack/menus/shards/).
 data/dishes.csv
 data/menu_docs.csv
+pack/menus/vectors/_vector_cache.sqlite
+pack/menus/vectors/_vector_cache.sqlite-*
 # Private counsel tracker — keep local, not in the public tree.
 docs/compliance.md
