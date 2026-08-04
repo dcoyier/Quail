@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from quail.analysis.errors import QuailRuntimeError, QuailSyntaxError
+from quail.analysis.errors import QuailRuntimeError, QuailScopeError, QuailSyntaxError
 from quail.mcp.rag_baseline import (
     OUTPUT_MARKER,
     SEARCH_FIELD,
+    ResultHandleRegistry,
     build_search_script,
     candidate_n,
     normalize_query,
@@ -104,3 +105,28 @@ def test_parse_search_output_rejects_bad_shapes() -> None:
         parse_search_output(f"{OUTPUT_MARKER}\nlexical 0\nsemantic 0\n")
     with pytest.raises(QuailRuntimeError, match="truncated|missing"):
         parse_search_output(f"{OUTPUT_MARKER}\nlexical 2\ne1\n")
+
+
+def test_result_handle_issues_resolves_and_reuses() -> None:
+    registry = ResultHandleRegistry()
+    handle = registry.issue(
+        session_id="s1", workspace_id="ws", dataset_id="notes", entry_id="e1"
+    )
+    assert handle != "e1"
+    assert registry.issue(
+        session_id="s1", workspace_id="ws", dataset_id="notes", entry_id="e1"
+    ) == handle
+    record = registry.resolve(handle, session_id="s1", workspace_id="ws")
+    assert record.dataset_id == "notes"
+    assert record.entry_id == "e1"
+
+
+def test_result_handle_rejects_unknown_raw_and_cross_session_values() -> None:
+    registry = ResultHandleRegistry()
+    handle = registry.issue(
+        session_id="s1", workspace_id="ws", dataset_id="notes", entry_id="e1"
+    )
+    with pytest.raises(QuailScopeError, match="rerun search"):
+        registry.resolve("e1", session_id="s1", workspace_id="ws")
+    with pytest.raises(QuailScopeError, match="rerun search"):
+        registry.resolve(handle, session_id="s2", workspace_id="ws")

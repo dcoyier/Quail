@@ -10,6 +10,8 @@ unrestricted_instructions(workspace_id):
   Give back fixed-workspace connect-time instructions (unrestricted; no sign-in)
   preferring quail_setup → dataset info → search → optional get_entry, including
   session rules and the skip-get_dataset_info-when-docs-already-in-setup note.
+  Say search gives canonical entry_id values for citation and opaque result_handle
+  values for get_entry. Require get_entry handles came from search in that session.
   Setup does not return analysis-language docs.
 
 clerk_instructions(locked default false):
@@ -17,4 +19,5 @@ clerk_instructions(locked default false):
   identity, TOML allowlist gates access, authorized parties bind the app; scopes
   are advertised for clients but not enforced from the token. Include Clerk
   session ownership rules, search workflow, and the dataset-docs note.
+  Say optional get_entry uses a same-session result_handle.
   When locked is true, append the locked-user addendum.
