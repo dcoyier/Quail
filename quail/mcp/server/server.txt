@@ -10,6 +10,7 @@ create_mcp_server(db_path, feedback_path, workspace_id default local, api_docs_p
   api_docs_path override (kept for context compatibility; setup does not ship
   analysis docs on this branch), and optional SearchRuntime.
   Build FastMCP with unrestricted instructions.
+  Create one process-local ResultHandleRegistry for the registered retrieval tools.
   Register the core unrestricted async tools (quail_setup, list/start/info,
   search, get_entry, provide_feedback; bodies via run_blocking) and give back
   the server. Do not register quail_exec or quail_get_api_docs.
@@ -36,6 +37,7 @@ create_clerk_mcp_server(config, verifier, api_docs_path default None,
   Register /.well-known/oauth-authorization-server proxy for older clients.
   Register list/switch plus gated retrieval tools (including quail_setup, search,
   get_entry) and give back the server.
+  Create one process-local ResultHandleRegistry for the registered retrieval tools.
   Clerk session create stamps owner_user_id; search/get_entry and
   feedback-with-session require that owner.
 
@@ -45,8 +47,10 @@ quail_setup returns datasets, session_id, workspace_id, and state_revision
 (optionally per-dataset documentation when configured). It does not return
 analysis-language documentation.
 search runs the rag-baseline canned dual Lexical/Semantic recipe via exec_script
-(with search_runtime) then host RRF; get_entry reads source fields through the
-catalog.
+(with search_runtime) then host RRF. It adds a session-bound result_handle to each
+hit while preserving canonical entry_id, rank, and snippet. get_entry accepts only
+a result_handle from search in the same session, resolves its dataset and entry,
+then reads source fields through the catalog. Raw entry ids are not accepted.
 
 Clerk tools:
   Authenticate Bearer via override or request headers.
