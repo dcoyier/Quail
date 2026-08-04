@@ -51,6 +51,7 @@ def put_cached_vector(
     text_hash: str,
     dimensions: int,
     vector: list[float],
+    commit: bool = True,
 ) -> None:
     """Store a unit vector in the rebuildable cache."""
 
@@ -78,4 +79,5 @@ def put_cached_vector(
             blob,
         ),
     )
-    db.connection.commit()
+    if commit:
+        db.connection.commit()

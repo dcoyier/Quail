@@ -7,6 +7,8 @@ build_fingerprint.
 
 There is a private search-build schema version constant (bumped when Lexical
 artifact layout changes, e.g. per-field corpora).
+There is a private 10,000-row source batch size.
+There is a private 32-batch embedding commit group.
 
 search_build_fingerprint(lexical_fields, profile):
   SHA-256 of canonical JSON covering schema version, lexical field list
@@ -30,25 +32,42 @@ collect_corpus_texts:
   Flatten collect_field_corpora into a flat text list and per-entry segment lists.
   Used by embedding warm.
 
-warm_dataset:
+warm_dataset(..., progress default None):
   Optionally clear the version.
   Compute the search-build fingerprint from lexical_fields and profile.
   If an existing receipt has a different fingerprint, delete all vectors for
   the version.
-  Collect per-field corpora for Lexical using lexical_fields when set
-  (else all fields).
-  Write a not-ready warm receipt before Lexical rebuild so a mid-pass failure
-  cannot leave lexical_ready over a partial index.
-  For each field, resolve that field's corpus and rebuild with
-  warm_entry_segments (plain row writes, then one FTS build).
+  Write a not-ready warm receipt before field validation or collection so any
+  failed re-warm leaves serve fail-closed.
+  Validate and select Lexical fields using lexical_fields when set (else all fields).
+  For each field, stream source values in bounded entry batches and rebuild with
+  warm_entry_segment_batches (plain row writes, then one FTS build).
   Drop any registered field corpora not in this warm set.
-  When a profile is set, collect embed texts from profile.fields only
-  (or all fields when fields is omitted — never reuse the Lexical text list),
-  then embed unique missing texts in batches with at most
-  max_concurrent_embed_requests in flight (provider calls only; cache writes
-  stay on the main thread).
+  When a profile is set, database-stream distinct texts from profile.fields only
+  (or all fields when fields is omitted).
+  Embed missing texts with bounded provider requests, vectors, and cache transactions.
+  Without an embedding profile, database-count distinct Lexical texts.
+  Report field and embedding progress when given a progress callback.
   Write a ready warm receipt storing the search-build fingerprint.
   Give back WarmDatasetResult.
+
+_selected_source_fields:
+  Give back all source field names or the requested subset.
+  Raise QuailRuntimeError naming unknown fields.
+
+_lexical_entry_batches:
+  Stream one field in bounded batches.
+  Keep only nonempty strings and shape them as entry segment dictionaries.
+
+_warm_embeddings:
+  Stream unique texts and check the version-scoped vector cache one at a time.
+  Keep at most max_concurrent_embed_requests provider batches in flight.
+  Accumulate at most 32 completed batches, then write them in one immediate transaction.
+  Checkpoint after each vector group and report committed-batch progress.
+  Give back submitted batch count and unique text count.
+
+_emit_progress:
+  Send a message when a progress callback is present.
 
 require_warm_ready(search, workspace_id, dataset_id, version_id, profile,
   lexical_fields default None):

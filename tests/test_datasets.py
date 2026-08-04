@@ -124,3 +124,43 @@ def test_version_identity_conflict(tmp_path: Path) -> None:
         db.connection.commit()
         with pytest.raises(DatasetConflictError, match="conflicts"):
             import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+
+
+def test_batched_import_recovers_a_failed_partial_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from quail.datasets.catalog import catalog as catalog_mod
+
+    csv_path = _write_csv(
+        tmp_path / "notes.csv",
+        "id,title\ne1,One\ne2,Two\ne3,Three\ne4,Four\ne5,Five\n",
+    )
+    monkeypatch.setattr(catalog_mod, "_IMPORT_BATCH_SIZE", 2)
+    original_write = catalog_mod._write_import_batch
+    calls = 0
+
+    def fail_second_batch(connection, entry_rows, value_rows):  # type: ignore[no-untyped-def]
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("simulated batch failure")
+        original_write(connection, entry_rows, value_rows)
+
+    with open_core_db(tmp_path / "core.turso") as db:
+        monkeypatch.setattr(catalog_mod, "_write_import_batch", fail_second_batch)
+        with pytest.raises(RuntimeError, match="simulated batch failure"):
+            import_csv_dataset(db, "ws", "notes", csv_path, activate=False)
+        failed = db.connection.execute(
+            "SELECT status FROM quail_dataset_versions WHERE dataset_id = 'notes'"
+        ).fetchone()
+        assert failed is not None and str(failed[0]) == "failed"
+
+        monkeypatch.setattr(catalog_mod, "_write_import_batch", original_write)
+        ref = import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+        assert [entry.id for entry in source_entries(db, "ws", "notes", ref.version_id)] == [
+            "e1",
+            "e2",
+            "e3",
+            "e4",
+            "e5",
+        ]

@@ -269,6 +269,30 @@ def test_warm_respects_batch_size_and_concurrency(tmp_path: Path) -> None:
     assert all(1 <= len(call) <= 3 for call in fake.calls)
 
 
+def test_embedding_warm_defers_vector_commits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from quail.search.warm import warm as warm_mod
+
+    manifest = _write_manifest(
+        tmp_path,
+        warm_knobs="embed_batch_size = 1\nmax_concurrent_embed_requests = 2\n",
+    )
+    config = load_config(manifest)
+    original_put = warm_mod.put_cached_vector
+    commit_flags: list[bool] = []
+
+    def recording_put(*args: object, **kwargs: object) -> None:
+        commit_flags.append(bool(kwargs.get("commit", True)))
+        original_put(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(warm_mod, "_EMBED_COMMIT_BATCHES", 2)
+    monkeypatch.setattr(warm_mod, "put_cached_vector", recording_put)
+    process_config(config, embedder_factory=lambda _p: RecordingEmbedder(dimensions=4))
+    assert commit_flags
+    assert not any(commit_flags)
+
+
 def test_lexical_only_warm_without_embedding(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path, embedding=False)
     config = load_config(manifest)
@@ -298,7 +322,7 @@ def test_failed_rewarm_clears_lexical_ready(
         raise QuailRuntimeError("simulated mid-warm failure")
 
     monkeypatch.setattr(
-        "quail.search.warm.warm.warm_entry_segments",
+        "quail.search.warm.warm.warm_entry_segment_batches",
         _failing_ensure,
     )
 
@@ -500,6 +524,33 @@ def test_lexical_fields_unknown_raises(tmp_path: Path) -> None:
     config = load_config(manifest)
     with pytest.raises(QuailRuntimeError, match="Source fields not present"):
         process_config(config)
+
+
+def test_failed_field_validation_clears_prior_ready_receipt(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, embedding=False, lexical_fields='["body"]')
+    valid = load_config(manifest)
+    first = process_config(valid)
+    version_id = first.results[0].version_id
+
+    invalid = load_config(
+        _write_manifest(tmp_path, embedding=False, lexical_fields='["missing"]')
+    )
+    with pytest.raises(QuailRuntimeError, match="Source fields not present"):
+        process_config(invalid)
+
+    search = open_search_db(invalid.search_database)  # type: ignore[arg-type]
+    try:
+        receipt = get_warm_receipt(
+            search,
+            workspace_id="local",
+            dataset_id="notes",
+            version_id=version_id,
+        )
+        assert receipt is not None
+        assert receipt.lexical_ready is False
+        assert receipt.embedding_ready is False
+    finally:
+        search.close()
 
 
 def test_lexical_fields_parse_rejects_empty(tmp_path: Path) -> None:

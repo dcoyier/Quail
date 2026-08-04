@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from quail.config.errors import ConfigError
 from quail.config.models import QuailConfig
 from quail.datasets import DatasetRef, ensure_workspace, import_csv_dataset, open_core_db
@@ -32,6 +34,7 @@ def import_declared_datasets(
     db: CoreDb,
     *,
     activate: bool = True,
+    progress: Callable[[str], None] | None = None,
 ) -> tuple[DatasetRef, ...]:
     """Ensure workspaces and import each declared CSV.
 
@@ -55,6 +58,7 @@ def import_declared_datasets(
             spec.source,
             name=spec.name,
             activate=activate,
+            progress=progress,
         )
         refs.append(ref)
     return tuple(refs)

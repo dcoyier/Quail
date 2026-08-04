@@ -1,12 +1,13 @@
 ProcessOutcome remembers results from one process_config call.
 
-process_config(config, clear=False, embedder_factory=None):
+process_config(config, clear=False, embedder_factory=None, progress=None):
   Acquire the deployment lease for the whole run.
   Open the core database and import declared CSVs without activating.
   When search_database is unset, publish activation (no pins) and stop.
   Sweep orphaned lexical scratch tables, then warm Lexical (using
   datasets.lexical.fields when set) and embeddings when declared for each
   imported version_id (not the prior active version).
+  Forward progress messages from import and warm when a callback is present.
   With clear=True, wipe that version's search artifacts before warming.
   Warm all datasets before any publication.
   Then publish: activate every imported version, pin embeddings when declared,

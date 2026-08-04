@@ -2,5 +2,7 @@ get_cached_vector_blob(...):
   Look up a unit-vector blob by workspace, dataset, version, profile_hash, and text_hash.
   Give back None on miss or dimension mismatch.
 
-put_cached_vector(...):
+put_cached_vector(..., commit default true):
   Upsert a unit vector into the rebuildable search cache.
+  Commit immediately by default.
+  Let bounded bulk warm callers defer the commit.

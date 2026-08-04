@@ -13,6 +13,7 @@ value_hash_from_canonical_json(encoded):
 
 dataset_content_hash(entries, fields):
   Hash every behaviorally relevant part of one immutable source version.
+  Accept entries as a one-shot iterable so large sources can be hashed while reading.
   Feed SHA-256 the prefix quail:dataset:v1, then a JSON object of ordered entries
   and the field-name list, using canonical_json for each entry and for fields.
   Give back the hex digest.

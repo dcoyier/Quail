@@ -1,23 +1,53 @@
-load_csv_dataset(path):
-  Resolve path to an absolute regular file and read its bytes with a size bound.
+CsvDatasetScan remembers:
+  path
+  version_id
+  content_hash
+  byte_count
+  row_count
+  cell_count
+  value_count
+  estimated_durable_bytes
+  field_names
+  source_signature
+
+_ScanCounters remembers mutable row, cell, value, and estimated durable-byte counts.
+
+scan_csv_dataset(path):
+  Resolve path to an absolute regular file and require its size stays within the bound.
   If the file is missing or not a regular file, raise that the CSV does not exist.
-  Decode as UTF-8 with optional BOM.
-  Parse with DictReader.
+  Decode and parse it as streaming UTF-8 with an optional BOM.
   Require a header row with unique nonempty stripped headers and an id column.
   field_names are the headers except id, and must stay within the field limit.
+  Use a private temporary SQLite table to detect duplicate ids without retaining them in memory.
   For each data row:
     Reject too many rows, ragged rows, and cell-budget overflow.
     Strip cell text; blank cells become absence.
     Require a nonempty unique id within the entry-id byte limit.
-    Build an entry that always remembers id and only present non-id fields.
     Charge estimated durable bytes for each present source value.
+    Feed the entry directly into dataset_content_hash.
   If there are no data rows, raise.
-  content_hash comes from dataset_content_hash over entries and field_names.
+  Require the source identity, size, and modification time did not change while reading.
   version_id is csv_ plus that hash.
-  Give back a CsvDataset with path, ids, sizes, field_names, and entries.
+  Give back CsvDatasetScan without retaining entries.
+
+iter_csv_entries(scan):
+  Require the source still matches the prior scan.
+  Stream and validate entries again without retaining them.
+  Require the headers, counts, durable estimate, and source signature still match.
+
+load_csv_dataset(path):
+  Scan the CSV, then collect iter_csv_entries into the compatibility CsvDataset shape.
   This does not write the database.
 
-_read_bounded(handle):
-  Read the file in chunks until EOF.
-  If total bytes exceed MAX_CSV_BYTES, raise.
-  Give back the joined payload.
+_open_csv / _source_signature:
+  Open without following symlinks.
+  Require a regular file within MAX_CSV_BYTES.
+  Give back streaming UTF-8 text and a stable file signature.
+
+_validated_headers:
+  Validate and normalize the CSV header.
+  Give back original headers and non-id field names.
+
+_iter_entries:
+  Validate rows, enforce row, cell, id, and durable limits, and update counters.
+  Yield each line number and sparse entry.

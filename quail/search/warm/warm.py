@@ -4,13 +4,19 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable, Sequence
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Callable, Iterable, Sequence
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 
 from quail.analysis.errors import QuailRuntimeError
 from quail.config.models import EmbeddingProfile, SearchWarmConfig
-from quail.datasets.catalog import source_entries, source_fields, source_values
+from quail.datasets.catalog import (
+    iter_source_field_batches,
+    iter_unique_source_texts,
+    source_entries,
+    source_fields,
+    source_values,
+)
 from quail.datasets.db import CoreDb
 from quail.providers import EmbeddingClient, ProviderError
 from quail.search.cache import get_cached_vector_blob, put_cached_vector
@@ -19,13 +25,15 @@ from quail.search.lexical.corpus import (
     drop_field_corpora_except,
     drop_version_corpora,
     resolve_corpus,
-    warm_entry_segments,
+    warm_entry_segment_batches,
 )
 from quail.search.pin import get_pinned_profile_hash
 from quail.search.vectors import text_hash, unit_vector
 
 # Bump when warm artifact semantics change (not batch/concurrency knobs).
 _SEARCH_BUILD_SCHEMA_VERSION = 2
+_SOURCE_BATCH_SIZE = 10_000
+_EMBED_COMMIT_BATCHES = 32
 
 
 def search_build_fingerprint(
@@ -270,6 +278,7 @@ def warm_dataset(
     embedder_factory: Callable[[EmbeddingProfile], EmbeddingClient],
     clear: bool = False,
     lexical_fields: Sequence[str] | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> WarmDatasetResult:
     """Warm Lexical (+ embeddings when profile set) and write the receipt."""
 
@@ -300,21 +309,8 @@ def warm_dataset(
         )
         search.connection.commit()
 
-    field_corpora = collect_field_corpora(
-        db,
-        workspace_id=workspace_id,
-        dataset_id=dataset_id,
-        version_id=version_id,
-        field_names=lexical_fields,
-    )
-    texts = [
-        segment
-        for entry_segments in field_corpora.values()
-        for segments in entry_segments.values()
-        for segment in segments
-    ]
-    # Full Lexical rebuild writes plain rows then creates FTS once per field.
-    # Clear readiness first so serve cannot treat a failed re-warm as authoritative.
+    # Clear readiness before field validation or collection so any failed
+    # re-warm leaves serve fail-closed rather than preserving a stale receipt.
     put_warm_receipt(
         search,
         workspace_id=workspace_id,
@@ -325,7 +321,17 @@ def warm_dataset(
         embedding_ready=False,
         text_count=0,
     )
-    for field_name, entry_segments in field_corpora.items():
+    selected_lexical_fields = _selected_source_fields(
+        db,
+        workspace_id=workspace_id,
+        dataset_id=dataset_id,
+        version_id=version_id,
+        field_names=lexical_fields,
+    )
+    # Full Lexical rebuild writes plain rows then creates FTS once per field.
+    text_count = 0
+    for field_name in selected_lexical_fields:
+        _emit_progress(progress, f"{dataset_id}: warming lexical field {field_name}")
         corpus = resolve_corpus(
             search,
             workspace_id=workspace_id,
@@ -333,42 +339,77 @@ def warm_dataset(
             version_id=version_id,
             field_name=field_name,
         )
-        warm_entry_segments(search, corpus, entry_segments=entry_segments)
+        text_count += warm_entry_segment_batches(
+            search,
+            corpus,
+            entry_segment_batches=_lexical_entry_batches(
+                db,
+                workspace_id=workspace_id,
+                dataset_id=dataset_id,
+                version_id=version_id,
+                field_name=field_name,
+            ),
+        )
+        _emit_progress(
+            progress,
+            f"{dataset_id}: lexical field {field_name} ready texts={text_count}",
+        )
     drop_field_corpora_except(
         search,
         workspace_id=workspace_id,
         dataset_id=dataset_id,
         version_id=version_id,
-        keep_fields=tuple(field_corpora.keys()),
+        keep_fields=selected_lexical_fields,
     )
     search.connection.commit()
 
     embedded_batches = 0
     embedding_ready = False
     if profile is not None:
-        # Always collect for the embedding field set (None = all source fields).
-        # Do not reuse Lexical `texts` — lexical_fields may be a narrower subset.
-        embed_texts, _ = collect_corpus_texts(
+        selected_embedding_fields = _selected_source_fields(
             db,
             workspace_id=workspace_id,
             dataset_id=dataset_id,
             version_id=version_id,
             field_names=profile.fields,
         )
-        unique_texts = _unique_texts(embed_texts)
-        embedded_batches = _warm_embeddings(
+        _emit_progress(progress, f"{dataset_id}: warming embeddings")
+        embedded_batches, unique_text_count = _warm_embeddings(
             search,
             workspace_id=workspace_id,
             dataset_id=dataset_id,
             version_id=version_id,
             profile=profile,
-            texts=unique_texts,
+            texts=iter_unique_source_texts(
+                db,
+                workspace_id,
+                dataset_id,
+                version_id,
+                selected_embedding_fields,
+                batch_size=_SOURCE_BATCH_SIZE,
+            ),
             warm=warm,
             client=embedder_factory(profile),
+            progress=progress,
         )
         embedding_ready = True
+        _emit_progress(
+            progress,
+            f"{dataset_id}: embeddings ready unique={unique_text_count} "
+            f"batches={embedded_batches}",
+        )
     else:
-        unique_texts = _unique_texts(texts)
+        unique_text_count = sum(
+            1
+            for _text in iter_unique_source_texts(
+                db,
+                workspace_id,
+                dataset_id,
+                version_id,
+                selected_lexical_fields,
+                batch_size=_SOURCE_BATCH_SIZE,
+            )
+        )
 
     put_warm_receipt(
         search,
@@ -378,14 +419,14 @@ def warm_dataset(
         build_fingerprint=desired_hash,
         lexical_ready=True,
         embedding_ready=embedding_ready,
-        text_count=len(texts),
+        text_count=text_count,
     )
     return WarmDatasetResult(
         workspace_id=workspace_id,
         dataset_id=dataset_id,
         version_id=version_id,
-        text_count=len(texts),
-        unique_text_count=len(unique_texts),
+        text_count=text_count,
+        unique_text_count=unique_text_count,
         embedded_batches=embedded_batches,
         lexical_ready=True,
         embedding_ready=embedding_ready,
@@ -465,6 +506,54 @@ def _unique_texts(texts: Sequence[str]) -> list[str]:
     return unique
 
 
+def _selected_source_fields(
+    db: CoreDb,
+    *,
+    workspace_id: str,
+    dataset_id: str,
+    version_id: str,
+    field_names: Sequence[str] | None,
+) -> tuple[str, ...]:
+    available_fields = source_fields(db, workspace_id, dataset_id, version_id)
+    available = {field.name for field in available_fields}
+    if field_names is None:
+        return tuple(field.name for field in available_fields)
+    missing = [name for name in field_names if name not in available]
+    if missing:
+        missing_list = ", ".join(repr(name) for name in missing)
+        raise QuailRuntimeError(
+            f"Source fields not present on dataset {dataset_id!r}: {missing_list}",
+            repair_hint=(
+                "Fix datasets.lexical.fields or datasets.embedding.fields to match "
+                "CSV column names, then re-run quail process."
+            ),
+        )
+    return tuple(field_names)
+
+
+def _lexical_entry_batches(
+    db: CoreDb,
+    *,
+    workspace_id: str,
+    dataset_id: str,
+    version_id: str,
+    field_name: str,
+) -> Iterable[dict[str, list[str]]]:
+    for rows in iter_source_field_batches(
+        db,
+        workspace_id,
+        dataset_id,
+        version_id,
+        field_name,
+        batch_size=_SOURCE_BATCH_SIZE,
+    ):
+        yield {
+            entry_id: [value]
+            for entry_id, value in rows
+            if isinstance(value, str) and value
+        }
+
+
 def _warm_embeddings(
     search: SearchDb,
     *,
@@ -472,32 +561,12 @@ def _warm_embeddings(
     dataset_id: str,
     version_id: str,
     profile: EmbeddingProfile,
-    texts: Sequence[str],
+    texts: Iterable[str],
     warm: SearchWarmConfig,
     client: EmbeddingClient,
-) -> int:
+    progress: Callable[[str], None] | None = None,
+) -> tuple[int, int]:
     profile_key = profile.profile_hash()
-    missing: list[tuple[str, str]] = []
-    for text in texts:
-        digest = text_hash(text)
-        cached = get_cached_vector_blob(
-            search,
-            workspace_id=workspace_id,
-            dataset_id=dataset_id,
-            version_id=version_id,
-            profile_hash=profile_key,
-            text_hash=digest,
-            dimensions=profile.dimensions,
-        )
-        if cached is None:
-            missing.append((text, digest))
-    if not missing:
-        return 0
-
-    batches = [
-        missing[offset : offset + warm.embed_batch_size]
-        for offset in range(0, len(missing), warm.embed_batch_size)
-    ]
 
     def _embed_batch(
         batch: list[tuple[str, str]],
@@ -530,22 +599,94 @@ def _warm_embeddings(
             paired.append((digest, unit_vector(raw)))
         return paired
 
-    workers = max(1, min(warm.max_concurrent_embed_requests, len(batches)))
-    embedded: list[tuple[str, list[float]]] = []
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(_embed_batch, batch) for batch in batches]
-        for future in as_completed(futures):
-            embedded.extend(future.result())
-    for digest, vector in embedded:
-        put_cached_vector(
-            search,
-            workspace_id=workspace_id,
-            dataset_id=dataset_id,
-            version_id=version_id,
-            profile_hash=profile_key,
-            text_hash=digest,
-            dimensions=profile.dimensions,
-            vector=vector,
+    workers = max(1, warm.max_concurrent_embed_requests)
+    pending: set[Future[list[tuple[str, list[float]]]]] = set()
+    write_buffer: list[tuple[str, list[float]]] = []
+    missing_batch: list[tuple[str, str]] = []
+    submitted_batches = 0
+    buffered_batches = 0
+    committed_batches = 0
+    unique_text_count = 0
+
+    def _write_ready_vectors() -> None:
+        nonlocal buffered_batches, committed_batches
+        if not write_buffer:
+            return
+        connection = search.connection
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            for digest, vector in write_buffer:
+                put_cached_vector(
+                    search,
+                    workspace_id=workspace_id,
+                    dataset_id=dataset_id,
+                    version_id=version_id,
+                    profile_hash=profile_key,
+                    text_hash=digest,
+                    dimensions=profile.dimensions,
+                    vector=vector,
+                    commit=False,
+                )
+            connection.commit()
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            connection.rollback()
+            raise
+        committed_batches += buffered_batches
+        write_buffer.clear()
+        buffered_batches = 0
+        _emit_progress(
+            progress,
+            f"{dataset_id}: embedded batches committed={committed_batches}",
         )
-    search.connection.commit()
-    return len(batches)
+
+    def _collect_completed() -> None:
+        nonlocal buffered_batches
+        if not pending:
+            return
+        done, _not_done = wait(pending, return_when=FIRST_COMPLETED)
+        for future in done:
+            pending.remove(future)
+            write_buffer.extend(future.result())
+            buffered_batches += 1
+        if buffered_batches >= _EMBED_COMMIT_BATCHES:
+            _write_ready_vectors()
+
+    def _submit(pool: ThreadPoolExecutor) -> None:
+        nonlocal missing_batch, submitted_batches
+        if not missing_batch:
+            return
+        pending.add(pool.submit(_embed_batch, missing_batch))
+        missing_batch = []
+        submitted_batches += 1
+        if len(pending) >= workers:
+            _collect_completed()
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for text in texts:
+            unique_text_count += 1
+            digest = text_hash(text)
+            cached = get_cached_vector_blob(
+                search,
+                workspace_id=workspace_id,
+                dataset_id=dataset_id,
+                version_id=version_id,
+                profile_hash=profile_key,
+                text_hash=digest,
+                dimensions=profile.dimensions,
+            )
+            if cached is not None:
+                continue
+            missing_batch.append((text, digest))
+            if len(missing_batch) >= warm.embed_batch_size:
+                _submit(pool)
+        _submit(pool)
+        while pending:
+            _collect_completed()
+    _write_ready_vectors()
+    return submitted_batches, unique_text_count
+
+
+def _emit_progress(progress: Callable[[str], None] | None, message: str) -> None:
+    if progress is not None:
+        progress(message)

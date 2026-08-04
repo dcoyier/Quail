@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 import uuid
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 
@@ -20,7 +20,7 @@ _TABLE_NAME_RE = re.compile(
 _SCRATCH_TABLE_RE = re.compile(r"^quail_lex_scratch_[dt]_[0-9a-f]{32}$")
 _MAX_PREFIX_TERMS = 4_096
 # Bound WAL growth while writing plain segment rows during warm.
-_ENTRY_COMMIT_BATCH_SIZE = 64
+_ENTRY_COMMIT_BATCH_SIZE = 1_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -327,6 +327,29 @@ def warm_entry_segments(
     )
     _create_fts_indexes(search, corpus)
     return counts
+
+
+def warm_entry_segment_batches(
+    search: SearchDb,
+    corpus: LexicalCorpus,
+    *,
+    entry_segment_batches: Iterable[dict[str, list[str]]],
+) -> int:
+    """Full Lexical rebuild from bounded entry batches."""
+
+    _drop_fts_indexes(search, corpus)
+    _write_entry_segments(search, corpus, entry_segments={}, replace_all=True)
+    text_count = 0
+    for entry_segments in entry_segment_batches:
+        text_count += sum(len(segments) for segments in entry_segments.values())
+        _write_entry_segments(
+            search,
+            corpus,
+            entry_segments=entry_segments,
+            replace_all=False,
+        )
+    _create_fts_indexes(search, corpus)
+    return text_count
 
 
 def ensure_entry_segments(

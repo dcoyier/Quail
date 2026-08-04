@@ -12,6 +12,7 @@ import gzip
 import json
 import sqlite3
 import struct
+import threading
 from pathlib import Path
 
 from quail.config.parse import load_config
@@ -27,18 +28,23 @@ class PrecomputedEmbedder:
         self._dimensions = dimensions
         self._missing = 0
         self._pack = struct.Struct(f"<{dimensions}f")
+        self._lock = threading.Lock()
 
     def embed_texts(self, texts):
+        digests = [text_hash(text) for text in texts]
+        placeholders = ",".join("?" for _ in digests)
+        with self._lock:
+            rows = self._conn.execute(
+                f"SELECT text_hash, vector FROM vectors WHERE text_hash IN ({placeholders})",
+                digests,
+            ).fetchall()
+        by_digest = {str(row[0]): row[1] for row in rows}
         out: list[list[float]] = []
-        for text in texts:
-            digest = text_hash(text)
-            row = self._conn.execute(
-                "SELECT vector FROM vectors WHERE text_hash = ?", (digest,)
-            ).fetchone()
-            if row is None:
+        for digest in digests:
+            blob = by_digest.get(digest)
+            if blob is None:
                 self._missing += 1
                 raise KeyError(f"missing precomputed vector for text_hash={digest}")
-            blob = row[0]
             if len(blob) != self._pack.size:
                 raise ValueError(
                     f"blob bytes {len(blob)} != {self._pack.size} for {digest}"
@@ -126,7 +132,11 @@ def main() -> None:
         n = build_vector_cache(paths, cache_path, dims)
         print(f"total unique vectors={n}", flush=True)
 
-    conn = sqlite3.connect(f"file:{cache_path.as_posix()}?mode=ro", uri=True)
+    conn = sqlite3.connect(
+        f"file:{cache_path.as_posix()}?mode=ro",
+        uri=True,
+        check_same_thread=False,
+    )
     embedder = PrecomputedEmbedder(conn, dims)
 
     def factory(profile):
@@ -135,7 +145,12 @@ def main() -> None:
         return embedder
 
     try:
-        outcome = process_config(config, clear=args.clear, embedder_factory=factory)
+        outcome = process_config(
+            config,
+            clear=args.clear,
+            embedder_factory=factory,
+            progress=lambda message: print(message, flush=True),
+        )
         for r in outcome.results:
             print(
                 f"warmed {r.dataset_id} texts={r.text_count} unique={r.unique_text_count} "

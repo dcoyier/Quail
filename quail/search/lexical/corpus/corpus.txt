@@ -1,7 +1,7 @@
 There is a safe table-name pattern for warmed tables quail_lex_[dt]_<32 hex>
 and scratch tables quail_lex_scratch_[dt]_<32 hex>.
 There is a default prefix-term budget of 4096.
-There is an entry commit batch size of 64 for plain segment writes.
+There is an entry commit batch size of 1,000 for plain segment writes.
 
 LexicalCorpus remembers doc_table and terms_table for one field or scratch corpus.
 
@@ -45,6 +45,13 @@ warm_entry_segments(search, corpus, entry_segments):
   Create dual whitespace FTS indexes on text and prefix_text once.
   Give back entry_id -> segment count.
   Used by quail process warm.
+
+warm_entry_segment_batches(search, corpus, entry_segment_batches):
+  Drop existing dual FTS indexes and clear document and term rows.
+  Consume bounded entry-segment dictionaries and write each without creating FTS between batches.
+  Create the dual FTS indexes once after all batches.
+  Give back the total nonempty segment count.
+  Used by large quail process warm.
 
 ensure_entry_segments(search, corpus, entry_segments):
   Write the given entries' rows in batches (delete then insert), then create

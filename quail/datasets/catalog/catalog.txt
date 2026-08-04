@@ -1,21 +1,40 @@
-import_csv_dataset(db, workspace_id, dataset_id, csv_path, name default None, activate default True):
+There is a private import batch size of 10,000 rows.
+
+import_csv_dataset(db, workspace_id, dataset_id, csv_path, name default None,
+activate default True, progress default None):
   Require workspace and dataset ids.
-  Load the CSV into a CsvDataset.
+  Stream-scan the CSV for validation, counts, and immutable identity without retaining entries.
+  Report scan and import progress when given a progress callback.
   Ensure the workspace exists.
-  Begin an immediate transaction.
   If a version with that version_id already exists:
-    If it is ready and matches hash, counts, fields, entries, and values:
+    If it is ready and its bulk-streamed stored content matches:
       Optionally rename and activate.
-      Commit and give back a DatasetRef.
-    If it is incomplete with the same identity, remove it and continue.
+      Commit and checkpoint.
+      Give back a DatasetRef.
+    If it is incomplete with the same identity, remove and checkpoint it, then continue.
     Otherwise raise a conflict.
   Upsert the dataset row with null active version.
   Insert the version as importing.
-  Insert source fields, entries, and present source values.
-  Mark the version ready.
-  Optionally activate it.
-  Commit and give back a DatasetRef.
-  On failure, roll back.
+  Insert source fields and commit that setup.
+  Stream the unchanged CSV again.
+  Insert entries and present source values in bounded transactions, checkpointing each batch.
+  Require both imported row and present-value counts match the validation scan.
+  Only after every row succeeds, mark the version ready and optionally activate it.
+  If a streamed import fails before ready commits, roll back the current batch and mark failed.
+  Give back a DatasetRef.
+
+_write_import_batch:
+  Insert one bounded entry and source-value batch in an immediate transaction.
+  Commit and truncate the WAL.
+
+_mark_import_failed:
+  Best-effort mark an incomplete version failed and checkpoint.
+
+_checkpoint:
+  Truncate the committed WAL.
+
+_emit_progress:
+  Send a message when a progress callback is present.
 
 active_version(db, workspace_id, dataset_id):
   Give back ActiveVersion for the dataset's active ready version, or None.
@@ -47,5 +66,19 @@ source_values(db, workspace_id, dataset_id, version_id, field, entry_ids default
   Give back one decoded value or None per requested entry id.
   Missing cells are None.
 
-Helpers rename, activate, remove incomplete versions, and verify stored content
-against the imported entries so idempotent re-import stays honest.
+iter_source_field_batches(db, workspace_id, dataset_id, version_id, field,
+batch_size default 10,000):
+  Require a ready version, known field, and positive batch size.
+  Stream entry ids and the decoded field value or None in import order.
+  Give back bounded batches.
+
+iter_unique_source_texts(db, workspace_id, dataset_id, version_id,
+field_names default None, batch_size default 10,000):
+  Require a ready version, positive batch size, and known selected fields.
+  Use a database DISTINCT scan over selected source values.
+  Yield each nonempty string once without retaining all strings in Python.
+
+Helpers rename, activate, and remove incomplete versions.
+_stored_version_matches checks stored field order against the ready version receipt.
+The ready receipt is trusted because import writes it only after the unchanged second pass
+commits every expected row and present value; idempotent process does not rescan all cells.

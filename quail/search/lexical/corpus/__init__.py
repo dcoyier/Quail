@@ -12,6 +12,7 @@ from .corpus import (
     scratch_corpus,
     sweep_scratch_corpora,
     validate_table_ident,
+    warm_entry_segment_batches,
     warm_entry_segments,
 )
 
@@ -27,5 +28,6 @@ __all__ = [
     "scratch_corpus",
     "sweep_scratch_corpora",
     "validate_table_ident",
+    "warm_entry_segment_batches",
     "warm_entry_segments",
 ]

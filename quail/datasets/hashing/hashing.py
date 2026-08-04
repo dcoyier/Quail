@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from quail.datasets.errors import DatasetSyntaxError
@@ -37,10 +37,14 @@ def value_hash_from_canonical_json(encoded: str) -> str:
 
 
 def dataset_content_hash(
-    entries: Sequence[Mapping[str, Any]],
+    entries: Iterable[Mapping[str, Any]],
     fields: Sequence[str],
 ) -> str:
-    """Hash every behaviorally relevant part of one immutable source version."""
+    """Hash every behaviorally relevant part of one immutable source version.
+
+    ``entries`` may be a one-shot iterator so large imports do not need to
+    materialize the whole dataset before computing its immutable identity.
+    """
 
     digest = hashlib.sha256()
     digest.update(b'quail:dataset:v1\0{"entries":[')

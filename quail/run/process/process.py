@@ -37,6 +37,7 @@ def process_config(
     *,
     clear: bool = False,
     embedder_factory: Callable[[EmbeddingProfile], EmbeddingClient] | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> ProcessOutcome:
     """Lease, import without activate, warm all, then publish activation and pins."""
 
@@ -49,7 +50,12 @@ def process_config(
     with acquire_deployment_lease(config):
         db = open_core_db(config.database)
         try:
-            refs = import_declared_datasets(config, db, activate=False)
+            refs = import_declared_datasets(
+                config,
+                db,
+                activate=False,
+                progress=progress,
+            )
             if config.search_database is None:
                 _publish_activation_and_pins(db, config, refs, search=None)
                 return ProcessOutcome(results=())
@@ -73,6 +79,7 @@ def process_config(
                         embedder_factory=factory,
                         clear=clear,
                         lexical_fields=spec.lexical_fields,
+                        progress=progress,
                     )
                     results.append(result)
                 _publish_activation_and_pins(db, config, refs, search=search)

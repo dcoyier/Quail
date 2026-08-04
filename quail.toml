@@ -23,6 +23,9 @@ id = "dishes"
 source = "data/dishes.csv"
 name = "NYPL menu dish lines (1850s-2000s)"
 
+[datasets.lexical]
+fields = ["body"]
+
 [datasets.embedding]
 provider = "ollama"
 model = "embeddinggemma:300m-qat-q8_0"

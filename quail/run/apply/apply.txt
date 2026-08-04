@@ -5,8 +5,8 @@ apply_config(config):
   On failure, close the core database and raise.
   Give back the open CoreDb.
 
-import_declared_datasets(config, db, activate default True):
+import_declared_datasets(config, db, activate default True, progress default None):
   Require each dataset source file exists.
   Ensure each workspace exists.
-  Import each declared CSV with the given activate flag.
+  Import each declared CSV with the given activate flag and progress callback.
   Give back the DatasetRef tuple in declaration order.
