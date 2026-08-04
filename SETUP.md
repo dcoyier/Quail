@@ -1,0 +1,14 @@
+# earth_science articles
+
+Attach both zips and unzip into the same folder:
+  1) earth_science_2-base-quail.zip
+  2) earth_science_2-search-parts.zip
+
+Then:
+
+```sh
+bash assemble.sh
+quail run --config "$(pwd)/quail.toml"
+```
+
+MCP: `http://127.0.0.1:8000/mcp`.
