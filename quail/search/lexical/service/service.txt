@@ -20,21 +20,40 @@ lexical_scores_for_entries(workspace_id, dataset_id, version_id, corpus_by_entry
   Aggregate input over segments and target over queries with total or avg.
   Give back entry_id -> float.
 
+lexical_scores_for_source_entries(workspace_id, dataset_id, version_id, entry_ids,
+                                  source_field, all_entries, query_record,
+                                  input_aggregation, target_aggregation):
+  Resolve literal query strings.
+  Give back None when the source field has no authoritative warmed corpus so the
+  caller can use dynamic corpus scoring.
+  For total input aggregation, do not load segment counts.
+  For average input aggregation, load counts for the requested entries, or the
+  full corpus without candidate JSON when all_entries is true.
+  Score the warmed corpus without loading source text into the exec.
+
 _try_warmed_field_corpus:
   Give back (corpus, segment_counts) when warm reuse applies; else None.
 
+_warmed_field_corpus:
+  Give back the registered source-field LexicalCorpus when the warm receipt says
+  Lexical is ready; else None.
+
 _score_entries:
   Parse queries, expand prefixes, then use the simple or prefix scoring path.
+  Pass through whether the candidate set is the complete corpus.
   When target_aggregation is avg, divide by the query count.
 
 _score_simple:
   For each compiled query, select matching candidate documents with named
   :query parameters and accumulate fts_score totals.
+  When all_entries is true, query the warmed FTS corpus directly without
+  serializing or filtering a candidate-id list.
   Apply input_aggregation total or avg using segment counts.
 
 _score_with_prefixes:
   Match with a predicate that may use prefix_text, then score positive leaves
   through _expression_scores / _positive_scores.
+  When all_entries is true, omit candidate-id JSON filtering.
   NOT filters candidates only; it does not subtract score.
 
 _expression_scores / _positive_scores / _matching_document_ids /
