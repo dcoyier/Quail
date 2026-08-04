@@ -1,7 +1,5 @@
 # sustainable_living articles
 
-Sealed Bright-Pro documents dataset for local Quail.
-
 ```sh
 bash assemble.sh
 quail run --config "$(pwd)/quail.toml"
