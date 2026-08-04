@@ -1,6 +1,7 @@
 # economics articles
 
 ```sh
+pip install --no-index --find-links=./deps ./quail-0.11.0a0-py3-none-any.whl
 bash assemble.sh
 quail run --config "$(pwd)/quail.toml"
 ```
