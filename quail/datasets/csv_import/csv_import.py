@@ -28,6 +28,9 @@ from quail.datasets.models import CsvDataset
 def load_csv_dataset(path: str | Path) -> CsvDataset:
     """Read one bounded UTF-8 CSV with a required unique ``id`` column."""
 
+    # Bodies can exceed Python's default 128 KiB csv field limit.
+    csv.field_size_limit(MAX_CSV_BYTES)
+
     source = Path(os.path.abspath(Path(path).expanduser()))
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
