@@ -168,6 +168,30 @@ def test_process_second_pass_is_idempotent(tmp_path: Path) -> None:
     assert first.results[0].version_id == second.results[0].version_id
 
 
+def test_search_schema_bump_preserves_vectors_for_unchanged_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from quail.search.warm import warm as warm_mod
+
+    manifest = _write_manifest(tmp_path, embedding_fields='["body"]')
+    config = load_config(manifest)
+    fake = RecordingEmbedder(dimensions=4)
+    first = process_config(config, embedder_factory=lambda _profile: fake)
+    calls_after_first = len(fake.calls)
+    assert calls_after_first > 0
+
+    monkeypatch.setattr(
+        warm_mod,
+        "_SEARCH_BUILD_SCHEMA_VERSION",
+        warm_mod._SEARCH_BUILD_SCHEMA_VERSION + 1,
+    )
+    second = process_config(config, embedder_factory=lambda _profile: fake)
+
+    assert second.results[0].version_id == first.results[0].version_id
+    assert second.results[0].embedded_batches == 0
+    assert len(fake.calls) == calls_after_first
+
+
 def test_run_gate_fails_without_process(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path)
     config = load_config(manifest)

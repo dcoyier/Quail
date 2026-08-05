@@ -285,13 +285,22 @@ def load_entry_segment_counts(
     search: SearchDb,
     corpus: LexicalCorpus,
     *,
-    entry_ids: Sequence[str],
+    entry_ids: Sequence[str] | None,
 ) -> dict[str, int]:
     """Return entry_id → segment count for entries that already have document rows."""
 
-    if not entry_ids:
+    if entry_ids is not None and not entry_ids:
         return {}
     doc_table = validate_table_ident(corpus.doc_table)
+    if entry_ids is None:
+        rows = search.connection.execute(
+            f"""
+            SELECT entry_id, COUNT(*)
+            FROM {doc_table}
+            GROUP BY entry_id
+            """
+        ).fetchall()
+        return {str(row[0]): int(row[1]) for row in rows}
     candidates_json = json.dumps(list(entry_ids), separators=(",", ":"), allow_nan=False)
     rows = search.connection.execute(
         f"""

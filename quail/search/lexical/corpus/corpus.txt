@@ -33,7 +33,9 @@ drop_field_corpora_except(search, workspace_id, dataset_id, version_id, keep_fie
   Drop registered field corpora whose field_name is not in keep_fields.
 
 load_entry_segment_counts(search, corpus, entry_ids):
-  Read existing document row counts for the given entry ids (GROUP BY entry_id).
+  Read existing document row counts (GROUP BY entry_id).
+  When entry_ids is None, read the full warmed corpus without candidate JSON.
+  Otherwise restrict to the given entry ids.
   Give back entry_id -> count for entries that already have rows.
   Used by score paths to reuse process-warmed segments without rewrite.
 

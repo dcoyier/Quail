@@ -1,4 +1,4 @@
-"""Search warm: Lexical FTS + unbounded corpus embeddings + receipt."""
+"""Search warm: bounded Lexical FTS, embeddings, source mappings, and receipt."""
 
 from __future__ import annotations
 
@@ -31,9 +31,10 @@ from quail.search.pin import get_pinned_profile_hash
 from quail.search.vectors import text_hash, unit_vector
 
 # Bump when warm artifact semantics change (not batch/concurrency knobs).
-_SEARCH_BUILD_SCHEMA_VERSION = 2
+_SEARCH_BUILD_SCHEMA_VERSION = 3
 _SOURCE_BATCH_SIZE = 10_000
 _EMBED_COMMIT_BATCHES = 32
+_EMBEDDING_SEGMENT_WRITE_BATCH = 10_000
 
 
 def search_build_fingerprint(
@@ -156,7 +157,7 @@ def clear_search_version(
     dataset_id: str,
     version_id: str,
 ) -> None:
-    """Drop warm receipt, vectors, and Lexical corpora for one version."""
+    """Drop receipt, vectors, source mappings, and Lexical corpora for one version."""
 
     connection = search.connection
     connection.execute("BEGIN IMMEDIATE")
@@ -170,6 +171,13 @@ def clear_search_version(
         connection.execute(
             """
             DELETE FROM quail_embedding_vectors
+            WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+            """,
+            (workspace_id, dataset_id, version_id),
+        )
+        connection.execute(
+            """
+            DELETE FROM quail_embedding_fields
             WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
             """,
             (workspace_id, dataset_id, version_id),
@@ -195,7 +203,7 @@ def collect_field_corpora(
     version_id: str,
     field_names: Sequence[str] | None = None,
 ) -> dict[str, dict[str, list[str]]]:
-    """Return field_name -> (entry_id -> segments) for Lexical warm.
+    """Materialize field_name -> (entry_id -> segments) for compatibility.
 
     When ``field_names`` is set, only those source fields are included.
     """
@@ -244,9 +252,8 @@ def collect_corpus_texts(
     version_id: str,
     field_names: Sequence[str] | None = None,
 ) -> tuple[list[str], dict[str, list[str]]]:
-    """Return (non-empty texts, entry_id -> segments) flattened across fields.
+    """Materialize (texts, entry segments) across fields for compatibility.
 
-    Used by embedding warm. Lexical warm uses ``collect_field_corpora``.
     When ``field_names`` is set, only those source fields are included.
     """
 
@@ -298,11 +305,26 @@ def warm_dataset(
         version_id=version_id,
     )
     if not clear and existing is not None and existing.build_fingerprint != desired_hash:
-        # Build identity changed (lexical and/or embedding). Drop all vectors for
-        # this version; embedding cache keys use profile.profile_hash() separately.
+        # Preserve reusable vectors when the pinned embedding identity is unchanged.
+        # The build schema or Lexical fields may have changed independently.
+        pinned_hash = get_pinned_profile_hash(
+            search,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+        )
+        desired_profile_hash = profile.profile_hash() if profile is not None else None
+        if pinned_hash != desired_profile_hash:
+            search.connection.execute(
+                """
+                DELETE FROM quail_embedding_vectors
+                WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+                """,
+                (workspace_id, dataset_id, version_id),
+            )
         search.connection.execute(
             """
-            DELETE FROM quail_embedding_vectors
+            DELETE FROM quail_embedding_fields
             WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
             """,
             (workspace_id, dataset_id, version_id),
@@ -390,6 +412,16 @@ def warm_dataset(
             ),
             warm=warm,
             client=embedder_factory(profile),
+            progress=progress,
+        )
+        _replace_embedding_segments(
+            search,
+            db,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+            profile_hash=profile.profile_hash(),
+            field_names=selected_embedding_fields,
             progress=progress,
         )
         embedding_ready = True
@@ -552,6 +584,110 @@ def _lexical_entry_batches(
             for entry_id, value in rows
             if isinstance(value, str) and value
         }
+
+
+def _replace_embedding_segments(
+    search: SearchDb,
+    db: CoreDb,
+    *,
+    workspace_id: str,
+    dataset_id: str,
+    version_id: str,
+    profile_hash: str,
+    field_names: Sequence[str],
+    progress: Callable[[str], None] | None = None,
+) -> None:
+    """Replace compact source entry/segment mappings in bounded batches."""
+
+    connection = search.connection
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        connection.execute(
+            """
+            DELETE FROM quail_embedding_fields
+            WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+            """,
+            (workspace_id, dataset_id, version_id),
+        )
+        for field_name in field_names:
+            connection.execute(
+                """
+                INSERT INTO quail_embedding_fields(
+                  workspace_id, dataset_id, version_id, profile_hash, field_name
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (workspace_id, dataset_id, version_id, profile_hash, field_name),
+            )
+        connection.commit()
+        connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    except Exception:
+        connection.rollback()
+        raise
+
+    def write_rows(rows: list[tuple[int, str, int, str]]) -> None:
+        if not rows:
+            return
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            connection.executemany(
+                """
+                INSERT INTO quail_embedding_segments(
+                  field_id, entry_id, segment_index, text_hash
+                ) VALUES (?, ?, ?, ?)
+                """,
+                rows,
+            )
+            connection.commit()
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            connection.rollback()
+            raise
+        rows.clear()
+
+    for field_name in field_names:
+        field_id = int(
+            connection.execute(
+                """
+                SELECT field_id
+                FROM quail_embedding_fields
+                WHERE workspace_id = ?
+                  AND dataset_id = ?
+                  AND version_id = ?
+                  AND profile_hash = ?
+                  AND field_name = ?
+                """,
+                (workspace_id, dataset_id, version_id, profile_hash, field_name),
+            ).fetchone()[0]
+        )
+        rows: list[tuple[int, str, int, str]] = []
+        mapped = 0
+        for batch in iter_source_field_batches(
+            db,
+            workspace_id,
+            dataset_id,
+            version_id,
+            field_name,
+            batch_size=_SOURCE_BATCH_SIZE,
+        ):
+            for entry_id, value in batch:
+                if not isinstance(value, str) or not value:
+                    continue
+                rows.append(
+                    (
+                        field_id,
+                        entry_id,
+                        0,
+                        text_hash(value),
+                    )
+                )
+                mapped += 1
+                if len(rows) >= _EMBEDDING_SEGMENT_WRITE_BATCH:
+                    write_rows(rows)
+        write_rows(rows)
+        _emit_progress(
+            progress,
+            f"{dataset_id}: embedding field {field_name} mapped segments={mapped}",
+        )
 
 
 def _warm_embeddings(

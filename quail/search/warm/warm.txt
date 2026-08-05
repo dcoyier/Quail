@@ -6,9 +6,10 @@ WarmDatasetResult remembers one process summary for a dataset version, including
 build_fingerprint.
 
 There is a private search-build schema version constant (bumped when Lexical
-artifact layout changes, e.g. per-field corpora).
+or embedding artifact layout changes).
 There is a private 10,000-row source batch size.
 There is a private 32-batch embedding commit group.
+There is a private 10,000-row embedding-segment write batch.
 
 search_build_fingerprint(lexical_fields, profile):
   SHA-256 of canonical JSON covering schema version, lexical field list
@@ -19,24 +20,26 @@ get_warm_receipt / put_warm_receipt:
   put_warm_receipt takes build_fingerprint and stores it in the profile_hash column.
 
 clear_search_version:
-  Drop every per-field Lexical corpus for the version, all vectors, and the
-  warm receipt.
+  Drop every per-field Lexical corpus for the version, all vectors, all compact
+  embedding segment mappings, and the warm receipt.
 
 collect_field_corpora:
-  Read source fields for every entry (all fields, or field_names when set).
+  Materialize source fields for every entry (all fields, or field_names when set).
   Keep non-empty text cells per field.
   Give back field_name -> (entry_id -> segment list).
   Unknown field_names raise QuailRuntimeError (source fields message).
+  Keep this compatibility helper separate from the bounded warm path.
 
 collect_corpus_texts:
-  Flatten collect_field_corpora into a flat text list and per-entry segment lists.
-  Used by embedding warm.
+  Materialize collect_field_corpora into a flat text list and per-entry segment lists.
+  Keep this compatibility helper separate from the bounded warm path.
 
 warm_dataset(..., progress default None):
   Optionally clear the version.
   Compute the search-build fingerprint from lexical_fields and profile.
-  If an existing receipt has a different fingerprint, delete all vectors for
-  the version.
+  If an existing receipt has a different fingerprint, keep vectors only when
+  the existing pinned profile_hash still equals the desired embedding profile.
+  Delete compact embedding field and segment artifacts so they are rebuilt.
   Write a not-ready warm receipt before field validation or collection so any
   failed re-warm leaves serve fail-closed.
   Validate and select Lexical fields using lexical_fields when set (else all fields).
@@ -46,6 +49,8 @@ warm_dataset(..., progress default None):
   When a profile is set, database-stream distinct texts from profile.fields only
   (or all fields when fields is omitted).
   Embed missing texts with bounded provider requests, vectors, and cache transactions.
+  After embeddings succeed, stream each selected source field again and replace
+  its compact entry/segment-to-text-hash mappings in bounded transactions.
   Without an embedding profile, database-count distinct Lexical texts.
   Report field and embedding progress when given a progress callback.
   Write a ready warm receipt storing the search-build fingerprint.
@@ -58,6 +63,16 @@ _selected_source_fields:
 _lexical_entry_batches:
   Stream one field in bounded batches.
   Keep only nonempty strings and shape them as entry segment dictionaries.
+
+_replace_embedding_segments:
+  Delete prior field registrations and mappings for the dataset version.
+  Register every selected embedding source field, including empty fields.
+  Give each field registration a compact integer field_id.
+  Stream one source field at a time in 10,000-row batches.
+  For each nonempty text, remember field_id, entry id, segment index zero, and
+  text_hash without copying source text or vector blobs.
+  Commit and checkpoint each bounded mapping group.
+  Report the mapped segment count for each field.
 
 _warm_embeddings:
   Stream unique texts and check the version-scoped vector cache one at a time.
