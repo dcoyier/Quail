@@ -1,7 +1,7 @@
 # Quail v0.11
 
 At the center of Quail is an analysis language inspired by Cloudflare’s “Code
-Mode” [2, 3], an approach that lets agents compose tool calls inside code
+Mode” [1, 2], an approach that lets agents compose tool calls inside code
 rather than making discrete requests. Quail adapts this general idea into an
 environment built for qualitative analysis, exposing a symbolic analysis
 language through a compact Python API. Within this environment, the agent
@@ -12,7 +12,7 @@ interdependent classes whose objects can be combined and nested to define
 scope, filtering, and ranking. Successful turns preserve variables and dataset
 annotations for later analysis, and only what is printed during the Python
 execution is passed as the result of the tool call. In a way, this environment
-extends retrieval-augmented generation [4]; retrieval remains a way for the
+extends retrieval-augmented generation [3]; retrieval remains a way for the
 agent to be grounded in evidence, but it is part of a programmable analysis
 environment instead of the sole capability. Quail is packaged as a
 harness-agnostic MCP server with explicit local and remote server modes.
@@ -92,13 +92,10 @@ belong to the creating user.
 
 ## References
 
-1. The DataSquad Experiment: Lessons for Preparing Data and Computer Scientists
-   for Work. Paula Lackie, Elliot Pickens, and Dashiell Coyier.
-   arXiv:2511.19688. 2025. https://arxiv.org/abs/2511.19688
-2. Code Mode: the better way to use MCP. Kenton Varda and Sunil Pai. Cloudflare
+1. Code Mode: the better way to use MCP. Kenton Varda and Sunil Pai. Cloudflare
    Blog. September 26, 2025. https://blog.cloudflare.com/code-mode/
-3. Code Mode. Cloudflare Agents Documentation. Cloudflare. 2026.
+2. Code Mode. Cloudflare Agents Documentation. Cloudflare. 2026.
    https://developers.cloudflare.com/agents/tools/codemode/
-4. Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks. Patrick
+3. Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks. Patrick
    Lewis et al. Advances in Neural Information Processing Systems 33. 2020.
    https://arxiv.org/abs/2005.11401
