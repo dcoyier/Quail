@@ -1,85 +1,93 @@
 # Quail v0.11
 
-Inspectable qualitative analysis over private corpora.
+## About
 
-This tree stays small. Product decisions live in
-[`docs/BOUNDARY.md`](docs/BOUNDARY.md). The model-facing analysis contract is
-[`docs/api.md`](docs/api.md). Change routing is
-[`docs/development.md`](docs/development.md). The previous implementation at
-`../Quail v0.10` is reference-only.
+At the center of Quail is an analysis language inspired by Cloudflare’s “Code
+Mode”, an approach that lets agents compose tool calls inside code rather than
+making discrete requests. Quail adapts this general idea into an environment
+built for qualitative analysis, exposing a symbolic analysis language through a
+compact Python API. Within this environment, the agent writes blocks of
+restricted Python that call the analysis API against a processed dataset, using
+core operations for retrieving, counting, inspecting, and tagging entries. The
+flexibility of these operations comes from interdependent classes whose objects
+can be combined and nested to define scope, filtering, and ranking. Successful
+turns preserve variables and dataset annotations for later analysis, and only
+what is printed during the Python execution is passed as the result of the tool
+call. In a way, this environment extends retrieval-augmented generation;
+retrieval remains a way for the agent to be grounded in evidence, but it is
+part of a programmable analysis environment instead of the sole capability.
+Quail is packaged as a harness-agnostic MCP server with explicit local and
+remote server modes.
 
-## Status
+## Quick start
 
-First-build spine through Clerk, search warm, `quail_exec` concurrency, and the
-Connector SDK (extra tools, dataset docs, MCP UI widgets) is in place. Author
-guide: [`docs/connector-sdk.md`](docs/connector-sdk.md). Example package:
-[`examples/notes-connector/`](examples/notes-connector/).
+Hand-edit `quail.toml`, import CSVs with `quail process`, then serve with
+`quail run`. The CLI never writes the TOML.
 
-`quail process --config /absolute/path/to/quail.toml` imports declared CSVs,
-warms Lexical FTS plus corpus embeddings, then publishes activation and pins.
-`quail run --config …` holds a deployment lease, imports without activating,
-fail-closes unless each imported version is already active and warm receipts
-match the current TOML, then serves MCP.
-
-- **Unrestricted:** fixed workspace, loopback, no sign-in
-  ([`examples/quail.toml`](examples/quail.toml)).
-- **Clerk:** Bearer JWT / OAuth access tokens + TOML `[[users]]` allowlist on one
-  deployment URL, sticky workspace via `quail_list_workspaces` /
-  `quail_switch_workspace` ([`examples/quail.clerk.toml`](examples/quail.clerk.toml)).
-  MCP OAuth discovery (`/.well-known/oauth-protected-resource/mcp` plus an
-  authorization-server metadata proxy) points clients at Clerk; operators paste
-  `user_…` ids into TOML. Set `hosting.public_base_url` when the public origin
-  differs from `bind`/`port` (e.g. ngrok).
-
-Feedback stays in a separate JSONL file (messages capped at 16 KiB UTF-8; the
-file fail-closes at 64 MiB). Semantic similarity uses a per-dataset embedding
-profile (`[datasets.embedding]` plus `[providers.*]` and `core.search_database`)
-with Turso exact batch cosine (not ANN). **OpenRouter sends full corpus field
-text off-host** for embedding export — use Ollama when text must stay local.
-Lexical FTS uses Turso native FTS in the same rebuildable search database
-(in-process). Both accept `str`, `list[str]`, entry groups, and Entry lists as
-query targets. Invitations remain deferred.
-
-Clerk public deployments expect an `https://` `hosting.public_base_url` unless
-`hosting.allow_insecure_http = true` is set deliberately. `process` and `run`
-take an exclusive local deployment lease (`fcntl.flock`); `process` warms all
-imports then publishes activation and embedding pins; `run` never activates.
-
-## Operator path
-
-Edit `quail.toml` by hand (the CLI never writes it). Paths inside the file are
-relative to the manifest directory. Process once per version/embedding profile,
-then run (and re-run) without re-embedding:
+- Analysis language: [`docs/api.md`](docs/api.md)
+- Change routing: [`docs/development.md`](docs/development.md)
+- Connector SDK: [`docs/connector-sdk.md`](docs/connector-sdk.md) ·
+  [`examples/notes-connector/`](examples/notes-connector/)
 
 ```sh
-uv run quail process --config /absolute/path/to/Quail/examples/quail.toml
-uv run quail run --config /absolute/path/to/Quail/examples/quail.toml
+uv sync
 ```
 
-After changing `[datasets.embedding]` (including `fields`) or `[search.warm]`,
-run `quail process` again. Use `quail process --clear` to wipe search artifacts
-for active versions and rebuild under the current TOML (core CSV versions stay
-untouched).
+1. Copy [`examples/quail.toml`](examples/quail.toml) (or point `--config` at it).
+2. Add a CSV and a `[[datasets]]` row. Paths in the TOML are relative to the
+   manifest directory.
+3. Process, then run. `--config` must be absolute:
+
+```sh
+uv run quail process --config /absolute/path/to/quail.toml
+uv run quail run --config /absolute/path/to/quail.toml
+```
+
+4. Connect an MCP client to `http://127.0.0.1:8000/mcp` (default bind/port).
+
+### process vs run
+
+- **`process`** — imports declared CSVs, warms Lexical FTS and any corpus
+  embeddings, then activates those versions and embedding pins.
+- **`run`** — takes a deployment lease, imports without activating, fail-closes
+  unless each imported version is already active and warm receipts match the
+  TOML, then serves MCP. Never activates.
+
+Re-run `process` after changing `[datasets.embedding]` (including `fields`) or
+`[search.warm]`. `quail process --clear` wipes search artifacts for versions
+being warmed and rebuilds them; core CSV data is untouched.
 
 `[hosting] max_concurrent_executions` (default `2`) caps simultaneous
-`quail_exec` work process-wide; it is independent of `[search.warm]` embed
-concurrency. Restart `quail run` after changing it.
+`quail_exec` work process-wide. Restart `quail run` after changing it.
 
-### Clerk / MCP clients
+## Modes
 
-Identity mode: Clerk proves who you are; `auth.clerk_authorized_parties` binds
-tokens to your Clerk application (`azp`/`aud`); TOML `[[users]]` is the tool
-gate. Advertised OAuth scopes are for client UX — Quail does not enforce them
-from the token. Sessions are owned by the creating user.
+- **Unrestricted** — fixed workspace, loopback, no sign-in
+  ([`examples/quail.toml`](examples/quail.toml)).
+- **Clerk** — JWT/OAuth identity + TOML `[[users]]` allowlist on one URL
+  ([`examples/quail.clerk.toml`](examples/quail.clerk.toml)).
 
-1. In the Clerk Dashboard, enable **Dynamic client registration** under OAuth
-   applications and set default scopes to `openid`, `profile`, and `email`.
-2. Put this application's party id in `auth.clerk_authorized_parties`.
-3. Invite people in Clerk; copy each `user_…` id into `[[users]]` in
-   `quail.toml` with workspace memberships.
-4. Set `hosting.public_base_url` to the origin clients will use (defaults to
-   `http://{bind}:{port}`). Expose that origin (and `/mcp`) via reverse proxy or
-   ngrok as needed.
-5. `quail process` then `quail run`, and add `{public_base_url}/mcp` in Cursor /
-   Claude. The client should open Clerk sign-in; Quail still enforces the TOML
-   allowlist after token verification.
+Public unrestricted tunnel: set `hosting.allow_public_unrestricted = true`
+(fail-closed without it). Clerk public origins should be `https://` unless you
+set `hosting.allow_insecure_http = true`.
+
+**Privacy:** if a dataset pins `provider = "openrouter"`, warm and query
+embedding exports send full field text off-host. Prefer Ollama when text must
+stay local.
+
+## Clerk setup
+
+Clerk proves identity (`sub`); `auth.clerk_authorized_parties` binds tokens to
+your Clerk app (`azp`/`aud`); TOML `[[users]]` gates tools. Advertised OAuth
+scopes are for client UX — Quail does not enforce them from the token. Sessions
+belong to the creating user.
+
+1. In Clerk, enable **Dynamic client registration** and default scopes
+   `openid`, `profile`, `email`.
+2. Put the application party id in `auth.clerk_authorized_parties`.
+3. Invite users in Clerk; paste each `user_…` id into `[[users]]` with
+   workspace memberships.
+4. Set `hosting.public_base_url` to the origin clients use (defaults to
+   `http://{bind}:{port}`). Expose that origin and `/mcp` (proxy or ngrok).
+5. `quail process` then `quail run`, and add `{public_base_url}/mcp` in Cursor
+   or Claude. Sign-in is Clerk; Quail still enforces the TOML allowlist.

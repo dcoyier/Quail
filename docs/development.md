@@ -1,9 +1,9 @@
 # Quail Development
 
 Architecture and change routing for Quail v0.11 from an existing checkout.
-Product decisions live in [`BOUNDARY.md`](BOUNDARY.md). The model-facing
-analysis contract is [`api.md`](api.md). Connector authors read
-[`connector-sdk.md`](connector-sdk.md).
+The model-facing analysis contract is [`api.md`](api.md). Connector authors
+read [`connector-sdk.md`](connector-sdk.md). Operator how-to:
+[`README.md`](../README.md).
 
 ## Package map
 
@@ -25,9 +25,9 @@ analysis contract is [`api.md`](api.md). Connector authors read
 | Change | Where to look |
 | --- | --- |
 | Analysis language / agent `quail_exec` contract | `docs/api.md` then `quail/analysis/` |
-| Deploy, auth mode, concurrency, warm | `docs/BOUNDARY.md` then `quail/config/`, `quail/run/`, `quail/mcp/` |
+| Deploy, auth mode, concurrency, warm | `README.md`, then `quail/config/`, `quail/run/`, `quail/mcp/` |
 | Connector author surface | `docs/connector-sdk.md` then `quail.connectors.sdk` only |
-| Tests as oracle | Prefer v0.11 tests; v0.10 at `../Quail v0.10` is reference only |
+| Tests | Prefer v0.11 tests under `tests/` |
 
 ## Module layout
 
