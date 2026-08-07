@@ -1,14 +1,18 @@
 # Quail v0.11
 
-Inspectable qualitative analysis over private corpora.
-
-Inspired by OpenAI's Code Interpreter, agents compose analysis inside
-restricted Python rather than one-off tool calls. Quail exposes a compact
-Python API for filtering, counting, inspecting, and tagging entries; objects
-combine and nest to set scope, filters, and ranking. Successful work persists
-in session variables and dataset annotations; only printed output returns from
-the tool call. Retrieval sits inside that programmable environment, not as the
-only capability. Quail ships as an MCP server with local and remote modes.
+Inspired by OpenAI's Code Interpreter, where agents compose tool calls inside
+code rather than making discrete requests, Quail exposes a symbolic analysis
+language through a compact Python API. Within this environment, the agent
+writes blocks of restricted Python that call the analysis API against a
+processed dataset—whitening, counting, inspecting, and tagging entries. The
+flexibility of this language comes from interdependent classes whose objects
+can be combined and nested to define scope, filtering, and ranking. Successful
+runs persist in variables and dataset annotations for later analysis, and only
+what is printed during the Python execution is passed as the result of the
+tool call to a step. Quail is thus an extension of retrieval-augmented
+generation (RAG) in which retrieval is one capability inside a programmable
+analysis environment rather than the sole one. Quail is packaged as an MCP
+(Model Context Protocol) server with explicit local and remote server modes.
 
 Hand-edit `quail.toml`, import CSVs with `quail process`, then serve with
 `quail run`. The CLI never writes the TOML.
