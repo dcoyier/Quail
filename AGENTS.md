@@ -1,12 +1,19 @@
-# Quail v0.11 agent notes
+# Quail v0.11
 
-Read `docs/BOUNDARY.md` before changing code.
-
-- v0.10 at `../Quail v0.10` is reference/oracle only.
-- Prefer re-expression over copying mega-files.
-- Move slowly: one build-order step at a time.
+- For **running** Quail (clone, dataset, process/run), see `README.md`.
+- Model-facing analysis contract: `docs/api.md`.
+- Change routing: `docs/development.md`.
+- Connector author surface: `docs/connector-sdk.md`.
+- Move slowly: one coherent step at a time.
 - CLI must never write the operator TOML.
-- Model-facing analysis contract: `docs/api.md` (grow code to match).
+
+## Non-goals (still out)
+
+- Operator console; validate/doctor/plan/apply ceremony
+- Invitations / identity linking / live admin user APIs
+- Search infrastructure extras (ANN, lexical workers/artifact roots)
+- Hosting flourishes (ngrok as product; `public_base_url` remains)
+- Connector events host API (file GET routes are in; pub/sub is not)
 
 ## Module layout (`.py` + `.txt`)
 
