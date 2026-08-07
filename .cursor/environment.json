@@ -1,12 +1,4 @@
 {
   "name": "Quail",
-  "install": "bash .cursor/install.sh",
-  "terminals": [
-    {
-      "name": "quail-mcp",
-      "command": "bash .cursor/serve.sh",
-      "description": "Processes the bundled unrestricted example (examples/quail.toml) and serves the Quail MCP server (streamable HTTP) on 127.0.0.1:8000/mcp."
-    }
-  ],
-  "ports": [{ "name": "quail-mcp", "port": 8000 }]
+  "install": "bash .cursor/install.sh"
 }
