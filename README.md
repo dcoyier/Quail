@@ -19,6 +19,8 @@ part of a programmable analysis environment instead of the sole capability.
 Quail is packaged as a harness-agnostic MCP server with explicit local and
 remote server modes.
 
+## Quick start
+
 Hand-edit `quail.toml`, import CSVs with `quail process`, then serve with
 `quail run`. The CLI never writes the TOML.
 
@@ -26,8 +28,6 @@ Hand-edit `quail.toml`, import CSVs with `quail process`, then serve with
 - Change routing: [`docs/development.md`](docs/development.md)
 - Connector SDK: [`docs/connector-sdk.md`](docs/connector-sdk.md) ·
   [`examples/notes-connector/`](examples/notes-connector/)
-
-## Quick start
 
 ```sh
 uv sync
@@ -60,7 +60,7 @@ being warmed and rebuilds them; core CSV data is untouched.
 `[hosting] max_concurrent_executions` (default `2`) caps simultaneous
 `quail_exec` work process-wide. Restart `quail run` after changing it.
 
-### Modes
+## Modes
 
 - **Unrestricted** — fixed workspace, loopback, no sign-in
   ([`examples/quail.toml`](examples/quail.toml)).
