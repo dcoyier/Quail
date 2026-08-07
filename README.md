@@ -1,5 +1,7 @@
 # Quail v0.11
 
+## About
+
 At the center of Quail is an analysis language inspired by Cloudflare’s “Code
 Mode”, an approach that lets agents compose tool calls inside code rather than
 making discrete requests. Quail adapts this general idea into an environment
