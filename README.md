@@ -55,7 +55,7 @@ Public unrestricted tunnel: set `hosting.allow_public_unrestricted = true`
 set `hosting.allow_insecure_http = true`.
 
 **Privacy:** if a dataset pins `provider = "openrouter"`, warm and query
-embedding export send full field text off-host. Prefer Ollama when text must
+embedding exports send full field text off-host. Prefer Ollama when text must
 stay local.
 
 ## Clerk setup
