@@ -2,8 +2,16 @@
 
 Inspectable qualitative analysis over private corpora.
 
-Agents use Quail over MCP. Hand-edit `quail.toml`, import CSVs with
-`quail process`, then serve with `quail run`. The CLI never writes the TOML.
+Inspired by OpenAI's Code Interpreter, agents compose analysis inside
+restricted Python rather than one-off tool calls. Quail exposes a compact
+Python API for filtering, counting, inspecting, and tagging entries; objects
+combine and nest to set scope, filters, and ranking. Successful work persists
+in session variables and dataset annotations; only printed output returns from
+the tool call. Retrieval sits inside that programmable environment, not as the
+only capability. Quail ships as an MCP server with local and remote modes.
+
+Hand-edit `quail.toml`, import CSVs with `quail process`, then serve with
+`quail run`. The CLI never writes the TOML.
 
 - Analysis language: [`docs/api.md`](docs/api.md)
 - Change routing: [`docs/development.md`](docs/development.md)
