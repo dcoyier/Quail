@@ -19,7 +19,7 @@ part of a programmable analysis environment instead of the sole capability.
 Quail is packaged as a harness-agnostic MCP server with explicit local and
 remote server modes.
 
--> [Read more (old version):](https://drive.google.com/file/d/1J7vOg3eojIIS6DqAOCjG6Qov0dOKl9zy/view?usp=sharing)
+-> [Read more (old version)](https://drive.google.com/file/d/1J7vOg3eojIIS6DqAOCjG6Qov0dOKl9zy/view?usp=sharing)
 
 ## Quick start
 
