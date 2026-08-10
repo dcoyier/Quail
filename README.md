@@ -1,4 +1,6 @@
-![Quail Logo](quail.png)
+<p align="center">
+  <img src="quail.png" alt="Quail Logo">
+</p>
 
 # Quail v0.11
 
