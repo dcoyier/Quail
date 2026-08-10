@@ -1,3 +1,5 @@
+![Quail Logo](quail.png)
+
 # Quail v0.11
 
 ## About
