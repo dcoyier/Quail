@@ -12,6 +12,7 @@ from starlette.testclient import TestClient
 
 from quail.auth import StaticTokenVerifier, UnauthorizedError
 from quail.config import ConfigError, load_config
+from quail.config.models import UserSpec
 from quail.config.hosting_url import (
     default_public_base_url,
     is_loopback_host,
@@ -120,7 +121,19 @@ def test_build_clerk_auth_settings() -> None:
 def test_clerk_access_token_verifier() -> None:
     import asyncio
 
-    verifier = ClerkAccessTokenVerifier(StaticTokenVerifier({"tok": "user_alice"}))
+    users = (
+        UserSpec(
+            user_id="alice",
+            clerk_user_id="user_alice",
+            workspaces=("acme",),
+            default_workspace="acme",
+            lock_workspace=False,
+        ),
+    )
+    verifier = ClerkAccessTokenVerifier(
+        StaticTokenVerifier({"tok": "user_alice", "eve": "user_eve"}),
+        users=users,
+    )
 
     async def _run() -> None:
         access = await verifier.verify_token("tok")
@@ -128,6 +141,7 @@ def test_clerk_access_token_verifier() -> None:
         assert access.subject == "user_alice"
         assert access.scopes == list(MCP_OAUTH_SCOPES)
         assert await verifier.verify_token("nope") is None
+        assert await verifier.verify_token("eve") is None
 
     asyncio.run(_run())
 
@@ -159,6 +173,25 @@ def test_protected_resource_metadata_and_mcp_401(tmp_path: Path) -> None:
         www = denied.headers.get("www-authenticate", "")
         assert "resource_metadata=" in www
         assert "oauth-protected-resource/mcp" in www
+
+
+def test_mcp_rejects_valid_token_for_unknown_user(tmp_path: Path) -> None:
+    manifest = _write_clerk_manifest(
+        tmp_path,
+        hosting_extra='public_base_url = "https://acme.example"\n',
+    )
+    config = load_config(manifest)
+    apply_config(config)
+    server = create_mcp_server_from_config(
+        config,
+        verifier=StaticTokenVerifier({"alice-token": "user_alice", "eve-token": "user_eve"}),
+    ).server
+    app = server.streamable_http_app()
+    with TestClient(app) as client:
+        denied = client.post("/mcp", headers={"Authorization": "Bearer eve-token"})
+        assert denied.status_code == 401
+        allowed = client.post("/mcp", headers={"Authorization": "Bearer alice-token"})
+        assert allowed.status_code != 401
 
 
 def test_authorization_server_metadata_proxy(tmp_path: Path) -> None:
@@ -338,8 +371,7 @@ def test_clerk_allows_insecure_http_with_override(tmp_path: Path) -> None:
         _write_clerk_manifest(
             tmp_path,
             hosting_extra=(
-                'public_base_url = "http://public.example"\n'
-                "allow_insecure_http = true\n"
+                'public_base_url = "http://public.example"\nallow_insecure_http = true\n'
             ),
         )
     )
@@ -361,7 +393,18 @@ def test_access_token_verifier_offloads_sync_verify() -> None:
 
     async def _run() -> None:
         slow = _SlowVerifier()
-        adapter = ClerkAccessTokenVerifier(slow)
+        adapter = ClerkAccessTokenVerifier(
+            slow,
+            users=(
+                UserSpec(
+                    user_id="abc",
+                    clerk_user_id="user_abc",
+                    workspaces=("acme",),
+                    default_workspace="acme",
+                    lock_workspace=False,
+                ),
+            ),
+        )
         main_thread = threading.get_ident()
         result = await adapter.verify_token("abc")
         assert result is not None
@@ -486,4 +529,3 @@ def test_jwt_verify_via_local_jwks_http_round_trip() -> None:
     finally:
         server.shutdown()
         server.server_close()
-

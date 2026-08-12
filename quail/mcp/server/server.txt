@@ -31,7 +31,8 @@ create_clerk_mcp_server(config, verifier, api_docs_path default None,
   include_dataset_docs_in_setup from config). Build ClerkJwtVerifier with
   config.clerk_authorized_parties when verifier is omitted.
   Build FastMCP with locking-agnostic clerk instructions, MCP AuthSettings
-  (Clerk issuer + public /mcp resource), and ClerkAccessTokenVerifier.
+  (Clerk issuer + public /mcp resource), and ClerkAccessTokenVerifier
+  (token verify plus TOML [[users]] allowlist).
   Register /.well-known/oauth-authorization-server proxy for older clients.
   Register list/switch plus gated analysis tools (including quail_setup) and give
   back the server.
