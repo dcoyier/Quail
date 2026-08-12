@@ -8,6 +8,7 @@ license = { text = "Apache-2.0" }
 authors = [{ name = "Dashiell Coyier" }]
 dependencies = [
   "google-re2==1.1.20251105",
+  "httpx==0.28.1",
   "mcp==1.28.1",
   "pyjwt[crypto]==2.13.0",
   "pyturso==0.7.0",
