@@ -111,7 +111,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="python -m quail.mcp_client",
         description=(
             "Generic MCP Streamable HTTP client (list tools / call a tool). "
-            "Fallback for agents without a native MCP client."
+            "Use when you do not have a native MCP client."
         ),
     )
     sub = parser.add_subparsers(dest="command", required=True)

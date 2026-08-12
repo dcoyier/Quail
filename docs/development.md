@@ -14,7 +14,7 @@ read [`connector-sdk.md`](connector-sdk.md). Operator how-to:
 | `quail/session/` | Sessions, overlays, revision commit |
 | `quail/search/` | Search Turso, FTS, vectors, warm, pool |
 | `quail/mcp/` | MCP tools, offload, feedback JSONL, Clerk sticky workspace, OAuth discovery |
-| `quail/mcp_client/` | Thin Streamable HTTP shell client (`python -m quail.mcp_client`) for agents without native MCP |
+| `quail/mcp_client/` | Thin Streamable HTTP shell client (`python -m quail.mcp_client`) when no native MCP client is available |
 | `quail/config/` | Slim hand-edited TOML models and parse |
 | `quail/auth/` | Clerk JWT verification |
 | `quail/run/` | `process` / `run` / apply / warm gate |
@@ -42,7 +42,7 @@ Agents use the core MCP tools:
 `quail_setup`, `quail_get_api_docs`, `quail_list_datasets`, `quail_start_session`,
 `quail_get_dataset_info`, `quail_exec`, `provide_feedback`, plus Clerk
 workspace tools when `auth.mode = "clerk"`. Connected connectors may add
-tools, resources, and MCP UI widgets. Prefer a native MCP client to
-`http://127.0.0.1:8000/mcp`. Agents without native MCP use
+tools, resources, and MCP UI widgets. Connect to
+`http://127.0.0.1:8000/mcp`. If you do not have a native MCP client, use
 `python -m quail.mcp_client` (`list` / `call`) against that URL. Soak
 regression path: `examples/quail.soak.toml` (local soak DBs stay untracked).
