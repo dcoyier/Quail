@@ -16,7 +16,12 @@ def main(argv: list[str] | None = None) -> None:
 
     run_parser = sub.add_parser(
         "run",
-        help="Apply slim quail.toml then serve unrestricted loopback MCP",
+        help="Serve MCP if already processed (never activates)",
+        description=(
+            "Take a deployment lease, import without activating, fail closed unless "
+            "each imported version is already active and warm, then serve MCP. "
+            "Never activates. Unrestricted and Clerk both use this command."
+        ),
     )
     run_parser.add_argument(
         "--config",
