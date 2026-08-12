@@ -76,6 +76,21 @@ def test_main_call_connection_failure_exits_1(capsys: pytest.CaptureFixture[str]
     assert "mcp_client:" in captured.err
 
 
+def test_main_call_sdk_value_error_exits_1(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    async def _raise(*_args: object, **_kwargs: object) -> None:
+        raise ValueError("unexpected content type")
+
+    monkeypatch.setattr("quail.mcp_client.mcp_client.call_tool", _raise)
+    code = main(["call", "quail_setup", "{}"])
+    assert code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "mcp_client:" in captured.err
+    assert "unexpected content type" in captured.err
+
+
 def test_list_and_call_against_live_server(mcp_url: str) -> None:
     listed = asyncio.run(list_tools(mcp_url))
     names = {tool["name"] for tool in listed["tools"]}

@@ -5,6 +5,7 @@ There is a private tool read timeout of 300 seconds for call_tool (same budget).
 
 main(optional argv):
   Parse list or call.
+  If argparse raises SystemExit, give back that integer code, or 2 if the code is not an int.
   For list, call list_tools with the URL, print JSON, give back 0.
   For call, load_arguments, call_tool, print the CallToolResult JSON payload.
   Give back 1 when the tool result isError is true.
@@ -15,7 +16,7 @@ main(optional argv):
 
 load_arguments(spec):
   If spec is "-", read stdin.
-  If spec starts with "@", read that file path.
+  If spec starts with "@", expanduser that file path and read it.
   If that file cannot be read, raise ValueError.
   Otherwise treat spec as inline JSON text.
   Empty JSON input means {}.
@@ -49,4 +50,4 @@ _call_result_payload(result):
   Give back isError, structuredContent, and content (JSON dumps of content blocks).
 
 _print_json(payload):
-  Write indented JSON plus a trailing newline to stdout.
+  Write indented JSON with sorted keys plus a trailing newline to stdout.
