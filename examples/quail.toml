@@ -36,7 +36,7 @@ id = "notes"
 source = "data/notes.csv"
 name = "Notes"
 
-# Optional per-dataset embedding profile (pinned on apply; warmed by quail process):
+# Optional per-dataset embedding profile (pinned and warmed by quail process):
 # [datasets.embedding]
 # provider = "ollama"
 # model = "embeddinggemma:latest"
