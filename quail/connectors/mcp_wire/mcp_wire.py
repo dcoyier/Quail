@@ -15,6 +15,7 @@ from starlette.requests import Request
 from starlette.responses import FileResponse as StarletteFileResponse
 from starlette.responses import Response
 
+from quail.auth.errors import ForbiddenError, UnauthorizedError
 from quail.connectors.load import (
     ConnectedProvider,
     ConnectorCatalog,
@@ -54,8 +55,14 @@ def register_connectors(
     catalog: ConnectorCatalog,
     *,
     resolve_workspace: Callable[[Context | None], tuple[str, str | None]],
+    authenticate_route: Callable[[Request, str], str | None] | None = None,
 ) -> None:
-    """Attach connector surfaces; resolver receives FastMCP Context or None."""
+    """Attach connector surfaces; resolver receives FastMCP Context or None.
+
+    authenticate_route, when set, receives the Starlette Request and URL
+    workspace_id and gives back user_id (or None). Raise UnauthorizedError or
+    ForbiddenError to fail the GET. Unrestricted mode omits it.
+    """
 
     providers_by_tool: dict[str, list[tuple[str, ConnectedProvider]]] = {}
     tool_extension: dict[str, str] = {}
@@ -122,7 +129,7 @@ def register_connectors(
         _register_tool(server, tool_specs[tool_name], owners, resolve_workspace)
 
     for (_extension_id, _route_id), owners in route_owners.items():
-        _register_route(server, owners)
+        _register_route(server, owners, authenticate_route=authenticate_route)
 
 
 def _register_resource(
@@ -267,6 +274,8 @@ def _published_input_schema(spec: ToolSpec) -> dict[str, Any]:
 def _register_route(
     server: FastMCP,
     owners: list[tuple[str, ConnectedProvider, RouteSpec]],
+    *,
+    authenticate_route: Callable[[Request, str], str | None] | None = None,
 ) -> None:
     sample = owners[0][2]
     extension_id = owners[0][1].extension_id
@@ -281,6 +290,14 @@ def _register_route(
             name: unquote(str(request.path_params.get(name, ""))) for name in param_names
         }
         path_params["workspace_id"] = workspace_id
+        user_id: str | None = None
+        if authenticate_route is not None:
+            try:
+                user_id = authenticate_route(request, workspace_id)
+            except UnauthorizedError:
+                return Response(status_code=401)
+            except ForbiddenError:
+                return Response(status_code=403)
 
         def work() -> FileResponse | None:
             connected = _provider_for_workspace(
@@ -291,7 +308,7 @@ def _register_route(
                 return None
             context = make_request_context(
                 workspace_id=workspace_id,
-                user_id=None,
+                user_id=user_id,
                 connected=connected,
             )
             handle = getattr(connected.provider, "handle_route", None)
@@ -321,9 +338,12 @@ def _register_route(
             return Response(status_code=500)
         if file_result is None:
             return Response(status_code=404)
+        now = int(time.time())
+        if file_result.expires_at is not None and file_result.expires_at < now:
+            return Response(status_code=404)
         headers: dict[str, str] = {}
         if file_result.expires_at is not None:
-            remaining = max(0, file_result.expires_at - int(time.time()))
+            remaining = max(0, file_result.expires_at - now)
             headers["Cache-Control"] = f"private, max-age={remaining}"
         return StarletteFileResponse(
             path=file_result.path,

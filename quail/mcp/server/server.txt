@@ -36,6 +36,7 @@ create_clerk_mcp_server(config, verifier, api_docs_path default None,
   Register /.well-known/oauth-authorization-server proxy for older clients.
   Register list/switch plus gated analysis tools (including quail_setup) and give
   back the server.
+  Connector HTTP file routes authenticate Bearer and require workspace membership.
   Clerk session create stamps owner_user_id; exec and feedback-with-session
   require that owner.
 
