@@ -47,7 +47,10 @@ quail_exec passes context.search_runtime into exec_script (pool checkout per exe
 
 Clerk tools:
   Authenticate Bearer via override or request headers.
-  Sticky-bind default_workspace once per connection key.
+  Sticky-bind default_workspace once per Streamable HTTP connection
+  (mcp-session-id header), falling back to the Clerk user id when no
+  connection id is present (in-process tests).
+  Core tools re-check that the sticky workspace is still a membership.
   quail_list_workspaces returns memberships (or only default when locked) and active_workspace_id.
   quail_switch_workspace binds an allowlisted workspace or errors when locked.
   Dataset/session/setup/exec/feedback require an active workspace; unbound gets UNBOUND_REPAIR_HINT.

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from mcp.types import CallToolResult
 
-from quail.auth import ForbiddenError, StaticTokenVerifier, UnauthorizedError
+from quail.auth import AllowlistedPrincipal, ForbiddenError, StaticTokenVerifier, UnauthorizedError
 from quail.auth.clerk import authenticate_bearer, resolve_allowlisted_user
 from quail.config import ConfigError, UserSpec, load_config, parse_config
 from quail.mcp import bearer_token, create_mcp_server_from_config
@@ -368,9 +368,7 @@ default_workspace = "acme"
     apply_config(config).close()
     server = create_mcp_server_from_config(
         config,
-        verifier=StaticTokenVerifier(
-            {"alice-token": "user_alice", "bob-token": "user_bob"}
-        ),
+        verifier=StaticTokenVerifier({"alice-token": "user_alice", "bob-token": "user_bob"}),
     ).server
 
     async def run() -> None:
@@ -396,5 +394,65 @@ default_workspace = "acme"
                 },
             )
             assert _is_error(stolen)
+
+    asyncio.run(run())
+
+
+def test_mcp_session_id_reads_streamable_http_header() -> None:
+    from quail.mcp.server.server import _clerk_connection_key, _mcp_session_id
+
+    class _Request:
+        def __init__(self, headers: dict[str, str]) -> None:
+            self.headers = headers
+
+    class _RequestContext:
+        def __init__(self, headers: dict[str, str]) -> None:
+            self.request = _Request(headers)
+
+    class _Ctx:
+        def __init__(self, headers: dict[str, str]) -> None:
+            self.request_context = _RequestContext(headers)
+
+        @property
+        def session(self) -> object:
+            raise AttributeError("ServerSession has no id")
+
+    assert _mcp_session_id(_Ctx({"mcp-session-id": "conn-1"})) == "conn-1"
+    assert _mcp_session_id(_Ctx({})) is None
+    principal = AllowlistedPrincipal(
+        user=UserSpec(
+            user_id="alice",
+            clerk_user_id="user_alice",
+            workspaces=("acme",),
+            default_workspace="acme",
+            lock_workspace=False,
+        ),
+        clerk_user_id="user_alice",
+    )
+    assert _clerk_connection_key(principal, _Ctx({"mcp-session-id": "conn-1"})) == "sess:conn-1"
+    assert _clerk_connection_key(principal, _Ctx({})) == "user:user_alice"
+
+
+def test_sticky_workspace_rejects_non_member_bind(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from quail.mcp.sticky import StickyWorkspaceStore
+
+    manifest = _write_clerk_manifest(tmp_path)
+    config = load_config(manifest)
+    apply_config(config).close()
+    verifier = StaticTokenVerifier({"alice-token": "user_alice"})
+    server = create_mcp_server_from_config(config, verifier=verifier).server
+
+    def _poisoned(self: StickyWorkspaceStore, connection_key: str, user: UserSpec) -> str | None:
+        del self, connection_key, user
+        return "not-a-workspace"
+
+    monkeypatch.setattr(StickyWorkspaceStore, "ensure_initial_bind", _poisoned)
+
+    async def run() -> None:
+        with bearer_token("alice-token"):
+            failed = await server.call_tool("quail_list_datasets", {})
+            assert _is_error(failed)
 
     asyncio.run(run())

@@ -67,6 +67,7 @@ _DEFAULT_EXEC_REPAIR = (
     "Fix the diagnostic, keep the same session_id, and retry. "
     "Failed exec does not commit tags or bindings."
 )
+_MCP_SESSION_ID_HEADER = "mcp-session-id"
 
 
 @dataclass(slots=True)
@@ -260,10 +261,7 @@ def _resolve_clerk_connector_workspace(
         users=runtime.users,
         verifier=runtime.verifier,
     )
-    session_id = _mcp_session_id(ctx)
-    connection_key = (
-        f"sess:{session_id}" if session_id is not None else f"user:{principal.clerk_user_id}"
-    )
+    connection_key = _clerk_connection_key(principal, ctx)
     workspace_id = runtime.sticky.active(connection_key)
     if workspace_id is None:
         workspace_id = runtime.sticky.ensure_initial_bind(connection_key, principal.user)
@@ -526,10 +524,7 @@ def _register_clerk_tools(
             return error_result(error=error)
 
     def _connection_key(principal: AllowlistedPrincipal, ctx: Context | None) -> str:
-        session_id = _mcp_session_id(ctx)
-        if session_id is not None:
-            return f"sess:{session_id}"
-        return f"user:{principal.clerk_user_id}"
+        return _clerk_connection_key(principal, ctx)
 
     def _require_workspace(
         principal: AllowlistedPrincipal,
@@ -541,6 +536,11 @@ def _register_clerk_tools(
             return error_result(
                 error=ValueError("No workspace bound for this connection"),
                 repair_hint=UNBOUND_REPAIR_HINT,
+            )
+        if active not in principal.user.workspaces:
+            return error_result(
+                error=ForbiddenError("Not a member of the active workspace"),
+                repair_hint="Call quail_list_workspaces and pick an allowlisted id.",
             )
         return active
 
@@ -876,16 +876,37 @@ def _authorization_header(ctx: Context | None) -> str | None:
 
 
 def _mcp_session_id(ctx: Context | None) -> str | None:
+    """Streamable HTTP mcp-session-id for this MCP connection, if present."""
+
     if ctx is None:
         return None
+    try:
+        request = ctx.request_context.request
+    except (ValueError, AttributeError, LookupError):
+        request = None
+    if request is not None:
+        headers = getattr(request, "headers", None)
+        if headers is not None:
+            header_id = headers.get(_MCP_SESSION_ID_HEADER)
+            if header_id:
+                return str(header_id)
     try:
         session: Any = ctx.session
     except (ValueError, AttributeError, LookupError):
         return None
-    session_id = getattr(session, "id", None) or getattr(session, "session_id", None)
-    if session_id is None:
-        return None
-    return str(session_id)
+    transport_id = getattr(session, "mcp_session_id", None)
+    if transport_id:
+        return str(transport_id)
+    return None
+
+
+def _clerk_connection_key(principal: AllowlistedPrincipal, ctx: Context | None) -> str:
+    """Prefer per-connection Streamable HTTP session; else Clerk user id."""
+
+    session_id = _mcp_session_id(ctx)
+    if session_id is not None:
+        return f"sess:{session_id}"
+    return f"user:{principal.clerk_user_id}"
 
 
 def _exec_repair_hint(error: BaseException) -> str | None:
