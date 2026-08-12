@@ -140,6 +140,25 @@ def test_apply_then_mcp_list_datasets(tmp_path: Path) -> None:
     asyncio.run(run())
 
 
+def test_cli_run_help_matches_serve_contract(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exited:
+        cli_main(["--help"])
+    assert exited.value.code == 0
+    parent = capsys.readouterr().out
+    assert "Apply slim quail.toml then serve unrestricted loopback MCP" not in parent
+    assert "Serve MCP if already processed (never activates)" in parent
+
+    with pytest.raises(SystemExit) as exited:
+        cli_main(["run", "--help"])
+    assert exited.value.code == 0
+    run_help = capsys.readouterr().out
+    assert "never activates" in run_help.lower() or "already processed" in run_help.lower()
+    assert "unrestricted loopback" not in run_help.lower()
+    assert "apply slim" not in run_help.lower()
+
+
 def test_cli_run_requires_absolute_config(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
