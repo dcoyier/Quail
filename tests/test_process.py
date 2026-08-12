@@ -16,7 +16,13 @@ from quail.run import apply_config, assert_search_warm, process_config
 from quail.search import open_search_db
 from quail.search.cache import get_cached_vector_blob
 from quail.search.vectors import text_hash
-from quail.search.warm import get_warm_receipt, search_build_fingerprint
+from quail.search.warm import (
+    get_warm_receipt,
+    require_warm_ready,
+    search_build_fingerprint,
+    warm_dataset,
+)
+from quail.search.warm import warm as warm_module
 
 
 class RecordingEmbedder:
@@ -210,6 +216,145 @@ def test_revision_change_fails_gate_until_reprocess(tmp_path: Path) -> None:
         assert_search_warm(db2, config2)
     finally:
         db2.close()
+
+
+def test_fingerprint_change_marks_not_ready_before_deleting_vectors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = _write_manifest(tmp_path, revision="v1")
+    config = load_config(manifest)
+    first = process_config(config, embedder_factory=lambda _p: RecordingEmbedder(dimensions=4))
+    version = first.results[0].version_id
+    db = open_core_db(config.database)
+    search = open_search_db(config.search_database)  # type: ignore[arg-type]
+    try:
+        events: list[str] = []
+        original_put = warm_module.put_warm_receipt
+        original_execute = search.connection.execute
+
+        def wrapped_put(*args: object, **kwargs: object) -> None:
+            if kwargs.get("lexical_ready") is False:
+                events.append("not_ready")
+                row = original_execute(
+                    """
+                    SELECT COUNT(*) FROM quail_embedding_vectors
+                    WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+                    """,
+                    ("local", "notes", version),
+                ).fetchone()
+                assert row is not None
+                events.append(f"vectors={int(row[0])}")
+            original_put(*args, **kwargs)
+
+        def wrapped_execute(sql: object, parameters: object = ()) -> object:
+            sql_text = " ".join(str(sql).split())
+            if "DELETE FROM quail_embedding_vectors" in sql_text:
+                events.append("delete_vectors")
+                receipt = get_warm_receipt(
+                    search,
+                    workspace_id="local",
+                    dataset_id="notes",
+                    version_id=version,
+                )
+                assert receipt is not None
+                assert receipt.lexical_ready is False
+                assert receipt.embedding_ready is False
+            return original_execute(sql, parameters)
+
+        monkeypatch.setattr(warm_module, "put_warm_receipt", wrapped_put)
+        monkeypatch.setattr(search.connection, "execute", wrapped_execute)
+
+        warm_dataset(
+            db,
+            search,
+            workspace_id="local",
+            dataset_id="notes",
+            version_id=version,
+            profile=EmbeddingProfile(
+                provider="ollama",
+                model="embeddinggemma:latest",
+                dimensions=4,
+                revision="v2",
+            ),
+            warm=config.search_warm,
+            embedder_factory=lambda _p: RecordingEmbedder(dimensions=4),
+        )
+        assert "not_ready" in events
+        assert "delete_vectors" in events
+        assert events.index("not_ready") < events.index("delete_vectors")
+        vector_marks = [item for item in events if item.startswith("vectors=")]
+        assert vector_marks and int(vector_marks[0].split("=", 1)[1]) > 0
+    finally:
+        search.close()
+        db.close()
+
+
+def test_vector_delete_crash_fails_run_gate_even_with_old_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = _write_manifest(tmp_path, revision="v1")
+    config = load_config(manifest)
+    first = process_config(config, embedder_factory=lambda _p: RecordingEmbedder(dimensions=4))
+    version = first.results[0].version_id
+    original_profile = config.datasets[0].embedding
+    assert original_profile is not None
+    db = open_core_db(config.database)
+    search = open_search_db(config.search_database)  # type: ignore[arg-type]
+    try:
+        pending_delete_commit = False
+        original_execute = search.connection.execute
+        original_commit = search.connection.commit
+
+        def wrapped_execute(sql: object, parameters: object = ()) -> object:
+            nonlocal pending_delete_commit
+            result = original_execute(sql, parameters)
+            sql_text = " ".join(str(sql).split())
+            if "DELETE FROM quail_embedding_vectors" in sql_text:
+                pending_delete_commit = True
+            return result
+
+        def wrapped_commit() -> None:
+            original_commit()
+            if pending_delete_commit:
+                raise RuntimeError("injected crash after vector delete commit")
+
+        monkeypatch.setattr(search.connection, "execute", wrapped_execute)
+        monkeypatch.setattr(search.connection, "commit", wrapped_commit)
+
+        with pytest.raises(RuntimeError, match="injected crash after vector delete"):
+            warm_dataset(
+                db,
+                search,
+                workspace_id="local",
+                dataset_id="notes",
+                version_id=version,
+                profile=EmbeddingProfile(
+                    provider="ollama",
+                    model="embeddinggemma:latest",
+                    dimensions=4,
+                    revision="v2",
+                ),
+                warm=config.search_warm,
+                embedder_factory=lambda _p: RecordingEmbedder(dimensions=4),
+            )
+
+        with pytest.raises(QuailRuntimeError, match="incomplete|not been processed"):
+            require_warm_ready(
+                search,
+                workspace_id="local",
+                dataset_id="notes",
+                version_id=version,
+                profile=original_profile,
+            )
+        receipt = get_warm_receipt(
+            search, workspace_id="local", dataset_id="notes", version_id=version
+        )
+        assert receipt is not None
+        assert receipt.lexical_ready is False
+        assert receipt.embedding_ready is False
+    finally:
+        search.close()
+        db.close()
 
 
 def test_clear_wipes_then_rewarms(tmp_path: Path) -> None:

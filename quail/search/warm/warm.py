@@ -288,18 +288,6 @@ def warm_dataset(
         dataset_id=dataset_id,
         version_id=version_id,
     )
-    if not clear and existing is not None and existing.build_fingerprint != desired_hash:
-        # Build identity changed (lexical and/or embedding). Drop all vectors for
-        # this version; embedding cache keys use profile.profile_hash() separately.
-        search.connection.execute(
-            """
-            DELETE FROM quail_embedding_vectors
-            WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
-            """,
-            (workspace_id, dataset_id, version_id),
-        )
-        search.connection.commit()
-
     field_corpora = collect_field_corpora(
         db,
         workspace_id=workspace_id,
@@ -325,6 +313,18 @@ def warm_dataset(
         embedding_ready=False,
         text_count=0,
     )
+    if not clear and existing is not None and existing.build_fingerprint != desired_hash:
+        # Build identity changed (lexical and/or embedding). Drop vectors only after
+        # the not-ready receipt so a crash cannot leave a ready receipt over an
+        # empty cache (including if the operator reverts TOML and runs).
+        search.connection.execute(
+            """
+            DELETE FROM quail_embedding_vectors
+            WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+            """,
+            (workspace_id, dataset_id, version_id),
+        )
+        search.connection.commit()
     for field_name, entry_segments in field_corpora.items():
         corpus = resolve_corpus(
             search,
