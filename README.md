@@ -50,6 +50,19 @@ uv run quail run --config /absolute/path/to/quail.toml
 ```
 
 4. Connect an MCP client to `http://127.0.0.1:8000/mcp` (default bind/port).
+   Prefer a native MCP client (Cursor, Claude, and similar). If the agent
+   cannot attach MCP cleanly, use the thin Streamable HTTP helper:
+
+```sh
+uv run python -m quail.mcp_client list
+uv run python -m quail.mcp_client call quail_setup '{}'
+uv run python -m quail.mcp_client call quail_exec @exec.json
+```
+
+   Default URL is `http://127.0.0.1:8000/mcp`. Pass `--url` to override.
+   Arguments are a JSON object, `@path.json`, or `-` (stdin). stdout is JSON
+   only. This is a generic MCP client over the official Python SDK — not a
+   Quail-specific protocol.
 
 ### process vs run
 

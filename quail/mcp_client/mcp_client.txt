@@ -1,0 +1,49 @@
+There is a default MCP URL called DEFAULT_URL: http://127.0.0.1:8000/mcp.
+There is a private connect timeout of 30 seconds and a private HTTP read timeout of 300 seconds.
+There is a private tool read timeout of 120 seconds for call_tool.
+
+main(optional argv):
+  Parse list or call.
+  For list, call list_tools with the URL, print JSON, give back 0.
+  For call, load_arguments, call_tool, print the CallToolResult JSON payload.
+  Give back 1 when the tool result isError is true.
+  Give back 2 for bad usage or bad JSON arguments.
+  Give back 1 for other connection or runtime failures.
+  Write diagnostics to stderr; write only JSON to stdout.
+
+load_arguments(spec):
+  If spec is "-", read stdin.
+  If spec starts with "@", read that file path.
+  Otherwise treat spec as inline JSON text.
+  Empty JSON input means {}.
+  Require a JSON object (or null treated as {}).
+  If JSON is invalid or not an object, raise ValueError.
+
+list_tools(url):
+  Open an initialized MCP session to url.
+  List tools.
+  Give back a mapping with tools: name, description, inputSchema for each tool.
+
+call_tool(url, name, optional arguments):
+  Open an initialized MCP session to url.
+  Call the named tool with arguments (default {}).
+  Use the private tool read timeout.
+  Give back the MCP CallToolResult.
+
+_build_parser:
+  Build argparse for "python -m quail.mcp_client".
+  Subcommand list takes optional --url.
+  Subcommand call takes tool_name, arguments, and optional --url.
+
+_session(url):
+  Create an httpx AsyncClient with the private timeouts and follow_redirects.
+  Enter streamable_http_client with that client.
+  Enter ClientSession on the read/write streams.
+  Initialize the session.
+  Yield the session, then close everything.
+
+_call_result_payload(result):
+  Give back isError, structuredContent, and content (JSON dumps of content blocks).
+
+_print_json(payload):
+  Write indented JSON plus a trailing newline to stdout.
