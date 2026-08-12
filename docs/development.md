@@ -44,5 +44,5 @@ Agents use the core MCP tools:
 workspace tools when `auth.mode = "clerk"`. Connected connectors may add
 tools, resources, and MCP UI widgets. Connect to
 `http://127.0.0.1:8000/mcp`. If you do not have a native MCP client, use
-`python -m quail.mcp_client` (`list` / `call`) against that URL. Soak
+`uv run python -m quail.mcp_client` (`list` / `call`) against that URL. Soak
 regression path: `examples/quail.soak.toml` (local soak DBs stay untracked).

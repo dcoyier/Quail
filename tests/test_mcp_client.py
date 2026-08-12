@@ -7,6 +7,7 @@ import json
 import socket
 import threading
 import time
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -42,15 +43,37 @@ def test_main_rejects_bad_usage() -> None:
     assert main(["call"]) == 2
 
 
-def test_list_and_call_against_live_server(tmp_path: Path) -> None:
-    url = _start_quail_mcp(tmp_path)
+def test_main_call_bad_json_exits_2(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["call", "quail_setup", "not-json"])
+    assert code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "mcp_client:" in captured.err
 
-    listed = asyncio.run(list_tools(url))
+
+def test_main_call_connection_failure_exits_1(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(
+        [
+            "call",
+            "quail_setup",
+            "{}",
+            "--url",
+            "http://127.0.0.1:1/mcp",
+        ]
+    )
+    assert code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "mcp_client:" in captured.err
+
+
+def test_list_and_call_against_live_server(mcp_url: str) -> None:
+    listed = asyncio.run(list_tools(mcp_url))
     names = {tool["name"] for tool in listed["tools"]}
     assert "quail_setup" in names
     assert "quail_exec" in names
 
-    setup = asyncio.run(call_tool(url, "quail_setup", {}))
+    setup = asyncio.run(call_tool(mcp_url, "quail_setup", {}))
     assert setup.isError is False
     assert setup.structuredContent is not None
     assert "session_id" in setup.structuredContent
@@ -63,19 +86,43 @@ def test_list_and_call_against_live_server(tmp_path: Path) -> None:
         "dataset_id": dataset_id,
         "code": "print(count())",
     }
-    outcome = asyncio.run(call_tool(url, "quail_exec", exec_args))
+    outcome = asyncio.run(call_tool(mcp_url, "quail_exec", exec_args))
     assert outcome.isError is False
     assert outcome.structuredContent is not None
     assert "printed_output" in outcome.structuredContent
     assert "2" in outcome.structuredContent["printed_output"]
 
 
-def test_main_list_prints_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    url = _start_quail_mcp(tmp_path)
-    code = main(["list", "--url", url])
-    assert code == 0
-    payload = json.loads(capsys.readouterr().out)
-    assert any(tool["name"] == "quail_setup" for tool in payload["tools"])
+def test_main_list_and_call_exit_codes(mcp_url: str, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["list", "--url", mcp_url]) == 0
+    listed = json.loads(capsys.readouterr().out)
+    assert any(tool["name"] == "quail_setup" for tool in listed["tools"])
+
+    assert main(["call", "quail_setup", "{}", "--url", mcp_url]) == 0
+    setup = json.loads(capsys.readouterr().out)
+    assert setup["isError"] is False
+    assert setup["structuredContent"]["session_id"]
+
+    assert (
+        main(
+            [
+                "call",
+                "quail_exec",
+                json.dumps(
+                    {
+                        "session_id": setup["structuredContent"]["session_id"],
+                        "dataset_id": "missing-dataset",
+                        "code": "print(1)",
+                    }
+                ),
+                "--url",
+                mcp_url,
+            ]
+        )
+        == 1
+    )
+    failed = json.loads(capsys.readouterr().out)
+    assert failed["isError"] is True
 
 
 class _FakeStdin:
@@ -86,16 +133,8 @@ class _FakeStdin:
         return self._text
 
 
-_SERVERS: list[uvicorn.Server] = []
-
-
-def _free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
-
-
-def _start_quail_mcp(tmp_path: Path) -> str:
+@pytest.fixture
+def mcp_url(tmp_path: Path) -> Iterator[str]:
     csv_path = tmp_path / "notes.csv"
     csv_path.write_text(
         "id,title,body\ne1,Hello,hydrangea care tips\ne2,Other,climate notes\n",
@@ -113,12 +152,26 @@ def _start_quail_mcp(tmp_path: Path) -> str:
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
-    _SERVERS.append(server)
 
     url = f"http://127.0.0.1:{port}/mcp"
     deadline = time.time() + 10
     while time.time() < deadline:
         if server.started:
-            return url
+            break
         time.sleep(0.05)
-    raise RuntimeError("uvicorn MCP server failed to start")
+    else:
+        server.should_exit = True
+        thread.join(timeout=5)
+        raise RuntimeError("uvicorn MCP server failed to start")
+
+    try:
+        yield url
+    finally:
+        server.should_exit = True
+        thread.join(timeout=5)
+
+
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])

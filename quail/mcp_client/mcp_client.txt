@@ -1,6 +1,7 @@
 There is a default MCP URL called DEFAULT_URL: http://127.0.0.1:8000/mcp.
-There is a private connect timeout of 30 seconds and a private HTTP read timeout of 300 seconds.
-There is a private tool read timeout of 120 seconds for call_tool.
+There is a private connect timeout of 30 seconds.
+There is a private HTTP read timeout of 300 seconds.
+There is a private tool read timeout of 300 seconds for call_tool (same budget).
 
 main(optional argv):
   Parse list or call.
@@ -36,7 +37,7 @@ _build_parser:
   Subcommand call takes tool_name, arguments, and optional --url.
 
 _session(url):
-  Create an httpx AsyncClient with the private timeouts and follow_redirects.
+  Create an httpx AsyncClient with the private timeouts and follow_redirects false.
   Enter streamable_http_client with that client.
   Enter ClientSession on the read/write streams.
   Initialize the session.

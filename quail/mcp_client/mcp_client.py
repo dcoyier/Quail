@@ -17,10 +17,10 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.types import CallToolResult
 
 DEFAULT_URL = "http://127.0.0.1:8000/mcp"
-# Cover Quail extended quail_exec wall time (100s) with headroom.
+# Cover Quail extended quail_exec wall time (100s) with queue/headroom budget.
 _READ_TIMEOUT_SECONDS = 300.0
 _CONNECT_TIMEOUT_SECONDS = 30.0
-_TOOL_READ_TIMEOUT = timedelta(seconds=120)
+_TOOL_READ_TIMEOUT = timedelta(seconds=_READ_TIMEOUT_SECONDS)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -38,13 +38,10 @@ def main(argv: list[str] | None = None) -> int:
             payload = asyncio.run(list_tools(args.url))
             _print_json(payload)
             return 0
-        if args.command == "call":
-            arguments = load_arguments(args.arguments)
-            result = asyncio.run(call_tool(args.url, args.tool_name, arguments))
-            _print_json(_call_result_payload(result))
-            return 1 if result.isError else 0
-        parser.error(f"Unknown command: {args.command}")
-        return 2
+        arguments = load_arguments(args.arguments)
+        result = asyncio.run(call_tool(args.url, args.tool_name, arguments))
+        _print_json(_call_result_payload(result))
+        return 1 if result.isError else 0
     except ValueError as error:
         print(f"mcp_client: {error}", file=sys.stderr)
         return 2
@@ -148,7 +145,7 @@ async def _session(url: str) -> AsyncIterator[ClientSession]:
                     _CONNECT_TIMEOUT_SECONDS,
                     read=_READ_TIMEOUT_SECONDS,
                 ),
-                follow_redirects=True,
+                follow_redirects=False,
             )
         )
         transport = streamable_http_client(url, http_client=http_client)
