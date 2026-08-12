@@ -6,8 +6,12 @@ semantic_score(...):
 semantic_scores_for_entries(workspace_id, dataset_id, version_id, corpus_by_entry,
                             query_record, input_aggregation, target_aggregation):
   Require a pinned embedding profile for the version.
+  If none, raise QuailRuntimeError with repair_hint to add [datasets.embedding]
+    and re-run quail process, then retry the whole exec.
   Use the stored pin profile_hash for vector cache keys (not a recomputed hash
-  from get_embedding_pin, which omits optional fields).
+    from get_embedding_pin, which omits optional fields).
+  If the stored profile_hash is missing, raise QuailRuntimeError with
+    repair_hint to re-run quail process to refresh the embedding pin, then retry.
   Resolve corpus and LiteralText / LiteralTextList query texts.
   Reject unresolved EntryGroup / EntryList (QueryEngine must resolve those first).
   Embed missing texts once through the provider and cache unit-vector blobs.

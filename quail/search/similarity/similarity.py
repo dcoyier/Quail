@@ -75,7 +75,7 @@ class SimilarityService:
             raise QuailRuntimeError(
                 "Semantic requires a pinned dataset embedding profile for this version",
                 repair_hint=(
-                    "Add [datasets.embedding] for this dataset, re-run quail apply/run, "
+                    "Add [datasets.embedding] for this dataset, re-run quail process, "
                     "then retry the whole exec."
                 ),
             )
@@ -89,7 +89,7 @@ class SimilarityService:
             raise QuailRuntimeError(
                 "Semantic requires a stored pin profile_hash for this version",
                 repair_hint=(
-                    "Re-run quail apply/run to refresh the embedding pin, then retry."
+                    "Re-run quail process to refresh the embedding pin, then retry."
                 ),
             )
 

@@ -476,7 +476,7 @@ def test_semantic_wrong_dimensions(tmp_path: Path) -> None:
 def test_semantic_without_pin(tmp_path: Path) -> None:
     search = open_search_db(tmp_path / "search.turso")
     service = SimilarityService(search=search, providers=ProvidersConfig())
-    with pytest.raises(QuailRuntimeError, match="pinned dataset embedding"):
+    with pytest.raises(QuailRuntimeError, match="pinned dataset embedding") as raised:
         service.semantic_score(
             workspace_id="ws",
             dataset_id="notes",
@@ -486,6 +486,9 @@ def test_semantic_without_pin(tmp_path: Path) -> None:
             input_aggregation=None,
             target_aggregation=None,
         )
+    assert raised.value.repair_hint is not None
+    assert "quail process" in raised.value.repair_hint
+    assert "apply" not in raised.value.repair_hint.lower()
     search.close()
 
 
