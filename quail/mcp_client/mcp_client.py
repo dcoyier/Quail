@@ -38,13 +38,14 @@ def main(argv: list[str] | None = None) -> int:
             payload = asyncio.run(list_tools(args.url))
             _print_json(payload)
             return 0
-        arguments = load_arguments(args.arguments)
+        try:
+            arguments = load_arguments(args.arguments)
+        except ValueError as error:
+            print(f"mcp_client: {error}", file=sys.stderr)
+            return 2
         result = asyncio.run(call_tool(args.url, args.tool_name, arguments))
         _print_json(_call_result_payload(result))
         return 1 if result.isError else 0
-    except ValueError as error:
-        print(f"mcp_client: {error}", file=sys.stderr)
-        return 2
     except Exception as error:
         print(f"mcp_client: {error}", file=sys.stderr)
         return 1
@@ -57,7 +58,10 @@ def load_arguments(spec: str) -> dict[str, Any]:
         raw = sys.stdin.read()
     elif spec.startswith("@"):
         path = Path(spec[1:]).expanduser()
-        raw = path.read_text(encoding="utf-8")
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except OSError as error:
+            raise ValueError(f"could not read arguments file: {error}") from error
     else:
         raw = spec
     try:

@@ -51,6 +51,15 @@ def test_main_call_bad_json_exits_2(capsys: pytest.CaptureFixture[str]) -> None:
     assert "mcp_client:" in captured.err
 
 
+def test_main_call_missing_file_exits_2(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    missing = tmp_path / "missing.json"
+    code = main(["call", "quail_setup", f"@{missing}"])
+    assert code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "mcp_client:" in captured.err
+
+
 def test_main_call_connection_failure_exits_1(capsys: pytest.CaptureFixture[str]) -> None:
     code = main(
         [

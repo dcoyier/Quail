@@ -8,13 +8,15 @@ main(optional argv):
   For list, call list_tools with the URL, print JSON, give back 0.
   For call, load_arguments, call_tool, print the CallToolResult JSON payload.
   Give back 1 when the tool result isError is true.
-  Give back 2 for bad usage or bad JSON arguments.
+  Give back 2 for bad usage, bad JSON arguments, or an unreadable @path file.
   Give back 1 for other connection or runtime failures.
+  Catch ValueError only from load_arguments (usage); other failures use the generic handler.
   Write diagnostics to stderr; write only JSON to stdout.
 
 load_arguments(spec):
   If spec is "-", read stdin.
   If spec starts with "@", read that file path.
+  If that file cannot be read, raise ValueError.
   Otherwise treat spec as inline JSON text.
   Empty JSON input means {}.
   Require a JSON object (or null treated as {}).
