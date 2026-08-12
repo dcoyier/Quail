@@ -16,10 +16,10 @@ from pydantic import AnyHttpUrl
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
-from quail.auth.clerk import TokenVerifier
-from quail.auth.errors import UnauthorizedError
+from quail.auth.clerk import TokenVerifier, resolve_allowlisted_user
+from quail.auth.errors import ForbiddenError, UnauthorizedError
 from quail.config.hosting_url import normalize_public_base_url
-from quail.config.models import QuailConfig
+from quail.config.models import QuailConfig, UserSpec
 from quail.mcp.offload import run_blocking
 
 # Advertised scopes for MCP protected-resource metadata / middleware checks.
@@ -77,15 +77,18 @@ class ClerkAccessTokenVerifier:
         self,
         verifier: TokenVerifier,
         *,
+        users: tuple[UserSpec, ...],
         scopes: tuple[str, ...] = MCP_OAUTH_SCOPES,
     ) -> None:
         self._verifier = verifier
+        self._users = users
         self._scopes = scopes
 
     async def verify_token(self, token: str) -> AccessToken | None:
         try:
             subject = await run_blocking(lambda: self._verifier.verify(token))
-        except UnauthorizedError:
+            resolve_allowlisted_user(self._users, subject)
+        except (UnauthorizedError, ForbiddenError):
             return None
         return AccessToken(
             token=token,

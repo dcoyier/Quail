@@ -18,10 +18,11 @@ build_clerk_auth_settings(clerk_domain, public_base_url):
   Build MCP AuthSettings with Clerk as issuer_url and Quail /mcp as resource_server_url.
   required_scopes is MCP_OAUTH_SCOPES.
 
-ClerkAccessTokenVerifier(verifier, scopes=MCP_OAUTH_SCOPES):
+ClerkAccessTokenVerifier(verifier, users, scopes=MCP_OAUTH_SCOPES):
   Adapt Quail's sync TokenVerifier to the MCP SDK async verify_token protocol.
   Run verifier.verify off the event loop via run_blocking.
-  On UnauthorizedError, give back None.
+  Then resolve the Clerk sub against TOML [[users]].
+  On UnauthorizedError or ForbiddenError, give back None.
   On success, give back AccessToken with subject and the advertised scopes.
 
 register_clerk_oauth_discovery(server, clerk_domain):

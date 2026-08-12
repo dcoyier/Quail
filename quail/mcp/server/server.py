@@ -233,7 +233,7 @@ def create_clerk_mcp_server(
             clerk_domain=config.clerk_domain,
             public_base_url=config.public_base_url,
         ),
-        token_verifier=ClerkAccessTokenVerifier(verifier),
+        token_verifier=ClerkAccessTokenVerifier(verifier, users=config.users),
     )
     register_clerk_oauth_discovery(server, clerk_domain=config.clerk_domain)
     _register_clerk_tools(server, runtime, connector_catalog=connector_catalog)
