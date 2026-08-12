@@ -456,3 +456,84 @@ def test_sticky_workspace_rejects_non_member_bind(
             assert _is_error(failed)
 
     asyncio.run(run())
+
+
+def test_clerk_connector_file_route_requires_bearer(tmp_path: Path) -> None:
+    from starlette.testclient import TestClient
+
+    from quail.connectors.load import ConnectedProvider, ConnectorCatalog, WorkspaceConnectorBundle
+    from quail.connectors.sdk import ConnectorError, ConnectorManifest, FileResponse, RouteSpec
+    from quail.mcp.server import create_clerk_mcp_server
+
+    asset = tmp_path / "page.png"
+    asset.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 20)
+
+    class _RouteProvider:
+        def call_tool(self, context, name, arguments):
+            raise ConnectorError("UNKNOWN_TOOL", "none", "n/a")
+
+        def dataset_document(self, context, dataset_id):
+            return None
+
+        def handle_route(self, context, route_id, path_params):
+            if route_id != "asset" or path_params.get("token") != "good":
+                return None
+            if context.workspace_id != "acme" or context.user_id != "alice":
+                return None
+            return FileResponse(asset, "image/png", filename="page.png")
+
+    class _RouteConnector:
+        def __init__(self) -> None:
+            self._manifest = ConnectorManifest(
+                id="garden_gate",
+                version="1.0.0",
+                routes=(RouteSpec(id="asset", path_suffix="assets/{token}"),),
+            )
+
+        @property
+        def manifest(self):
+            return self._manifest
+
+        def read_resource(self, uri: str) -> str:
+            raise ValueError(uri)
+
+        def connect(self, runtime):
+            del runtime
+            return _RouteProvider()
+
+    connector = _RouteConnector()
+    connected = ConnectedProvider(
+        extension_id="garden_gate",
+        version="1.0.0",
+        manifest=connector.manifest,
+        connector=connector,
+        provider=_RouteProvider(),
+        dataset_ids=frozenset(),
+        provides_docs=False,
+    )
+    catalog = ConnectorCatalog(
+        by_workspace={
+            "acme": WorkspaceConnectorBundle(
+                workspace_id="acme",
+                providers=(connected,),
+                docs_by_dataset={},
+            )
+        }
+    )
+    manifest = _write_clerk_manifest(tmp_path)
+    config = load_config(manifest)
+    apply_config(config).close()
+    verifier = StaticTokenVerifier({"alice-token": "user_alice", "bob-token": "user_bob"})
+    server = create_clerk_mcp_server(config, verifier=verifier, connector_catalog=catalog)
+    client = TestClient(server.streamable_http_app())
+    url = "/extensions/garden_gate/acme/assets/good"
+    assert client.get(url).status_code == 401
+    assert client.get(url, headers={"Authorization": "Bearer bob-token"}).status_code == 403
+    labs = client.get(
+        "/extensions/garden_gate/labs/assets/good",
+        headers={"Authorization": "Bearer alice-token"},
+    )
+    assert labs.status_code == 404
+    ok = client.get(url, headers={"Authorization": "Bearer alice-token"})
+    assert ok.status_code == 200
+    assert ok.content.startswith(b"\x89PNG")

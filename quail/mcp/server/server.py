@@ -245,6 +245,9 @@ def create_clerk_mcp_server(
             server,
             connector_catalog,
             resolve_workspace=lambda ctx: _resolve_clerk_connector_workspace(runtime, ctx),
+            authenticate_route=lambda request, workspace_id: _authenticate_clerk_file_route(
+                runtime, request, workspace_id
+            ),
         )
     return server
 
@@ -273,6 +276,24 @@ def _resolve_clerk_connector_workspace(
     if workspace_id not in principal.user.workspaces:
         raise ForbiddenError("Not a member of the active workspace")
     return workspace_id, principal.user.user_id
+
+
+def _authenticate_clerk_file_route(
+    runtime: ClerkMcpRuntime,
+    request: Any,
+    workspace_id: str,
+) -> str:
+    """Require an allowlisted Bearer member of the URL workspace for file GETs."""
+
+    authorization = request.headers.get("authorization") or request.headers.get("Authorization")
+    principal = authenticate_bearer(
+        authorization,
+        users=runtime.users,
+        verifier=runtime.verifier,
+    )
+    if workspace_id not in principal.user.workspaces:
+        raise ForbiddenError("Not a member of this workspace")
+    return principal.user.user_id
 
 
 def _register_unrestricted_tools(

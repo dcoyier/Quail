@@ -11,7 +11,8 @@ RouteSpec is one host HTTP GET route. Remember: id, path_suffix (under
 /extensions/{connector_id}/{workspace_id}/), method GET only, max_body_bytes.
 
 FileResponse is the route reply. Remember: path, content_type, optional
-filename, optional expires_at unix timestamp.
+filename, optional expires_at unix timestamp. The host 404s when expires_at
+is in the past instead of streaming the file.
 
 ConnectorManifest remembers id, version, tools, resources, widgets, routes, and
 config_keys.

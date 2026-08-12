@@ -192,8 +192,7 @@ def _config(
     sample = tmp_path / "sample.csv"
     if not sample.exists():
         sample.write_text(
-            "id,title,body\n"
-            "s1,Cover,hello\n",
+            "id,title,body\ns1,Cover,hello\n",
             encoding="utf-8",
         )
     manifest = tmp_path / "quail.toml"
@@ -225,8 +224,7 @@ def _seed_db(tmp_path: Path, workspace_id: str = "local") -> Path:
     db_path = tmp_path / "core.turso"
     csv_path = tmp_path / "sample.csv"
     csv_path.write_text(
-        "id,title,body\n"
-        "s1,Cover,hello\n",
+        "id,title,body\ns1,Cover,hello\n",
         encoding="utf-8",
     )
     with open_core_db(db_path) as db:
@@ -235,9 +233,7 @@ def _seed_db(tmp_path: Path, workspace_id: str = "local") -> Path:
             db,
             workspace_id,
             "notes",
-            tmp_path / "notes.csv"
-            if (tmp_path / "notes.csv").exists()
-            else _write_notes(tmp_path),
+            tmp_path / "notes.csv" if (tmp_path / "notes.csv").exists() else _write_notes(tmp_path),
             activate=True,
         )
     return db_path
@@ -575,12 +571,7 @@ def test_connector_error_classification() -> None:
 
 
 def test_example_package_surface(tmp_path: Path) -> None:
-    example_src = (
-        Path(__file__).resolve().parents[1]
-        / "examples"
-        / "notes-connector"
-        / "src"
-    )
+    example_src = Path(__file__).resolve().parents[1] / "examples" / "notes-connector" / "src"
     sys.path.insert(0, str(example_src))
     try:
         from quail_notes_connector import create_connector
@@ -635,7 +626,9 @@ def test_production_shaped_toml_loads_notes_via_entry_point(tmp_path: Path) -> N
     if "notes" not in {
         ep.name for ep in entry_points().select(group=load_module.ENTRY_POINT_GROUP)
     }:
-        pytest.skip("install examples/notes-connector (uv pip install -e ./examples/notes-connector)")
+        pytest.skip(
+            "install examples/notes-connector (uv pip install -e ./examples/notes-connector)"
+        )
 
     data = tmp_path / "data"
     data.mkdir()
@@ -894,6 +887,136 @@ def test_connector_file_route_serves_bytes(tmp_path: Path) -> None:
     assert ok.status_code == 200
     assert ok.headers["content-type"].startswith("image/png")
     assert ok.content.startswith(b"\x89PNG")
+
+
+def test_connector_file_route_expired_is_404(tmp_path: Path) -> None:
+    from mcp.server.fastmcp import FastMCP
+    from starlette.testclient import TestClient
+
+    asset, catalog = _file_route_catalog(tmp_path, expires_at=1)
+    del asset
+    server = FastMCP("t")
+    register_connectors(
+        server,
+        catalog,
+        resolve_workspace=lambda _ctx: ("garden", None),
+    )
+    client = TestClient(server.streamable_http_app())
+    expired = client.get("/extensions/garden_gate/garden/assets/good")
+    assert expired.status_code == 404
+
+
+def test_connector_file_route_authenticate_route(tmp_path: Path) -> None:
+    from mcp.server.fastmcp import FastMCP
+    from starlette.testclient import TestClient
+
+    from quail.auth.errors import ForbiddenError, UnauthorizedError
+
+    seen: dict[str, str | None] = {}
+    asset, catalog = _file_route_catalog(tmp_path, seen=seen)
+    del asset
+
+    def authenticate(request: object, workspace_id: str) -> str:
+        del workspace_id
+        header = request.headers.get("authorization")  # type: ignore[attr-defined]
+        if not header:
+            raise UnauthorizedError("Missing Authorization bearer token")
+        if header != "Bearer good":
+            raise ForbiddenError("Not a member of this workspace")
+        return "alice"
+
+    server = FastMCP("t")
+    register_connectors(
+        server,
+        catalog,
+        resolve_workspace=lambda _ctx: ("garden", None),
+        authenticate_route=authenticate,
+    )
+    client = TestClient(server.streamable_http_app())
+    assert client.get("/extensions/garden_gate/garden/assets/good").status_code == 401
+    assert (
+        client.get(
+            "/extensions/garden_gate/garden/assets/good",
+            headers={"Authorization": "Bearer other"},
+        ).status_code
+        == 403
+    )
+    ok = client.get(
+        "/extensions/garden_gate/garden/assets/good",
+        headers={"Authorization": "Bearer good"},
+    )
+    assert ok.status_code == 200
+    assert seen.get("user_id") == "alice"
+
+
+def _file_route_catalog(
+    tmp_path: Path,
+    *,
+    expires_at: int = 9_999_999_999,
+    seen: dict[str, str | None] | None = None,
+    workspace_id: str = "garden",
+):
+    from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
+    from quail.connectors.sdk import FileResponse, RouteSpec
+
+    asset = tmp_path / "page.png"
+    asset.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 20)
+
+    class _RouteProvider:
+        def call_tool(self, context, name, arguments):
+            raise ConnectorError("UNKNOWN_TOOL", "none", "n/a")
+
+        def dataset_document(self, context, dataset_id):
+            return None
+
+        def handle_route(self, context, route_id, path_params):
+            if seen is not None:
+                seen["user_id"] = context.user_id
+            if route_id != "asset" or path_params.get("token") != "good":
+                return None
+            if context.workspace_id != workspace_id:
+                return None
+            return FileResponse(asset, "image/png", filename="page.png", expires_at=expires_at)
+
+    class _RouteConnector:
+        def __init__(self) -> None:
+            self._manifest = ConnectorManifest(
+                id="garden_gate",
+                version="1.0.0",
+                routes=(RouteSpec(id="asset", path_suffix="assets/{token}"),),
+            )
+
+        @property
+        def manifest(self):
+            return self._manifest
+
+        def read_resource(self, uri: str) -> str:
+            raise ValueError(uri)
+
+        def connect(self, runtime):
+            del runtime
+            return _RouteProvider()
+
+    connector = _RouteConnector()
+    connected = ConnectedProvider(
+        extension_id="garden_gate",
+        version="1.0.0",
+        manifest=connector.manifest,
+        connector=connector,
+        provider=_RouteProvider(),
+        dataset_ids=frozenset({"garden-gate"}),
+        provides_docs=False,
+    )
+    catalog = ConnectorCatalog(
+        by_workspace={
+            workspace_id: WorkspaceConnectorBundle(
+                workspace_id=workspace_id,
+                providers=(connected,),
+                docs_by_dataset={},
+            )
+        }
+    )
+    return asset, catalog
 
 
 def test_unknown_config_keys_rejected_even_with_empty_allowlist(
