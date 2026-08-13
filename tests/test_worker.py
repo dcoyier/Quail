@@ -193,3 +193,4 @@ def test_exec_script_preserves_lexical_repair_hint(tmp_path: Path) -> None:
             )
         assert raised.value.repair_hint is not None
         assert "search_database" in raised.value.repair_hint
+        assert "quail process" in raised.value.repair_hint

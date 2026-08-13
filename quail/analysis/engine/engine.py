@@ -42,6 +42,14 @@ from quail.search import LexicalService, SimilarityService
 from quail.session.models import FieldCreate, Scope, ValueDelete, ValueWrite
 from quail.session.overlay import analysis_fields, analysis_values, catalog_fields
 
+_LEXICAL_NOT_CONFIGURED_HINT = (
+    "Set core.search_database, re-run quail process, then retry the whole exec."
+)
+_SEMANTIC_NOT_CONFIGURED_HINT = (
+    "Set core.search_database, [providers.*], and [datasets.embedding], "
+    "re-run quail process, then retry the whole exec."
+)
+
 
 class QueryEngine:
     """Evaluate retrieve/count/mutations for one scope; stage overlay in memory."""
@@ -544,9 +552,7 @@ class QueryEngine:
             if self._lexical is None:
                 raise QuailRuntimeError(
                     "Lexical search is not configured",
-                    repair_hint=(
-                        "Set core.search_database, re-run quail, then retry the whole exec."
-                    ),
+                    repair_hint=_LEXICAL_NOT_CONFIGURED_HINT,
                 )
             if root is None:
                 raise QuailRuntimeError("Lexical requires an expression root field")
@@ -569,10 +575,7 @@ class QueryEngine:
             if self._similarity is None:
                 raise QuailRuntimeError(
                     "Semantic search is not configured",
-                    repair_hint=(
-                        "Set core.search_database, [providers.*], and [datasets.embedding], "
-                        "re-run quail, then retry the whole exec."
-                    ),
+                    repair_hint=_SEMANTIC_NOT_CONFIGURED_HINT,
                 )
             if root is None:
                 raise QuailRuntimeError("Semantic requires an expression root field")
@@ -817,10 +820,7 @@ class QueryEngine:
                 if self._similarity is None:
                     raise QuailRuntimeError(
                         "Semantic search is not configured",
-                        repair_hint=(
-                            "Set core.search_database, [providers.*], and [datasets.embedding], "
-                            "re-run quail, then retry the whole exec."
-                        ),
+                        repair_hint=_SEMANTIC_NOT_CONFIGURED_HINT,
                     )
                 scored = self._similarity.semantic_scores_for_entries(
                     workspace_id=self._scope.workspace_id,
@@ -840,9 +840,7 @@ class QueryEngine:
                 if self._lexical is None:
                     raise QuailRuntimeError(
                         "Lexical search is not configured",
-                        repair_hint=(
-                            "Set core.search_database, re-run quail, then retry the whole exec."
-                        ),
+                        repair_hint=_LEXICAL_NOT_CONFIGURED_HINT,
                     )
                 source_field = None
                 if not prefix_ops:

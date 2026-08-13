@@ -145,8 +145,11 @@ def test_lexical_requires_search_database(tmp_path: Path) -> None:
         matching = G0.where(score > 0)
 
         def driver(engine: QueryEngine, _prints) -> None:
-            with pytest.raises(QuailRuntimeError, match="Lexical search is not configured"):
+            with pytest.raises(QuailRuntimeError, match="Lexical search is not configured") as raised:
                 dispatch_call(engine, "count", (), {"group": matching})
+            assert raised.value.repair_hint is not None
+            assert "quail process" in raised.value.repair_hint
+            assert "apply" not in raised.value.repair_hint.lower()
 
         run_analysis(
             db,
