@@ -169,7 +169,7 @@ def test_correct_kind_and_none_field_bindings_round_trip(tmp_path: Path) -> None
         assert second.printed_output == "source body\n"
 
 
-def test_wrong_kind_field_binding_rejected_at_restore(tmp_path: Path) -> None:
+def test_wrong_kind_field_binding_does_not_block_restore(tmp_path: Path) -> None:
     db, session = _seed(tmp_path)
     with db:
         scope = resolve_scope(db, session.id, "notes")
@@ -182,14 +182,87 @@ def test_wrong_kind_field_binding_rejected_at_restore(tmp_path: Path) -> None:
         )
         assert "bad" in load_bindings(db, session.id)
 
+        outcome = exec_script(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=revision,
+            code="print(1)\n",
+        )
+        assert outcome.printed_output == "1\n"
+        assert "bad" in load_bindings(db, session.id)
+
         with pytest.raises(QuailFieldError, match="registered as source, not analysis"):
             exec_script(
                 db,
                 session_id=session.id,
                 dataset_id="notes",
-                expected_revision=revision,
-                code="print(1)\n",
+                expected_revision=outcome.state_revision,
+                code=(
+                    "print(count(group=G0.where("
+                    "Expression(bad, Value()) != None)))\n"
+                ),
             )
         session_row = get_session(db, session.id)
-        assert session_row is not None and session_row.state_revision == revision
-        assert "bad" in load_bindings(db, session.id)
+        assert session_row is not None
+        assert session_row.state_revision == outcome.state_revision
+
+        recovered = exec_script(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=outcome.state_revision,
+            code="del bad\nprint(1)\n",
+        )
+        assert recovered.printed_output == "1\n"
+        assert "bad" not in load_bindings(db, session.id)
+
+
+def test_stale_kind_field_binding_survives_dataset_switch(tmp_path: Path) -> None:
+    notes_csv = tmp_path / "notes.csv"
+    meta_csv = tmp_path / "meta.csv"
+    notes_csv.write_text("id,title,body\ne1,Hello,hydrangea\n", encoding="utf-8")
+    meta_csv.write_text("id,title\nm1,Meta\n", encoding="utf-8")
+    db = open_core_db(tmp_path / "core.turso")
+    with db:
+        import_csv_dataset(db, "ws", "notes", notes_csv, activate=True)
+        import_csv_dataset(db, "ws", "meta", meta_csv, activate=True)
+        session = create_session(db, "ws")
+
+        first = exec_script(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            code='f = Field("body", "source")\nprint(f.kind)\n',
+        )
+        assert first.printed_output == "source\n"
+
+        second = exec_script(
+            db,
+            session_id=session.id,
+            dataset_id="meta",
+            expected_revision=first.state_revision,
+            code='create_field("body")\nprint(1)\n',
+        )
+        assert second.printed_output == "1\n"
+
+        third = exec_script(
+            db,
+            session_id=session.id,
+            dataset_id="meta",
+            expected_revision=second.state_revision,
+            code="print(1)\n",
+        )
+        assert third.printed_output == "1\n"
+        assert "f" in load_bindings(db, session.id)
+
+        recovered = exec_script(
+            db,
+            session_id=session.id,
+            dataset_id="meta",
+            expected_revision=third.state_revision,
+            code="del f\nprint(1)\n",
+        )
+        assert recovered.printed_output == "1\n"
+        assert "f" not in load_bindings(db, session.id)

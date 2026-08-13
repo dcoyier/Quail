@@ -158,9 +158,11 @@ atomically (no tags, bindings, or printed output).
 ### `Field(name, kind=None)`
 
 `kind` is `"source"`, `"analysis"`, or `None` (resolve by name at use).  
-Explicit kind must match the catalog when the Field is used **or** when a
-binding that holds the Field (or a tree containing it) is committed or
-restored. Construction alone does not consult the catalog.
+Explicit kind must match the catalog when the Field is used, and when a
+binding that holds the Field (or a tree containing it) is committed.
+Restore does not fail the exec on a stale kind (bindings are session-global;
+kinds are dataset-specific) — using the Field still raises, and `del` recovers.
+Construction alone does not consult the catalog.
 Do not compare a Field to a value or order Fields — that raises
 `QuailSyntaxError`; use `Expression(field, Value())` (or a numeric op) for
 entry-value predicates. `Field == Field` is only identity of `(name, kind)`,
