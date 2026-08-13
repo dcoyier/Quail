@@ -683,13 +683,15 @@ class QueryEngine:
         if operation.kind == "RegexSearch":
             if value is None:
                 return None
-            text = value if isinstance(value, str) else str(value)
-            return compiled.search(text)
+            if not isinstance(value, str):
+                raise QuailRuntimeError("RegexSearch requires text; use AsText() first")
+            return compiled.search(value)
         if operation.kind == "RegexFindAll":
             if value is None:
                 return []
-            text = value if isinstance(value, str) else str(value)
-            return compiled.find_all(text)
+            if not isinstance(value, str):
+                raise QuailRuntimeError("RegexFindAll requires text; use AsText() first")
+            return compiled.find_all(value)
         # RegexSub — literal replacement only (no backrefs).
         replacement = str(operation.params["replacement"])
         if value is None:

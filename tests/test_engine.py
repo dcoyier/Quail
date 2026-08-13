@@ -12,7 +12,7 @@ from quail.analysis.exec_host import dispatch_call, run_analysis
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
 from quail.analysis.group import G0, G1, GroupExpr
-from quail.analysis.operations import Lexical, RegexSearch, Value
+from quail.analysis.operations import AsText, Lexical, RegexSearch, Value
 from quail.analysis.planner import plan_create_field
 from quail.analysis.unit import Unit, fields
 from quail.datasets import import_csv_dataset, open_core_db
@@ -147,6 +147,48 @@ def test_lexical_requires_search_database(tmp_path: Path) -> None:
         def driver(engine: QueryEngine, _prints) -> None:
             with pytest.raises(QuailRuntimeError, match="Lexical search is not configured"):
                 dispatch_call(engine, "count", (), {"group": matching})
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+        )
+
+
+def test_regex_search_rejects_non_text(tmp_path: Path) -> None:
+    db, session = _seed(tmp_path)
+    with db:
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            score = dispatch_call(engine, "create_field", ("score",))
+            sample = dispatch_call(engine, "retrieve", (), {"limit": 1})[0]
+            dispatch_call(engine, "tag", ([sample], score, 12))
+            with pytest.raises(QuailRuntimeError, match="requires text"):
+                dispatch_call(
+                    engine,
+                    "count",
+                    (),
+                    {
+                        "group": G0.where(
+                            Expression(score, RegexSearch("1")) != None  # noqa: E711
+                        )
+                    },
+                )
+            assert (
+                dispatch_call(
+                    engine,
+                    "count",
+                    (),
+                    {
+                        "group": G0.where(
+                            Expression(score, AsText(), RegexSearch("1")) != None  # noqa: E711
+                        )
+                    },
+                )
+                == 1
+            )
 
         run_analysis(
             db,
