@@ -31,7 +31,13 @@ def main(argv: list[str] | None = None) -> None:
 
     process_parser = sub.add_parser(
         "process",
-        help="Apply slim quail.toml then warm Lexical/embeddings for search",
+        help="Import, warm search, then publish activation",
+        description=(
+            "Take a deployment lease, import without activating, warm Lexical and "
+            "embeddings when a search database is configured, then publish "
+            "activation and pins. With no search database, import and activate "
+            "only (no search warm). Never writes quail.toml."
+        ),
     )
     process_parser.add_argument(
         "--config",
@@ -60,7 +66,10 @@ def main(argv: list[str] | None = None) -> None:
             config = load_config(args.config)
             outcome = process_config(config, clear=args.clear)
             if not outcome.results:
-                print("quail process: no search database; apply only")
+                print(
+                    "quail process: no search database; "
+                    "imported and activated (no search warm)"
+                )
                 return
             for result in outcome.results:
                 emb = "yes" if result.embedding_ready else "no"

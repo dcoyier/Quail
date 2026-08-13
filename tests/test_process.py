@@ -544,6 +544,43 @@ def test_cli_process_prints_summary(
     assert "embedding=yes" in out
 
 
+def test_cli_process_without_search_database_skips_warm(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "notes.csv").write_text(
+        "id,title,body\ne1,Hello,hydrangea\n",
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "quail.toml"
+    manifest.write_text(
+        """
+[core]
+database = "data/quail.turso"
+feedback = "data/feedback.jsonl"
+
+[auth]
+mode = "unrestricted"
+workspace = "local"
+
+[hosting]
+bind = "127.0.0.1"
+port = 8765
+
+[[datasets]]
+id = "notes"
+source = "data/notes.csv"
+""",
+        encoding="utf-8",
+    )
+    cli_main(["process", "--config", str(manifest.resolve())])
+    out = capsys.readouterr().out
+    assert "no search database" in out
+    assert "no search warm" in out
+    assert "apply" not in out.lower()
+
+
 def test_default_search_warm_config() -> None:
     warm = SearchWarmConfig()
     assert warm.embed_batch_size == 32

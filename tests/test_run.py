@@ -159,6 +159,26 @@ def test_cli_run_help_matches_serve_contract(
     assert "apply slim" not in run_help.lower()
 
 
+def test_cli_process_help_matches_process_contract(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exited:
+        cli_main(["--help"])
+    assert exited.value.code == 0
+    parent = capsys.readouterr().out
+    assert "Apply slim quail.toml then warm" not in parent
+    assert "Import, warm search, then publish activation" in parent
+
+    with pytest.raises(SystemExit) as exited:
+        cli_main(["process", "--help"])
+    assert exited.value.code == 0
+    process_help = capsys.readouterr().out
+    assert "apply slim" not in process_help.lower()
+    assert "lease" in process_help.lower()
+    assert "publish" in process_help.lower()
+    assert "never writes" in process_help.lower()
+
+
 def test_cli_run_requires_absolute_config(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
