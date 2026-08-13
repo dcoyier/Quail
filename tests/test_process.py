@@ -852,3 +852,115 @@ def test_process_deletes_pin_when_embedding_removed(tmp_path: Path) -> None:
         )
     finally:
         search2.close()
+
+
+def test_warm_deletes_pin_before_ready_receipt_when_embedding_omitted(
+    tmp_path: Path,
+) -> None:
+    from quail.search.pin import get_embedding_pin
+
+    manifest = _write_manifest(tmp_path, embedding=True)
+    config = load_config(manifest)
+    outcome = process_config(
+        config, embedder_factory=lambda _p: RecordingEmbedder(dimensions=4)
+    )
+    version = outcome.results[0].version_id
+    db = open_core_db(config.database)
+    search = open_search_db(config.search_database)  # type: ignore[arg-type]
+    try:
+        assert (
+            get_embedding_pin(
+                search, workspace_id="local", dataset_id="notes", version_id=version
+            )
+            is not None
+        )
+        warm_dataset(
+            db,
+            search,
+            workspace_id="local",
+            dataset_id="notes",
+            version_id=version,
+            profile=None,
+            warm=config.search_warm,
+            embedder_factory=lambda _p: (_ for _ in ()).throw(RuntimeError("no embed")),
+        )
+        assert (
+            get_embedding_pin(
+                search, workspace_id="local", dataset_id="notes", version_id=version
+            )
+            is None
+        )
+        require_warm_ready(
+            search,
+            workspace_id="local",
+            dataset_id="notes",
+            version_id=version,
+            profile=None,
+        )
+    finally:
+        search.close()
+        db.close()
+
+
+def test_leftover_pin_fails_run_gate_when_toml_has_no_embedding(tmp_path: Path) -> None:
+    from quail.search.pin import pin_embedding_profile
+
+    manifest = _write_manifest(tmp_path, embedding=False)
+    config = load_config(manifest)
+    outcome = process_config(config)
+    version = outcome.results[0].version_id
+    search = open_search_db(config.search_database)  # type: ignore[arg-type]
+    try:
+        pin_embedding_profile(
+            search,
+            workspace_id="local",
+            dataset_id="notes",
+            version_id=version,
+            profile=EmbeddingProfile(
+                provider="ollama",
+                model="embeddinggemma:latest",
+                dimensions=4,
+                revision="stale",
+            ),
+        )
+        with pytest.raises(QuailRuntimeError, match="embedding pin"):
+            require_warm_ready(
+                search,
+                workspace_id="local",
+                dataset_id="notes",
+                version_id=version,
+                profile=None,
+            )
+    finally:
+        search.close()
+
+
+def test_publish_crash_after_warm_does_not_leave_pin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from quail.search.pin import get_embedding_pin
+
+    manifest = _write_manifest(tmp_path, embedding=True)
+    config = load_config(manifest)
+    first = process_config(
+        config, embedder_factory=lambda _p: RecordingEmbedder(dimensions=4)
+    )
+    version = first.results[0].version_id
+
+    def _boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("injected publish crash")
+
+    monkeypatch.setattr("quail.run.process.process._publish_activation_and_pins", _boom)
+    config2 = load_config(_write_manifest(tmp_path, embedding=False))
+    with pytest.raises(RuntimeError, match="injected publish crash"):
+        process_config(config2)
+    search = open_search_db(config2.search_database)  # type: ignore[arg-type]
+    try:
+        assert (
+            get_embedding_pin(
+                search, workspace_id="local", dataset_id="notes", version_id=version
+            )
+            is None
+        )
+    finally:
+        search.close()

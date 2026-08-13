@@ -39,6 +39,8 @@ warm_dataset:
   cannot leave lexical_ready over a partial index.
   If an existing receipt had a different fingerprint, delete all vectors for
   the version only after that not-ready receipt (never while still ready).
+  If profile is None, delete the embedding pin after the not-ready receipt
+  (before Lexical rebuild and the ready receipt).
   For each field, resolve that field's corpus and rebuild with
   warm_entry_segments (plain row writes, then one FTS build).
   Drop any registered field corpora not in this warm set.
@@ -54,4 +56,5 @@ require_warm_ready(search, workspace_id, dataset_id, version_id, profile,
   lexical_fields default None):
   Fail closed when the receipt is missing, Lexical is not ready, search-build
   fingerprint does not match TOML lexical+embedding, embedding readiness
-  disagrees, or the stored pin hash mismatches the embedding profile_hash.
+  disagrees, the stored pin hash mismatches the embedding profile_hash, or a
+  pin remains when TOML has no embedding.

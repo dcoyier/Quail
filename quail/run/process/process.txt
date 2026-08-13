@@ -9,6 +9,8 @@ process_config(config, clear=False, embedder_factory=None):
   imported version_id (not the prior active version).
   With clear=True, wipe that version's search artifacts before warming.
   Warm all datasets before any publication.
+  During each warm, if embedding is omitted, delete that version's pin before
+  the ready receipt.
   Then publish: activate every imported version, pin embeddings when declared,
   and delete pins when embedding is omitted.
   Give back ProcessOutcome.

@@ -21,7 +21,7 @@ from quail.search.lexical.corpus import (
     resolve_corpus,
     warm_entry_segments,
 )
-from quail.search.pin import get_pinned_profile_hash
+from quail.search.pin import delete_embedding_pin, get_pinned_profile_hash
 from quail.search.vectors import text_hash, unit_vector
 
 # Bump when warm artifact semantics change (not batch/concurrency knobs).
@@ -325,6 +325,13 @@ def warm_dataset(
             (workspace_id, dataset_id, version_id),
         )
         search.connection.commit()
+    if profile is None:
+        delete_embedding_pin(
+            search,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+        )
     for field_name, entry_segments in field_corpora.items():
         corpus = resolve_corpus(
             search,
@@ -449,6 +456,19 @@ def require_warm_ready(
     elif receipt.embedding_ready:
         raise QuailRuntimeError(
             f"Dataset {dataset_id!r} was warmed with embeddings but quail.toml has none",
+            repair_hint=hint,
+        )
+    elif (
+        get_pinned_profile_hash(
+            search,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+        )
+        is not None
+    ):
+        raise QuailRuntimeError(
+            f"Dataset {dataset_id!r} still has an embedding pin but quail.toml has none",
             repair_hint=hint,
         )
 
