@@ -2,6 +2,9 @@ Public connector author types and protocols.
 
 ToolSpec is one MCP tool declaration (name, title, description, closed JSON
 Schema input, optional output schema and hints).
+Input schema property names must be valid Python parameters and must not be
+ctx — FastMCP injects Context as ctx and would otherwise emit a duplicate
+parameter when wiring the handler.
 
 ResourceSpec is one readable MCP resource (uri, title, description, mime_type).
 
