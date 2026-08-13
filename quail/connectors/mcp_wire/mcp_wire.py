@@ -33,6 +33,22 @@ from quail.mcp.results import error_result, success_result
 
 _PARAM = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
+# Frozen host surface (unrestricted + Clerk). FastMCP overwrites duplicate
+# add_tool names with a warning, so a connector must not claim these.
+CORE_MCP_TOOL_NAMES = frozenset(
+    {
+        "quail_setup",
+        "quail_get_api_docs",
+        "quail_list_datasets",
+        "quail_start_session",
+        "quail_get_dataset_info",
+        "quail_exec",
+        "provide_feedback",
+        "quail_list_workspaces",
+        "quail_switch_workspace",
+    }
+)
+
 
 def _claim_resource_uri(
     uri: str,
@@ -74,6 +90,15 @@ def register_connectors(
     for workspace_id, bundle in catalog.by_workspace.items():
         for connected in bundle.providers:
             for tool in connected.manifest.tools:
+                if (
+                    tool.name in CORE_MCP_TOOL_NAMES
+                    or server._tool_manager.get_tool(tool.name) is not None
+                ):
+                    raise ConnectorError(
+                        "TOOL_NAME_CONFLICT",
+                        f"Tool {tool.name!r} collides with a core Quail MCP tool.",
+                        "Rename the connector tool; core names such as quail_exec are reserved.",
+                    )
                 owner = tool_extension.get(tool.name)
                 if owner is not None and owner != connected.extension_id:
                     raise ConnectorError(
