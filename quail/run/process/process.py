@@ -41,8 +41,13 @@ def process_config(
     """Lease, import without activate, warm all, then publish activation and pins."""
 
     has_embedding = any(spec.embedding is not None for spec in config.datasets)
+    has_lexical = any(spec.lexical_fields is not None for spec in config.datasets)
     if has_embedding and config.search_database is None:
         raise ConfigError("core.search_database is required when any dataset declares embedding")
+    if has_lexical and config.search_database is None:
+        raise ConfigError(
+            "core.search_database is required when any dataset declares [datasets.lexical]"
+        )
     if clear and config.search_database is None:
         raise ConfigError("core.search_database is required for quail process --clear")
 

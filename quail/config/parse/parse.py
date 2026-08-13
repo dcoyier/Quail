@@ -700,16 +700,24 @@ def _parse_providers(raw: object) -> ProvidersConfig:
 
 def _validate_embedding_wiring(config: QuailConfig) -> None:
     needed_providers: set[str] = set()
+    has_lexical = False
     for spec in config.datasets:
-        if spec.embedding is None:
-            continue
-        needed_providers.add(spec.embedding.provider)
+        if spec.embedding is not None:
+            needed_providers.add(spec.embedding.provider)
+        if spec.lexical_fields is not None:
+            has_lexical = True
+    if config.search_database is None:
+        if needed_providers:
+            raise ConfigError(
+                "core.search_database is required when any dataset declares [datasets.embedding]"
+            )
+        if has_lexical:
+            raise ConfigError(
+                "core.search_database is required when any dataset declares [datasets.lexical]"
+            )
+        return
     if not needed_providers:
         return
-    if config.search_database is None:
-        raise ConfigError(
-            "core.search_database is required when any dataset declares [datasets.embedding]"
-        )
     if "ollama" in needed_providers and config.providers.ollama is None:
         raise ConfigError("[providers.ollama] is required for datasets using provider ollama")
     if "openrouter" in needed_providers and config.providers.openrouter is None:
