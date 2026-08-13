@@ -259,6 +259,17 @@ def test_unrestricted_allows_public_with_override(tmp_path: Path) -> None:
     assert config.public_base_url == "https://example.trycloudflare.com"
 
 
+def test_unrestricted_wildcard_bind_requires_explicit_public_base_url(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="public_base_url is required"):
+        load_config(
+            _write_unrestricted_hosting(
+                tmp_path,
+                bind="0.0.0.0",
+                hosting_extra="allow_public_unrestricted = true\n",
+            )
+        )
+
+
 def test_clerk_rejects_allow_public_unrestricted(tmp_path: Path) -> None:
     data = tmp_path / "data"
     data.mkdir(parents=True, exist_ok=True)

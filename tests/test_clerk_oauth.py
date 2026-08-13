@@ -30,7 +30,9 @@ from quail.mcp.oauth import (
 from quail.run import apply_config
 
 
-def _write_clerk_manifest(tmp_path: Path, *, hosting_extra: str = "") -> Path:
+def _write_clerk_manifest(
+    tmp_path: Path, *, hosting_extra: str = "", bind: str = "127.0.0.1"
+) -> Path:
     data = tmp_path / "data"
     data.mkdir(parents=True, exist_ok=True)
     (data / "notes.csv").write_text("id,title\ne1,Hello\n", encoding="utf-8")
@@ -47,7 +49,7 @@ clerk_domain = "example.clerk.accounts.dev"
 clerk_authorized_parties = ["test_clerk_app"]
 
 [hosting]
-bind = "127.0.0.1"
+bind = "{bind}"
 port = 8765
 {hosting_extra}
 [[workspaces]]
@@ -70,12 +72,20 @@ default_workspace = "acme"
 
 def test_normalize_and_default_public_base_url() -> None:
     assert normalize_public_base_url("https://tunnel.example/") == "https://tunnel.example"
-    assert default_public_base_url(bind="0.0.0.0", port=8000) == "http://127.0.0.1:8000"
+    assert default_public_base_url(bind="127.0.0.1", port=8000) == "http://127.0.0.1:8000"
+    assert default_public_base_url(bind="::1", port=8000) == "http://[::1]:8000"
+    assert default_public_base_url(bind="[::1]", port=8000) == "http://[::1]:8000"
+    with pytest.raises(ValueError, match="wildcard bind"):
+        default_public_base_url(bind="0.0.0.0", port=8000)
+    with pytest.raises(ValueError, match="wildcard bind"):
+        default_public_base_url(bind="::", port=8000)
     assert is_loopback_host("127.0.0.1")
     assert is_loopback_host("LOCALHOST")
     assert is_loopback_host("[::1]")
+    assert is_loopback_host("::1")
     assert not is_loopback_host("0.0.0.0")
     assert is_loopback_public_base_url("http://127.0.0.1:8000")
+    assert is_loopback_public_base_url("http://[::1]:8000")
     assert not is_loopback_public_base_url("https://tunnel.example")
     with pytest.raises(ValueError, match="origin only"):
         normalize_public_base_url("https://tunnel.example/mcp")
@@ -92,6 +102,28 @@ def test_public_base_url_defaults_and_override(tmp_path: Path) -> None:
         )
     )
     assert config.public_base_url == "https://acme.ngrok.app"
+
+
+def test_wildcard_bind_requires_explicit_public_base_url(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="public_base_url is required"):
+        load_config(_write_clerk_manifest(tmp_path, bind="0.0.0.0"))
+    with pytest.raises(ConfigError, match="public_base_url is required"):
+        load_config(_write_clerk_manifest(tmp_path, bind="::"))
+    config = load_config(
+        _write_clerk_manifest(
+            tmp_path,
+            bind="0.0.0.0",
+            hosting_extra='public_base_url = "https://acme.example"\n',
+        )
+    )
+    assert config.bind == "0.0.0.0"
+    assert config.public_base_url == "https://acme.example"
+
+
+def test_unbracketed_ipv6_loopback_default_public_base_url(tmp_path: Path) -> None:
+    config = load_config(_write_clerk_manifest(tmp_path, bind="::1"))
+    assert config.bind == "::1"
+    assert config.public_base_url == "http://[::1]:8765"
 
 
 def test_public_base_url_rejects_path(tmp_path: Path) -> None:

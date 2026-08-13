@@ -16,7 +16,8 @@ parse_config(raw_text, manifest_path):
   Optional core.search_database; must differ from core.database.
   Require [hosting] bind, port 1..65535, optional max_concurrent_executions
   (default 2, range 1..100), optional public_base_url (http(s) origin; defaults
-  from bind/port, mapping 0.0.0.0/:: to 127.0.0.1), optional
+  from bind/port with IPv6 hosts bracketed; 0.0.0.0 / :: require an explicit
+  public_base_url), optional
   allow_public_unrestricted (boolean, default false; unrestricted-only), optional
   allow_insecure_http (boolean, default false; clerk-only), and optional
   include_dataset_docs_in_setup (boolean, default false).

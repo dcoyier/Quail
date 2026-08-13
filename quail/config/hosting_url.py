@@ -5,6 +5,7 @@ from __future__ import annotations
 from urllib.parse import urlparse
 
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+_WILDCARD_BINDS = frozenset({"0.0.0.0", "::", "[::]"})
 
 
 def is_loopback_host(host: str) -> bool:
@@ -14,6 +15,12 @@ def is_loopback_host(host: str) -> bool:
     if raw.startswith("[") and raw.endswith("]"):
         raw = raw[1:-1]
     return raw in _LOOPBACK_HOSTS
+
+
+def is_wildcard_bind(bind: str) -> bool:
+    """True for 0.0.0.0 / :: binds that listen on every interface."""
+
+    return bind.strip().lower() in _WILDCARD_BINDS
 
 
 def is_loopback_public_base_url(url: str) -> bool:
@@ -38,7 +45,24 @@ def normalize_public_base_url(value: str) -> str:
 
 
 def default_public_base_url(*, bind: str, port: int) -> str:
-    """Derive a local public base URL from hosting bind/port."""
+    """Derive a local public base URL from hosting bind/port.
 
-    host = "127.0.0.1" if bind in {"0.0.0.0", "::", "[::]"} else bind
-    return f"http://{host}:{port}"
+    Wildcard binds cannot imply a loopback origin; callers must set
+    ``public_base_url`` explicitly.
+    """
+
+    if is_wildcard_bind(bind):
+        raise ValueError(
+            "public_base_url is required when bind is 0.0.0.0 or :: "
+            "(wildcard bind cannot imply a loopback origin)"
+        )
+    return f"http://{_origin_host(bind)}:{port}"
+
+
+def _origin_host(bind: str) -> str:
+    raw = bind.strip()
+    if raw.startswith("[") and raw.endswith("]"):
+        return raw
+    if ":" in raw:
+        return f"[{raw}]"
+    return raw
