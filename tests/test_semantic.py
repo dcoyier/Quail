@@ -579,6 +579,98 @@ def test_turso_cosine_on_packed_unit_blobs(tmp_path: Path) -> None:
     search.close()
 
 
+def test_finite_score_rejects_null_and_non_finite() -> None:
+    from quail.search.similarity.similarity import _finite_score
+
+    assert _finite_score(0.0) == 0.0
+    assert _finite_score(1) == 1.0
+    for bad in (None, True, False, "1.0", float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(QuailRuntimeError, match="not a finite number"):
+            _finite_score(bad)
+
+
+def test_orthogonal_unit_vectors_score_zero(tmp_path: Path) -> None:
+    class AxisEmbedder:
+        def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
+            vectors: list[list[float]] = []
+            for text in texts:
+                if "alpha" in text:
+                    vectors.append([1.0, 0.0, 0.0, 0.0])
+                else:
+                    vectors.append([0.0, 1.0, 0.0, 0.0])
+            return vectors
+
+    search = open_search_db(tmp_path / "search.turso")
+    profile = EmbeddingProfile(provider="ollama", model="fake", dimensions=4, revision="r1")
+    pin_embedding_profile(
+        search,
+        workspace_id="ws",
+        dataset_id="notes",
+        version_id="v1",
+        profile=profile,
+    )
+    service = SimilarityService(
+        search=search,
+        providers=ProvidersConfig(),
+        embedder_factory=lambda _profile: AxisEmbedder(),
+    )
+    score = service.semantic_score(
+        workspace_id="ws",
+        dataset_id="notes",
+        version_id="v1",
+        corpus="alpha",
+        query_record={"kind": "LiteralText", "text": "beta"},
+        input_aggregation=None,
+        target_aggregation=None,
+    )
+    assert score == 0.0
+    search.close()
+
+
+def test_non_finite_turso_cosine_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    search = open_search_db(tmp_path / "search.turso")
+    profile = EmbeddingProfile(provider="ollama", model="fake", dimensions=4, revision="r1")
+    pin_embedding_profile(
+        search,
+        workspace_id="ws",
+        dataset_id="notes",
+        version_id="v1",
+        profile=profile,
+    )
+    service = SimilarityService(
+        search=search,
+        providers=ProvidersConfig(),
+        embedder_factory=lambda _profile: FakeEmbedder(dimensions=4),
+    )
+    original_execute = search.connection.execute
+
+    def wrapped_execute(sql: object, parameters: object = ()) -> object:
+        result = original_execute(sql, parameters)
+        sql_text = " ".join(str(sql).split())
+        if "-vector_distance_dot" in sql_text and "FROM" in sql_text:
+            rows = result.fetchall()
+
+            class _NanRows:
+                def fetchall(self) -> list[tuple[object, ...]]:
+                    return [(row[0], row[1], float("nan")) for row in rows]
+
+            return _NanRows()
+        return result
+
+    monkeypatch.setattr(search.connection, "execute", wrapped_execute)
+    with pytest.raises(QuailRuntimeError, match="not a finite number"):
+        service.semantic_score(
+            workspace_id="ws",
+            dataset_id="notes",
+            version_id="v1",
+            corpus="hello",
+            query_record={"kind": "LiteralText", "text": "hello"},
+            input_aggregation=None,
+            target_aggregation=None,
+        )
+    search.close()
+
+
 def test_unit_vector_rejects_non_finite() -> None:
     with pytest.raises(ValueError, match="finite"):
         unit_vector([1.0, float("nan")])
