@@ -1,0 +1,25 @@
+Operator CLI. It reads quail.toml only. It never writes the TOML.
+
+main(argv default None):
+  Parse subcommands run and process. Both require --config as an absolute path.
+  run:
+    Help says serve MCP if already processed (never activates).
+    Description: take a deployment lease, import without activating, fail closed
+    unless each imported version is already active and warm, then serve MCP.
+    Never activates. Unrestricted and Clerk both use this command.
+    Load config, call serve. ConfigError exits 2. Other errors exit 1.
+  process:
+    Help says import, warm search, then publish activation.
+    Description: take a deployment lease, import without activating, warm
+    Lexical and embeddings when a search database is configured, then publish
+    activation and pins. With no search database, import and activate only
+    (no search warm). Never writes quail.toml.
+    Optional --clear wipes search warm/vectors/FTS for active versions, then
+    re-warms.
+    Load config, call process_config.
+    If there are no warm results, print that there is no search database and
+    that import activated with no search warm.
+    Otherwise print one summary line per dataset (texts, unique, embed batches,
+    lexical, embedding yes/no).
+    ConfigError exits 2. Other errors exit 1.
+  Unknown command: argparse error.
