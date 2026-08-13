@@ -143,10 +143,10 @@ def exec_script(
                     similarity=active_similarity,
                     lexical=active_lexical,
                 )
-                validate_encoded_bindings(
-                    initial_bindings,
-                    engine.check_bound_field_kind,
-                )
+                # Bindings are session-global; Field kinds are dataset-specific.
+                # Restore must not fail the exec on a stale kind — using the
+                # Field still fails in resolve_field, and del recovers.
+                validate_encoded_bindings(initial_bindings, lambda _field: None)
 
                 def on_api_call(call: ApiCall) -> Any:
                     raise_if_cancelled(host_cancel, limits=active_limits)
