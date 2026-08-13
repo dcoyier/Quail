@@ -460,7 +460,7 @@ def test_semantic_wrong_dimensions(tmp_path: Path) -> None:
         providers=ProvidersConfig(),
         embedder_factory=lambda _profile: fake,
     )
-    with pytest.raises(QuailRuntimeError, match="dimensions"):
+    with pytest.raises(QuailRuntimeError, match="dimensions") as raised:
         service.semantic_score(
             workspace_id="ws",
             dataset_id="notes",
@@ -470,6 +470,9 @@ def test_semantic_wrong_dimensions(tmp_path: Path) -> None:
             input_aggregation=None,
             target_aggregation=None,
         )
+    assert raised.value.repair_hint is not None
+    assert "quail process" in raised.value.repair_hint
+    assert "apply" not in raised.value.repair_hint.lower()
     search.close()
 
 
@@ -688,6 +691,11 @@ def test_provider_require_vector_rejects_non_finite() -> None:
             require([1.0, float("nan")], 2, label="embedder")
         with pytest.raises(ProviderError, match="non-finite"):
             require([1.0, float("inf")], 2, label="embedder")
+        with pytest.raises(ProviderError, match="dimensions") as raised:
+            require([1.0], 2, label="embedder")
+        assert raised.value.repair_hint is not None
+        assert "quail process" in raised.value.repair_hint
+        assert "apply" not in raised.value.repair_hint.lower()
 
 
 def test_least_similar_avg_order_bottom(tmp_path: Path) -> None:
