@@ -122,7 +122,7 @@ def _require_vector(item: object, dimensions: int, *, label: str) -> list[float]
     if len(item) != dimensions:
         raise ProviderError(
             f"{label} returned {len(item)} dimensions; expected {dimensions}",
-            repair_hint="Align datasets.embedding.dimensions with the provider output, then re-apply.",
+            repair_hint="Align datasets.embedding.dimensions with the provider output, then re-run quail process.",
         )
     vector: list[float] = []
     for value in item:

@@ -210,7 +210,7 @@ class SimilarityService:
                     f"expected {profile.dimensions}",
                     repair_hint=(
                         "Align datasets.embedding.dimensions with the provider, "
-                        "re-apply, and retry the whole exec."
+                        "re-run quail process, and retry the whole exec."
                     ),
                 )
             put_cached_vector(

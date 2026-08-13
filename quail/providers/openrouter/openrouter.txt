@@ -7,4 +7,6 @@ OpenRouter API (off-host). Prefer Ollama when corpus text must stay local.
 embed_texts(texts):
   Give back one float vector per input text in request order.
   Raise ProviderError on HTTP/JSON/shape/dimension mismatches.
+  Dimension mismatch repair_hint says to align datasets.embedding.dimensions
+  and re-run quail process.
   Raise ProviderError when any embedding component is non-numeric or non-finite.
