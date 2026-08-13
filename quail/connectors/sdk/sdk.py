@@ -442,6 +442,10 @@ def _validate_object_schema_node(
             raise ValueError(f"Connector {label} property names must be non-empty strings")
         if python_parameters and (keyword.iskeyword(key) or not key.isidentifier()):
             raise ValueError(f"Connector {label} property {key!r} is not a valid Python parameter")
+        if python_parameters and key == "ctx":
+            raise ValueError(
+                f"Connector {label} property 'ctx' is reserved for host Context injection"
+            )
         if not isinstance(child, Mapping):
             raise ValueError(f"Connector {label} property {key!r} must be an object schema")
         _validate_schema_node(child, f"{label}.{key}", python_parameters=False)

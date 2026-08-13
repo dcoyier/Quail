@@ -712,6 +712,21 @@ def test_register_connectors_noop_catalog() -> None:
     )
 
 
+def test_tool_spec_rejects_ctx_input_property() -> None:
+    with pytest.raises(ValueError, match="reserved for host Context injection"):
+        ToolSpec(
+            name="notes_show",
+            title="Show",
+            description="Demo",
+            input_schema={
+                "type": "object",
+                "properties": {"ctx": {"type": "string"}},
+                "required": ["ctx"],
+                "additionalProperties": False,
+            },
+        )
+
+
 def test_connector_tools_list_publishes_input_schema_and_hides_context() -> None:
     from mcp.server.fastmcp import FastMCP
 
