@@ -8,6 +8,8 @@ encode_value / decode_value:
 
 dumps_message / loads_message:
   NDJSON objects with version and sorted compact JSON.
+  Failure api_result and execute result payloads may include optional
+  repair_hint. PROTOCOL_VERSION stays 1.
 
 _encode_plain:
   Recursively encode sealed operation params (including MappingProxyType nests).
