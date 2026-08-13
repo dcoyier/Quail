@@ -1,9 +1,10 @@
 apply_config(config):
   Require each dataset source file exists.
+  Acquire the deployment lease (same flocks as process and serve).
   Open the core database.
   Import declared datasets with activate=True (no embedding pins).
   On failure, close the core database and raise.
-  Give back the open CoreDb.
+  Give back the open CoreDb after the lease is released.
 
 import_declared_datasets(config, db, activate default True):
   Require each dataset source file exists.

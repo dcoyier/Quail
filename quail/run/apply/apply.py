@@ -6,25 +6,28 @@ from quail.config.errors import ConfigError
 from quail.config.models import QuailConfig
 from quail.datasets import DatasetRef, ensure_workspace, import_csv_dataset, open_core_db
 from quail.datasets.db import CoreDb
+from quail.run.lease import acquire_deployment_lease
 
 
 def apply_config(config: QuailConfig) -> CoreDb:
     """Open the core DB, ensure workspaces, import each declared CSV (activate).
 
     Embedding pins are applied by ``process_config`` publication, not here.
+    Takes the deployment lease for the import so it cannot race process/serve.
     """
 
     for spec in config.datasets:
         if not spec.source.is_file():
             raise ConfigError(f"Dataset source not found: {spec.source}")
 
-    db = open_core_db(config.database)
-    try:
-        import_declared_datasets(config, db, activate=True)
-    except Exception:
-        db.close()
-        raise
-    return db
+    with acquire_deployment_lease(config):
+        db = open_core_db(config.database)
+        try:
+            import_declared_datasets(config, db, activate=True)
+        except Exception:
+            db.close()
+            raise
+        return db
 
 
 def import_declared_datasets(

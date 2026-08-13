@@ -1,4 +1,4 @@
-"""Operator run: apply slim TOML then serve MCP."""
+"""Operator process / run, plus the apply_config import helper."""
 
 from quail.run.apply import apply_config
 from quail.run.process import ProcessOutcome, assert_search_warm, process_config

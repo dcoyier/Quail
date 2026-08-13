@@ -5,4 +5,5 @@ acquire_deployment_lease(config):
   in that order (POSIX local filesystems only).
   If any flock is busy, raise QuailRuntimeError telling the operator to stop the
   other Quail process, then retry.
+  Used by process_config, serve, and apply_config.
   Yield the lock paths for the with-block lifetime, then unlock and close.
