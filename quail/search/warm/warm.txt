@@ -33,12 +33,12 @@ collect_corpus_texts:
 warm_dataset:
   Optionally clear the version.
   Compute the search-build fingerprint from lexical_fields and profile.
-  If an existing receipt has a different fingerprint, delete all vectors for
-  the version.
   Collect per-field corpora for Lexical using lexical_fields when set
   (else all fields).
   Write a not-ready warm receipt before Lexical rebuild so a mid-pass failure
   cannot leave lexical_ready over a partial index.
+  If an existing receipt had a different fingerprint, delete all vectors for
+  the version only after that not-ready receipt (never while still ready).
   For each field, resolve that field's corpus and rebuild with
   warm_entry_segments (plain row writes, then one FTS build).
   Drop any registered field corpora not in this warm set.
