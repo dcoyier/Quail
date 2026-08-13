@@ -652,6 +652,38 @@ def test_lexical_fields_parse_rejects_empty(tmp_path: Path) -> None:
         load_config(_write_manifest(tmp_path, embedding=False, lexical_fields="[]"))
 
 
+def test_lexical_fields_require_search_database(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    data.mkdir(parents=True, exist_ok=True)
+    (data / "notes.csv").write_text("id,title,body\ne1,Hello,world\n", encoding="utf-8")
+    manifest = tmp_path / "quail.toml"
+    manifest.write_text(
+        """
+[core]
+database = "data/quail.turso"
+feedback = "data/feedback.jsonl"
+
+[auth]
+mode = "unrestricted"
+workspace = "local"
+
+[hosting]
+bind = "127.0.0.1"
+port = 8765
+
+[[datasets]]
+id = "notes"
+source = "data/notes.csv"
+
+[datasets.lexical]
+fields = ["body"]
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match=r"search_database is required.*\[datasets.lexical\]"):
+        load_config(manifest)
+
+
 def test_embedding_fields_parse_rejects_empty(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="fields"):
         load_config(_write_manifest(tmp_path, embedding_fields="[]"))

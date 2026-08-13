@@ -1,6 +1,8 @@
 ProcessOutcome remembers results from one process_config call.
 
 process_config(config, clear=False, embedder_factory=None):
+  Require search_database when any dataset declares embedding or
+    [datasets.lexical], and when clear=True.
   Acquire the deployment lease for the whole run.
   Open the core database and import declared CSVs without activating.
   When search_database is unset, publish activation (no pins) and stop.

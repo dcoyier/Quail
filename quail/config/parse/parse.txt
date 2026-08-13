@@ -37,7 +37,8 @@ parse_config(raw_text, manifest_path):
   Optional [datasets.lexical] with required fields (non-empty string array of CSV columns
   for Lexical warm; omit the table = all source fields).
   For users: validate memberships, optional default_workspace, optional lock_workspace (requires default).
-  When any dataset has embedding: require search_database and the matching provider blocks.
+  When any dataset has embedding or [datasets.lexical]: require search_database
+  and, for embedding, the matching provider blocks.
   Give back a QuailConfig.
 
 _parse_extensions(raw):
