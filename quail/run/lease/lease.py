@@ -1,4 +1,4 @@
-"""Exclusive flock lease so process and serve do not share live search/core state."""
+"""Exclusive flock lease so process, serve, and apply_config do not share live state."""
 
 from __future__ import annotations
 

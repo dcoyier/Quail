@@ -119,6 +119,17 @@ def test_apply_missing_source_fails(tmp_path: Path) -> None:
     assert not (tmp_path / "data" / "quail.turso").exists()
 
 
+def test_apply_fails_when_lease_held(tmp_path: Path) -> None:
+    from quail.analysis.errors import QuailRuntimeError
+    from quail.run.lease import acquire_deployment_lease
+
+    manifest = _write_manifest(tmp_path)
+    config = load_config(manifest)
+    with acquire_deployment_lease(config):
+        with pytest.raises(QuailRuntimeError, match="deployment lease"):
+            apply_config(config)
+
+
 def test_apply_then_mcp_list_datasets(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path)
     config = load_config(manifest)
