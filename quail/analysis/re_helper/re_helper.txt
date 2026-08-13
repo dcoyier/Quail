@@ -1,4 +1,4 @@
-There is a flag mask ALLOWED_REGEX_FLAGS built from re.I, re.M, re.S, re.A, and re.U.
+There is a flag mask ALLOWED_REGEX_FLAGS built from re.I, re.M, and re.S.
 There is a size limit MAX_REGEX_PATTERN_BYTES of 16 kilobytes.
 
 ReFacade is the restricted regex helper injected as re.
@@ -18,8 +18,11 @@ escape(pattern):
 
 validate_regex_flags(flags):
   If flags is a bool or not an int, raise a syntax error that regex flags must be an int.
-  If flags has bits outside ALLOWED_REGEX_FLAGS, raise a syntax error that flags are limited to re.A, re.I, re.M, re.S, and re.U.
-  If both re.A and re.U are set, raise a syntax error that those flags cannot be combined.
+  If re.A or re.U is set, raise a syntax error that those flags are not supported:
+  RE2 word classes are ASCII, so use re.I, re.M, and re.S only.
+  ReFacade still remembers A and U so re.A / re.U exist; using them fails closed.
+  If flags has other bits outside ALLOWED_REGEX_FLAGS, raise a syntax error that
+  flags are limited to re.I, re.M, and re.S.
 
 require_regex_text(value, label):
   If value is not a string, raise a syntax error that label must be a string.

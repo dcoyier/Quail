@@ -6,7 +6,7 @@ import re as python_re
 
 from quail.analysis.errors import QuailSyntaxError
 
-ALLOWED_REGEX_FLAGS = int(python_re.I | python_re.M | python_re.S | python_re.A | python_re.U)
+ALLOWED_REGEX_FLAGS = int(python_re.I | python_re.M | python_re.S)
 MAX_REGEX_PATTERN_BYTES = 16 * 1024
 
 
@@ -27,10 +27,13 @@ class ReFacade:
 def validate_regex_flags(flags: int) -> None:
     if isinstance(flags, bool) or not isinstance(flags, int):
         raise QuailSyntaxError("Regex flags must be an int")
+    if flags & int(python_re.A) or flags & int(python_re.U):
+        raise QuailSyntaxError(
+            "Regex flags re.A and re.U are not supported; "
+            "RE2 word classes are ASCII. Use re.I, re.M, and re.S only"
+        )
     if flags & ~ALLOWED_REGEX_FLAGS:
-        raise QuailSyntaxError("Regex flags are limited to re.A, re.I, re.M, re.S, and re.U")
-    if flags & int(python_re.A) and flags & int(python_re.U):
-        raise QuailSyntaxError("Regex flags re.A and re.U cannot be combined")
+        raise QuailSyntaxError("Regex flags are limited to re.I, re.M, and re.S")
 
 
 def require_regex_text(value: str, label: str) -> bytes:
