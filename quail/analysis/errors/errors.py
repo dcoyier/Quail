@@ -50,7 +50,11 @@ _WIRE_ERROR_TYPES: dict[str, type[QuailError]] = {
 }
 
 
-def rehydrate_quail_error(exception_type: object, message: object) -> QuailError:
+def rehydrate_quail_error(
+    exception_type: object,
+    message: object,
+    repair_hint: object = None,
+) -> QuailError:
     """Rebuild a Quail error from worker/host wire fields."""
 
     text = str(message) if message is not None else "worker failed"
@@ -59,11 +63,12 @@ def rehydrate_quail_error(exception_type: object, message: object) -> QuailError
         prefix = f"{type_name}: "
         if text.startswith(prefix):
             text = text[len(prefix) :]
+    hint = repair_hint if isinstance(repair_hint, str) and repair_hint else None
     cls = _WIRE_ERROR_TYPES.get(type_name, QuailRuntimeError)
     if cls is QuailServerBusyError:
-        return QuailServerBusyError(text)
+        return QuailServerBusyError(text, repair_hint=hint)
     if cls is QuailSessionBusyError:
-        return QuailSessionBusyError(text)
+        return QuailSessionBusyError(text, repair_hint=hint)
     if cls is QuailRuntimeError:
-        return QuailRuntimeError(text)
+        return QuailRuntimeError(text, repair_hint=hint)
     return cls(text)

@@ -6,8 +6,14 @@ from pathlib import Path
 
 import pytest
 
+from quail.analysis.errors import (
+    QuailRuntimeError,
+    QuailServerBusyError,
+    rehydrate_quail_error,
+)
 from quail.analysis.exec_host import exec_script
-from quail.analysis.errors import QuailRuntimeError
+from quail.analysis.worker.client import run_worker_script
+from quail.analysis.worker.protocol import ApiCall
 from quail.analysis.worker.sandbox import validate_quail_code
 from quail.datasets import import_csv_dataset, open_core_db
 from quail.session import (
@@ -135,3 +141,55 @@ def test_validate_rejects_import(tmp_path: Path) -> None:
     del tmp_path
     with pytest.raises(Exception, match="Unsupported construct|Import"):
         validate_quail_code("import os\nprint(1)\n")
+
+
+def test_rehydrate_quail_error_preserves_repair_hint() -> None:
+    error = rehydrate_quail_error(
+        "QuailRuntimeError",
+        "Lexical search is not configured",
+        "Set core.search_database, then retry.",
+    )
+    assert isinstance(error, QuailRuntimeError)
+    assert error.repair_hint == "Set core.search_database, then retry."
+
+    busy = rehydrate_quail_error(
+        "QuailServerBusyError",
+        "too many execs",
+        "Retry after another quail_exec finishes.",
+    )
+    assert isinstance(busy, QuailServerBusyError)
+    assert busy.repair_hint == "Retry after another quail_exec finishes."
+
+    bare = rehydrate_quail_error("QuailRuntimeError", "boom")
+    assert isinstance(bare, QuailRuntimeError)
+    assert bare.repair_hint is None
+
+
+def test_worker_rpc_preserves_runtime_repair_hint() -> None:
+    hint = "Set core.search_database, re-run quail, then retry the whole exec."
+
+    def on_api_call(call: ApiCall) -> object:
+        del call
+        raise QuailRuntimeError("Lexical search is not configured", repair_hint=hint)
+
+    with pytest.raises(QuailRuntimeError, match="not configured") as raised:
+        run_worker_script("print(count())", on_api_call=on_api_call)
+    assert raised.value.repair_hint == hint
+
+
+def test_exec_script_preserves_lexical_repair_hint(tmp_path: Path) -> None:
+    db, session = _seed(tmp_path)
+    with db:
+        with pytest.raises(QuailRuntimeError, match="Lexical search is not configured") as raised:
+            exec_script(
+                db,
+                session_id=session.id,
+                dataset_id="notes",
+                expected_revision=0,
+                code=(
+                    'print(count(group=G0.where('
+                    'Expression(Field("body"), Lexical("x")) > 0)))\n'
+                ),
+            )
+        assert raised.value.repair_hint is not None
+        assert "search_database" in raised.value.repair_hint

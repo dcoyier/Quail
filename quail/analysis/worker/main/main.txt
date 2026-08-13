@@ -9,5 +9,11 @@ serve(stdin, stdout):
   On success encode assigned survivors as changed_bindings and deleted names
   as deleted_bindings, then write result ok with printed_output.
   On BindingEncodingError or other failure write result not ok with exception_type,
-  message, an empty printed_output, and no binding commit on the host.
+  message, an empty printed_output, optional repair_hint when the error is a
+  QuailRuntimeError that has one, and no binding commit on the host.
   Always clear the Entry host-call context var.
+
+_failure_result(error, message):
+  Give back a result not-ok payload with exception_type, message, and empty
+  printed_output. If the error is a QuailRuntimeError with repair_hint, include
+  that field too.

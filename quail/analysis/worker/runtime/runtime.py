@@ -78,7 +78,11 @@ class HostEndpoint:
             raise QuailRuntimeError("Host returned a mismatched api_result")
         if not response.get("ok"):
             message = str(response.get("message") or "host api_call failed")
-            raise rehydrate_quail_error(response.get("exception_type"), message)
+            raise rehydrate_quail_error(
+                response.get("exception_type"),
+                message,
+                response.get("repair_hint"),
+            )
         return decode_value(response["result"])
 
 

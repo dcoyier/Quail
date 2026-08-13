@@ -127,37 +127,13 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
             },
         )
     except BindingEncodingError as error:
-        _write(
-            output_stream,
-            {
-                "type": "result",
-                "ok": False,
-                "exception_type": type(error).__name__,
-                "message": str(error),
-                "printed_output": "",
-            },
-        )
+        _write(output_stream, _failure_result(error, message=str(error)))
     except (QuailError, QuailSyntaxError, QuailRuntimeError) as error:
-        _write(
-            output_stream,
-            {
-                "type": "result",
-                "ok": False,
-                "exception_type": type(error).__name__,
-                "message": str(error),
-                "printed_output": "",
-            },
-        )
+        _write(output_stream, _failure_result(error, message=str(error)))
     except Exception as error:  # noqa: BLE001 - sandbox boundary
         _write(
             output_stream,
-            {
-                "type": "result",
-                "ok": False,
-                "exception_type": type(error).__name__,
-                "message": f"{type(error).__name__}: {error}",
-                "printed_output": "",
-            },
+            _failure_result(error, message=f"{type(error).__name__}: {error}"),
         )
     finally:
         reset_host_call(token)
@@ -168,6 +144,19 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
 def _write(stream: TextIO, message: dict[str, Any]) -> None:
     stream.write(dumps_message(message) + "\n")
     stream.flush()
+
+
+def _failure_result(error: BaseException, *, message: str) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "type": "result",
+        "ok": False,
+        "exception_type": type(error).__name__,
+        "message": message,
+        "printed_output": "",
+    }
+    if isinstance(error, QuailRuntimeError) and error.repair_hint:
+        payload["repair_hint"] = error.repair_hint
+    return payload
 
 
 def _parse_limits(raw: object) -> tuple[int, int]:

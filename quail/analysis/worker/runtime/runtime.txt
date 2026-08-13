@@ -6,7 +6,8 @@ text gives back the joined buffer.
 
 HostEndpoint sends encode_api_call messages and decodes api_result payloads.
 call allocates contiguous ids.
-On api_result failure, raise rehydrate_quail_error(exception_type, message).
+On api_result failure, raise rehydrate_quail_error(exception_type, message,
+  repair_hint).
 
 set_host_call / reset_host_call:
   Context var used by Entry.value and Entry.fields RPC helpers.

@@ -13,10 +13,12 @@ run_worker_script(code, on_api_call, bindings default None, limits default None,
   Watch wall-clock and worker RSS; on exceed set cancel_event (when given)
   and kill the process group.
   For each api_call, invoke on_api_call and reply with api_result.
-  On host callback failure, include exception_type and message on api_result.
+  On host callback failure, include exception_type and message on api_result,
+  plus repair_hint when the error is a QuailRuntimeError that has one.
   Host cancel/wall/memory errors from on_api_call are re-raised (not wrapped
   as worker api_result failures).
   When result arrives ok, give back WorkerResult with binding deltas.
   On wall, CPU, or memory exceed, raise QuailRuntimeError with repair_hint.
-  On worker failure result, rehydrate_quail_error from exception_type + message.
+  On worker failure result, rehydrate_quail_error from exception_type, message,
+  and optional repair_hint.
   Always kill the subprocess when finished.

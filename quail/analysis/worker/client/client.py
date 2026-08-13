@@ -184,6 +184,8 @@ def run_worker_script(
                         "message": f"{type(error).__name__}: {error}",
                         "result": encode_value(None),
                     }
+                    if isinstance(error, QuailRuntimeError) and error.repair_hint:
+                        response["repair_hint"] = error.repair_hint
                 _raise_if_resource_exceeded(
                     wall_exceeded=wall_exceeded,
                     memory_exceeded=memory_exceeded,
@@ -200,7 +202,11 @@ def run_worker_script(
                             active.cpu_seconds,
                             already_extended=active.already_extended,
                         )
-                    raise rehydrate_quail_error(message.get("exception_type"), message_text)
+                    raise rehydrate_quail_error(
+                        message.get("exception_type"),
+                        message_text,
+                        message.get("repair_hint"),
+                    )
                 printed = message.get("printed_output", "")
                 if not isinstance(printed, str):
                     raise QuailRuntimeError("worker printed_output must be a string")
