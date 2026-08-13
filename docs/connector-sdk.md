@@ -57,6 +57,9 @@ such as preview base64). `structuredContent` stays JSON-only.
    the owning provider’s `dataset_document` when present.
 
 Tools may overlap on the same dataset; only competing **docs** are rejected.
+Tool names must not match the core MCP surface (`quail_exec`, `quail_setup`,
+`provide_feedback`, Clerk workspace tools, and the other frozen host tools).
+FastMCP would otherwise overwrite the core handler.
 
 ## TOML shape
 
@@ -117,4 +120,6 @@ package (tool + notes docs + widget) and install notes.
 | Missing entry point / package | `quail run` fails |
 | TOML version ≠ manifest / distribution | `quail run` fails |
 | Two connectors document the same bound `dataset_id` | `quail run` fails |
+| Two connectors claim the same tool name | `quail run` fails |
+| Connector tool name matches a core MCP tool | `quail run` fails |
 | Connector active only in workspace A | Does not appear in workspace B |

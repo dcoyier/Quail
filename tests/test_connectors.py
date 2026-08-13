@@ -1098,6 +1098,74 @@ def test_tool_name_conflict_across_connectors() -> None:
         )
 
 
+def test_connector_tool_cannot_claim_core_mcp_name() -> None:
+    from mcp.server.fastmcp import FastMCP
+
+    from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
+    from quail.connectors.mcp_wire import CORE_MCP_TOOL_NAMES
+
+    env = ConnectorEnvironment(
+        host=_Host({}),
+        public_base_url="http://127.0.0.1:8765",
+        base_path=Path("/tmp"),
+    )
+
+    def catalog_for(tool_name: str) -> ConnectorCatalog:
+        spec = ToolSpec(
+            name=tool_name,
+            title="Collision",
+            description="Must not replace a core tool.",
+            input_schema={
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
+        )
+        connector = _FakeConnector(env, extension_id="alpha", version="1.0.0")
+        connector._manifest = ConnectorManifest(
+            id="alpha",
+            version="1.0.0",
+            tools=(spec,),
+            config_keys=frozenset({"heading"}),
+        )
+        return ConnectorCatalog(
+            by_workspace={
+                "local": WorkspaceConnectorBundle(
+                    workspace_id="local",
+                    providers=(
+                        ConnectedProvider(
+                            extension_id="alpha",
+                            version="1.0.0",
+                            manifest=connector.manifest,
+                            connector=connector,
+                            provider=_ToolProvider(env.host, "a"),
+                            dataset_ids=frozenset({"sample"}),
+                            provides_docs=False,
+                        ),
+                    ),
+                    docs_by_dataset={},
+                )
+            }
+        )
+
+    for name in ("quail_exec", "provide_feedback", "quail_list_workspaces"):
+        assert name in CORE_MCP_TOOL_NAMES
+        server = FastMCP("core-clash")
+
+        @server.tool()
+        async def quail_setup() -> str:
+            return "core"
+
+        with pytest.raises(ConnectorError, match="core Quail MCP tool"):
+            register_connectors(
+                server,
+                catalog_for(name),
+                resolve_workspace=lambda _ctx: ("local", None),
+            )
+        remaining = {tool.name for tool in server._tool_manager.list_tools()}
+        assert remaining == {"quail_setup"}
+
+
 def test_tool_result_text_not_merged_into_structured() -> None:
     from quail.mcp.results import success_result
 
