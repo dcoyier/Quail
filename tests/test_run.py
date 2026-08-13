@@ -229,6 +229,11 @@ source = "data/notes.csv"
 
 def test_unrestricted_rejects_non_loopback_bind(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="allow_public_unrestricted"):
+        load_config(_write_unrestricted_hosting(tmp_path, bind="1.2.3.4"))
+
+
+def test_unrestricted_rejects_wildcard_bind_without_public_base_url(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="public_base_url is required"):
         load_config(_write_unrestricted_hosting(tmp_path, bind="0.0.0.0"))
 
 
