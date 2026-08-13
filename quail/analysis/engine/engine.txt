@@ -1,5 +1,10 @@
 QueryEngine evaluates plans for one Scope against catalog data and an in-memory overlay.
 
+There is a repair hint _LEXICAL_NOT_CONFIGURED_HINT to set core.search_database,
+re-run quail process, then retry the whole exec.
+There is a repair hint _SEMANTIC_NOT_CONFIGURED_HINT that also names
+[providers.*] and [datasets.embedding].
+
 It remembers db, scope, optional SimilarityService, optional LexicalService, staged
 mutations, created fields, value overlay, a per-exec Lexical/Semantic score cache,
 and an execution snapshot (ordered entry ids, positions, lazy per-field value maps,
@@ -58,7 +63,10 @@ _require_entry_in_scope(entry):
 
 Helpers evaluate groups and predicates, run expression pipelines (Value, AsText,
 AsNumber, regex, Slice, Length, Lexical via LexicalService, Semantic via
-SimilarityService). Member entry groups validate each member's scope.
+SimilarityService). When LexicalService is missing, raise QuailRuntimeError with
+repair_hint to set core.search_database, re-run quail process, then retry.
+When SimilarityService is missing, the hint also names [providers.*] and
+[datasets.embedding]. Member entry groups validate each member's scope.
 
 _apply_regex(operation, value):
   Compile the pattern with flags.
