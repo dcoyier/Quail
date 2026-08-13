@@ -96,6 +96,8 @@ def test_bad_csv_shapes_raise(tmp_path: Path) -> None:
     missing_id = _write_csv(tmp_path / "missing_id.csv", "title\nx\n")
     duplicate_header = _write_csv(tmp_path / "dup_header.csv", "id,id\na,b\n")
     duplicate_id = _write_csv(tmp_path / "dup_id.csv", "id,title\ne1,a\ne1,b\n")
+    short_row = _write_csv(tmp_path / "short.csv", "id,title,body\ne1,Hello\n")
+    extra_row = _write_csv(tmp_path / "extra.csv", "id,title\ne1,Hello,world\n")
 
     with pytest.raises(DatasetSyntaxError, match="id column"):
         load_csv_dataset(missing_id)
@@ -103,6 +105,10 @@ def test_bad_csv_shapes_raise(tmp_path: Path) -> None:
         load_csv_dataset(duplicate_header)
     with pytest.raises(DatasetSyntaxError, match="duplicates id"):
         load_csv_dataset(duplicate_id)
+    with pytest.raises(DatasetSyntaxError, match="fewer values than headers"):
+        load_csv_dataset(short_row)
+    with pytest.raises(DatasetSyntaxError, match="more values than headers"):
+        load_csv_dataset(extra_row)
 
 
 def test_version_identity_conflict(tmp_path: Path) -> None:

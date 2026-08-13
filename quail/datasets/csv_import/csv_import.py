@@ -75,6 +75,8 @@ def load_csv_dataset(path: str | Path) -> CsvDataset:
                 raise DatasetSyntaxError(f"CSV import exceeds the {MAX_CSV_ROWS}-row limit")
             if None in raw_row:
                 raise DatasetSyntaxError(f"CSV row {line_number} has more values than headers")
+            if any(raw_row.get(original) is None for original in headers):
+                raise DatasetSyntaxError(f"CSV row {line_number} has fewer values than headers")
             cell_count += len(normalized_headers)
             if cell_count > MAX_DATASET_CELLS:
                 raise DatasetSyntaxError(f"CSV import exceeds the {MAX_DATASET_CELLS}-cell limit")
