@@ -229,6 +229,11 @@ source = "data/notes.csv"
 
 def test_unrestricted_rejects_non_loopback_bind(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="allow_public_unrestricted"):
+        load_config(_write_unrestricted_hosting(tmp_path, bind="1.2.3.4"))
+
+
+def test_unrestricted_rejects_wildcard_bind_without_public_base_url(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="public_base_url is required"):
         load_config(_write_unrestricted_hosting(tmp_path, bind="0.0.0.0"))
 
 
@@ -257,6 +262,17 @@ def test_unrestricted_allows_public_with_override(tmp_path: Path) -> None:
     assert config.allow_public_unrestricted is True
     assert config.bind == "0.0.0.0"
     assert config.public_base_url == "https://example.trycloudflare.com"
+
+
+def test_unrestricted_wildcard_bind_requires_explicit_public_base_url(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="public_base_url is required"):
+        load_config(
+            _write_unrestricted_hosting(
+                tmp_path,
+                bind="0.0.0.0",
+                hosting_extra="allow_public_unrestricted = true\n",
+            )
+        )
 
 
 def test_clerk_rejects_allow_public_unrestricted(tmp_path: Path) -> None:

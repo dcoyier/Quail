@@ -432,7 +432,10 @@ def _parse_public_base_url(hosting: dict[str, Any], *, bind: str, port: int) -> 
     from quail.config.hosting_url import default_public_base_url, normalize_public_base_url
 
     if "public_base_url" not in hosting:
-        return default_public_base_url(bind=bind, port=port)
+        try:
+            return default_public_base_url(bind=bind, port=port)
+        except ValueError as error:
+            raise ConfigError(f"hosting.public_base_url: {error}") from error
     value = hosting["public_base_url"]
     if not isinstance(value, str):
         raise ConfigError("hosting.public_base_url must be a string")
