@@ -824,6 +824,97 @@ def test_connector_tools_list_publishes_input_schema_and_hides_context() -> None
     asyncio.run(run())
 
 
+def _catalog_with_probe_in(workspace_id: str) -> ConnectorCatalog:
+    from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
+
+    env = ConnectorEnvironment(
+        host=_Host({}),
+        public_base_url="http://127.0.0.1:8765",
+        base_path=Path("/tmp"),
+    )
+    connector = _FakeConnector(
+        env, extension_id="alpha", version="1.0.0", with_tool=True
+    )
+    connected = ConnectedProvider(
+        extension_id="alpha",
+        version="1.0.0",
+        manifest=connector.manifest,
+        connector=connector,
+        provider=_ToolProvider(env.host, "alpha"),
+        dataset_ids=frozenset({"sample"}),
+        provides_docs=False,
+    )
+    return ConnectorCatalog(
+        by_workspace={
+            workspace_id: WorkspaceConnectorBundle(
+                workspace_id=workspace_id,
+                providers=(connected,),
+                docs_by_dataset={},
+            )
+        }
+    )
+
+
+def test_tools_list_omits_connector_outside_workspace() -> None:
+    from mcp.server.fastmcp import FastMCP
+
+    current = {"id": "garden"}
+    server = FastMCP("t")
+
+    @server.tool()
+    async def quail_setup() -> str:
+        return "core"
+
+    register_connectors(
+        server,
+        _catalog_with_probe_in("garden"),
+        resolve_workspace=lambda _ctx: (current["id"], None),
+    )
+
+    async def run() -> None:
+        names = {tool.name for tool in await server.list_tools()}
+        assert names == {"quail_setup", "probe_dataset"}
+        current["id"] = "other"
+        names = {tool.name for tool in await server.list_tools()}
+        assert names == {"quail_setup"}
+        result = await server.call_tool("probe_dataset", {"dataset_id": "sample"})
+        assert isinstance(result, CallToolResult)
+        assert result.isError
+        assert result.structuredContent is not None
+        assert (
+            result.structuredContent["diagnostic"]["stable_error_code"]
+            == "connector_not_in_workspace"
+        )
+
+    asyncio.run(run())
+
+
+def test_tools_list_omits_connectors_when_workspace_unresolved() -> None:
+    from mcp.server.fastmcp import FastMCP
+
+    server = FastMCP("t")
+
+    @server.tool()
+    async def quail_setup() -> str:
+        return "core"
+
+    def boom(_ctx: object) -> tuple[str, None]:
+        raise RuntimeError("unbound")
+
+    register_connectors(
+        server,
+        _catalog_with_probe_in("garden"),
+        resolve_workspace=boom,
+    )
+
+    async def run() -> None:
+        names = {tool.name for tool in await server.list_tools()}
+        assert names == {"quail_setup"}
+        assert server._tool_manager.get_tool("probe_dataset") is not None
+
+    asyncio.run(run())
+
+
 def test_connector_file_route_serves_bytes(tmp_path: Path) -> None:
     from mcp.server.fastmcp import FastMCP
     from starlette.testclient import TestClient

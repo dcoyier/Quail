@@ -17,6 +17,12 @@ register_connectors(server, catalog, resolve_workspace, authenticate_route defau
   injects it and does not advertise ctx on tools/list).
   After add_tool, publish ToolSpec.input_schema onto the FastMCP tool parameters
   so tools/list shows the real JSON Schema (not the Any signature).
+  When any connector tools were registered, wrap FastMCP list_tools (and the
+  low-level MCP handler) so tools/list uses the same resolve_workspace as calls.
+  Core tools stay listed. A connector tool is listed only when
+  _provider_for_workspace finds an owner for the active workspace.
+  When resolve_workspace raises (unbound Clerk, missing auth), omit connector
+  tools rather than listing the union.
   ToolResult structured_content becomes structuredContent; optional text becomes
   the MCP text content block (not merged into structured content). When text is
   omitted and images are present, content is image-only. Optional images become
@@ -29,3 +35,15 @@ Unrestricted omits it and passes user_id None. The handler then resolves the
 workspace-bound provider, calls handle_route, and streams FileResponse bytes
 (404 when None). If FileResponse.expires_at is in the past, give back 404
 instead of the file. Remaining lifetime becomes Cache-Control max-age.
+
+_install_workspace_scoped_list_tools(server, providers_by_tool, resolve_workspace):
+  Remember the current FastMCP list_tools.
+  Replace it and the low-level MCP list_tools handler with a wrapper.
+  The wrapper lists tools, then resolve_workspace from server.get_context().
+  Give back _tools_visible_in_workspace. If resolve_workspace raises, treat
+  workspace_id as missing.
+
+_tools_visible_in_workspace(tools, providers_by_tool, workspace_id):
+  Give back core tools (names not in providers_by_tool) always.
+  Give back a connector tool only when workspace_id is set and
+  _provider_for_workspace finds an owner.

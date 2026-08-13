@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import unquote
 
 from mcp.server.fastmcp import Context, FastMCP
-from mcp.types import CallToolResult, ToolAnnotations
+from mcp.types import CallToolResult, Tool, ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import FileResponse as StarletteFileResponse
 from starlette.responses import Response
@@ -78,6 +78,7 @@ def register_connectors(
     authenticate_route, when set, receives the Starlette Request and URL
     workspace_id and gives back user_id (or None). Raise UnauthorizedError or
     ForbiddenError to fail the GET. Unrestricted mode omits it.
+    tools/list shows connector tools only for the resolved workspace.
     """
 
     providers_by_tool: dict[str, list[tuple[str, ConnectedProvider]]] = {}
@@ -153,8 +154,53 @@ def register_connectors(
     for tool_name, owners in providers_by_tool.items():
         _register_tool(server, tool_specs[tool_name], owners, resolve_workspace)
 
+    if providers_by_tool:
+        _install_workspace_scoped_list_tools(server, providers_by_tool, resolve_workspace)
+
     for (_extension_id, _route_id), owners in route_owners.items():
         _register_route(server, owners, authenticate_route=authenticate_route)
+
+
+def _install_workspace_scoped_list_tools(
+    server: FastMCP,
+    providers_by_tool: dict[str, list[tuple[str, ConnectedProvider]]],
+    resolve_workspace: Callable[[Context | None], tuple[str, str | None]],
+) -> None:
+    """Filter tools/list to connector tools bound in the active workspace.
+
+    Core (non-connector) tools stay listed. When resolve_workspace raises
+    (unbound Clerk, missing auth), omit connector tools rather than the union.
+    """
+
+    original_list_tools = server.list_tools
+
+    async def list_tools() -> list[Tool]:
+        tools = await original_list_tools()
+        workspace_id: str | None = None
+        try:
+            workspace_id, _user_id = resolve_workspace(server.get_context())
+        except Exception:
+            workspace_id = None
+        return _tools_visible_in_workspace(tools, providers_by_tool, workspace_id)
+
+    server.list_tools = list_tools  # type: ignore[method-assign]
+    server._mcp_server.list_tools()(list_tools)
+
+
+def _tools_visible_in_workspace(
+    tools: list[Tool],
+    providers_by_tool: dict[str, list[tuple[str, ConnectedProvider]]],
+    workspace_id: str | None,
+) -> list[Tool]:
+    visible: list[Tool] = []
+    for tool in tools:
+        owners = providers_by_tool.get(tool.name)
+        if owners is None:
+            visible.append(tool)
+            continue
+        if workspace_id is not None and _provider_for_workspace(owners, workspace_id) is not None:
+            visible.append(tool)
+    return visible
 
 
 def _register_resource(
