@@ -213,7 +213,8 @@ Use `AsText()` before regex when values might not already be text.
 them in `Ranking(expression=...)` only when you want ordered retrieval.
 
 Regex uses a bounded RE2-style engine (not Python backtracking). Supported
-flags via `re`: `I`, `M`, `S`, `A`/`U`, etc. No lookaround, no backreferences.
+flags via `re`: `I`, `M`, `S` only. `re.A` and `re.U` exist on the helper but
+are rejected — RE2 word classes are ASCII. No lookaround, no backreferences.
 
 ### Predicates and groups
 

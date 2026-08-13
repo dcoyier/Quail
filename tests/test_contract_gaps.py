@@ -12,6 +12,7 @@ from quail.analysis.exec_host import dispatch_call
 from quail.analysis.field import Field
 from quail.analysis.group import G0
 from quail.analysis.operations import RegexSearch, RegexSub
+from quail.analysis.re_helper import ReFacade
 from quail.analysis.planner import plan_tag
 from quail.analysis.unit import Unit
 from quail.datasets import import_csv_dataset, open_core_db
@@ -81,3 +82,14 @@ def test_regex_sub_literal_and_rejects_lookaround() -> None:
         RegexSearch(r"(?=a)")
     with pytest.raises(QuailSyntaxError, match="backreference"):
         RegexSearch(r"(a)\1")
+
+
+def test_regex_search_rejects_ascii_and_unicode_flags() -> None:
+    re = ReFacade()
+    assert RegexSearch("hydrangea", flags=re.I).params["flags"] == re.I
+    with pytest.raises(QuailSyntaxError, match="re.A and re.U are not supported"):
+        RegexSearch("a", flags=re.A)
+    with pytest.raises(QuailSyntaxError, match="re.A and re.U are not supported"):
+        RegexSearch("a", flags=re.U)
+    with pytest.raises(QuailSyntaxError, match="re.A and re.U are not supported"):
+        RegexSearch("a", flags=re.A | re.I)
