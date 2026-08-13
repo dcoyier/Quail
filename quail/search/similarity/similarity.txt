@@ -17,6 +17,8 @@ semantic_scores_for_entries(workspace_id, dataset_id, version_id, corpus_by_entr
   Embed missing texts once through the provider and cache unit-vector blobs.
   Stage corpus segment hashes in a TEMP table, join to the vector cache, and score
   with Turso -vector_distance_dot (exact unit cosine).
+  Raise QuailRuntimeError when a cosine is null, non-numeric, or non-finite
+  (do not map those to 0.0).
   Aggregate target then input with total or avg.
   Give back entry_id -> score | None.
   Raise QuailRuntimeError with repair_hint when search or provider wiring fails.

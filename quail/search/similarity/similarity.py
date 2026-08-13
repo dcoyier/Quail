@@ -387,8 +387,14 @@ def _aggregate(scores: Sequence[float], mode: str) -> float:
 
 def _finite_score(value: object) -> float:
     if value is None or isinstance(value, bool) or not isinstance(value, int | float):
-        return 0.0
+        raise QuailRuntimeError(
+            "Semantic cosine score was not a finite number",
+            repair_hint="Retry the whole exec; if it persists, rebuild the search database.",
+        )
     number = float(value)
     if not math.isfinite(number):
-        return 0.0
+        raise QuailRuntimeError(
+            "Semantic cosine score was not a finite number",
+            repair_hint="Retry the whole exec; if it persists, rebuild the search database.",
+        )
     return number
