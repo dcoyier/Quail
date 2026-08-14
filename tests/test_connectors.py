@@ -1254,7 +1254,7 @@ def test_connector_tool_cannot_claim_core_mcp_name() -> None:
             }
         )
 
-    for name in ("quail_exec", "provide_feedback", "quail_list_workspaces"):
+    for name in ("quail_exec", "quail_export_csv", "provide_feedback", "quail_list_workspaces"):
         assert name in CORE_MCP_TOOL_NAMES
         server = FastMCP("core-clash")
 

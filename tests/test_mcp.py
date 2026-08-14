@@ -56,6 +56,7 @@ def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
     assert "quail_get_dataset_info" in server.instructions
     assert "quail_get_api_docs" in server.instructions
     assert "provide_feedback" in server.instructions
+    assert "quail_export_csv" in server.instructions
     assert "session_id" in (server.instructions or "")
 
     async def run() -> None:
@@ -67,11 +68,14 @@ def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
             "quail_start_session",
             "quail_get_dataset_info",
             "quail_exec",
+            "quail_export_csv",
             "provide_feedback",
         }
         assert "cold-start" in (tools["quail_setup"].description or "").lower()
         assert "analysis-language" in (tools["quail_get_api_docs"].description or "").lower()
         assert "dataset_id" in tools["quail_exec"].inputSchema["properties"]
+        assert "session_id" in tools["quail_export_csv"].inputSchema["properties"]
+        assert "dataset_id" in tools["quail_export_csv"].inputSchema["properties"]
         assert "message" in tools["provide_feedback"].inputSchema["properties"]
 
     asyncio.run(run())
@@ -103,6 +107,73 @@ def test_quail_setup_returns_docs_catalog_and_session(tmp_path: Path) -> None:
         assert "2" in outcome["printed_output"]
 
     asyncio.run(run())
+
+
+def test_quail_export_csv_writes_host_file(tmp_path: Path) -> None:
+    server, db_path, _feedback = _seed(tmp_path)
+
+    async def run() -> None:
+        setup = _as_dict(await _call(server, "quail_setup"))
+        assert "Promote tags locally" in setup["documentation"]
+        session_id = setup["session_id"]
+        tagged = _as_dict(
+            await _call(
+                server,
+                "quail_exec",
+                {
+                    "session_id": session_id,
+                    "dataset_id": "notes",
+                    "code": (
+                        'topic = create_field("topic")\n'
+                        'tag(G0, topic, "climate")\n'
+                        'print("ok")\n'
+                    ),
+                },
+            )
+        )
+        assert "ok" in tagged["printed_output"]
+        exported = _as_dict(
+            await _call(
+                server,
+                "quail_export_csv",
+                {"session_id": session_id, "dataset_id": "notes"},
+            )
+        )
+        path = Path(exported["path"])
+        assert path.is_file()
+        assert path.parent == db_path.resolve().parent / "exports"
+        assert exported["dataset_id"] == "notes"
+        assert exported["session_id"] == session_id
+        assert exported["columns"] == ["id", "title", "body", "topic"]
+        assert exported["row_count"] == 2
+        lines = path.read_text(encoding="utf-8").splitlines()
+        assert lines[0] == "id,title,body,topic"
+        assert all(line.endswith(",climate") for line in lines[1:])
+
+    asyncio.run(run())
+
+
+def test_quail_export_csv_busy_when_session_locked(tmp_path: Path) -> None:
+    from quail.analysis.session_lock import acquire_session_lock, reset_session_locks_for_tests
+
+    reset_session_locks_for_tests()
+    server, _, _feedback = _seed(tmp_path)
+
+    async def run() -> None:
+        setup = _as_dict(await _call(server, "quail_setup"))
+        session_id = setup["session_id"]
+        with acquire_session_lock(session_id):
+            failed = await _call(
+                server,
+                "quail_export_csv",
+                {"session_id": session_id, "dataset_id": "notes"},
+            )
+            assert _is_error(failed)
+
+    try:
+        asyncio.run(run())
+    finally:
+        reset_session_locks_for_tests()
 
 
 def test_quail_setup_can_include_dataset_docs(tmp_path: Path) -> None:

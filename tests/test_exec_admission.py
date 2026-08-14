@@ -159,3 +159,6 @@ def test_instructions_state_session_rules() -> None:
         assert "workspace-scoped" in text
         assert "quail_setup again" in text or "quail_start_session again" in text
         assert "one quail_exec in flight per session_id" in text
+    assert "quail_export_csv" in unrestricted
+    assert "same dataset id" in unrestricted
+    assert "quail_export_csv" not in clerk

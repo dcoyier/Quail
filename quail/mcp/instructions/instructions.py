@@ -59,7 +59,16 @@ def unrestricted_instructions(workspace_id: str) -> str:
         '"extended" (100s wall / 60s CPU); worker RSS is capped at 256 MiB.\n'
         "\n"
         "provide_feedback for friction or improvements (low bar for entry) — not for "
-        "analysis results. Optional category, session_id, dataset_id."
+        "analysis results. Optional category, session_id, dataset_id.\n"
+        "\n"
+        "quail_export_csv(session_id, dataset_id) writes source columns plus this "
+        "session's tags to a new CSV on this machine (path in the result). "
+        "Lexical/Semantic on analysis tags materializes cells; after those columns "
+        "are source, scoring uses the process-warmed path. This tool does not "
+        "reprocess or edit quail.toml. Keep the same dataset id, point source at "
+        "the export, stop quail run, quail process, quail run, then "
+        "quail_start_session. Unchanged text reuses embeddings. Do not export to "
+        "copy source fields, for one-off filters, or to persist bindings."
     )
 
 

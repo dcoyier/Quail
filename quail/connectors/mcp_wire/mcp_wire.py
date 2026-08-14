@@ -43,6 +43,7 @@ CORE_MCP_TOOL_NAMES = frozenset(
         "quail_start_session",
         "quail_get_dataset_info",
         "quail_exec",
+        "quail_export_csv",
         "provide_feedback",
         "quail_list_workspaces",
         "quail_switch_workspace",

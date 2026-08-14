@@ -622,6 +622,7 @@ def test_clerk_tools_list_follows_sticky_workspace(tmp_path: Path) -> None:
             names = {tool.name for tool in await server.list_tools()}
             assert "garden_ping" in names
             assert "quail_exec" in names
+            assert "quail_export_csv" not in names
             assert "quail_switch_workspace" in names
             ping = _as_dict(await server.call_tool("garden_ping", {}))
             assert ping["ok"] is True
@@ -632,6 +633,7 @@ def test_clerk_tools_list_follows_sticky_workspace(tmp_path: Path) -> None:
             names = {tool.name for tool in await server.list_tools()}
             assert "garden_ping" not in names
             assert "quail_exec" in names
+            assert "quail_export_csv" not in names
             assert "quail_switch_workspace" in names
             failed = await server.call_tool("garden_ping", {})
             assert _is_error(failed)

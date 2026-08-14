@@ -61,7 +61,8 @@ such as preview base64). `structuredContent` stays JSON-only.
 
 Tools may overlap on the same dataset; only competing **docs** are rejected.
 Tool names must not match the core MCP surface (`quail_exec`, `quail_setup`,
-`provide_feedback`, Clerk workspace tools, and the other frozen host tools).
+`quail_export_csv`, `provide_feedback`, Clerk workspace tools, and the other
+frozen host tools).
 FastMCP would otherwise overwrite the core handler.
 
 ## TOML shape

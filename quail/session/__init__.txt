@@ -9,5 +9,6 @@ Import and expose:
   require_active_session, require_owned_active_session, require_session_owner
   resolve_scope, ensure_scope
   analysis_fields, analysis_values, catalog_fields, commit_overlay
+  export_session_csv, ExportCsvResult
 
 __all__ lists those names.

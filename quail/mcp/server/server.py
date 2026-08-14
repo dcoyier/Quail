@@ -11,6 +11,7 @@ from mcp.types import CallToolResult
 
 from quail.analysis.errors import QuailRuntimeError, QuailScopeError
 from quail.analysis.exec_host import exec_script
+from quail.analysis.session_lock import acquire_session_lock
 from quail.auth import (
     AllowlistedPrincipal,
     AuthError,
@@ -47,6 +48,7 @@ from quail.mcp.results import (
 from quail.mcp.sticky import StickyWorkspaceStore
 from quail.search.runtime import SearchRuntime, search_runtime_from_config
 from quail.session import create_session, get_session
+from quail.session.export import export_session_csv
 from quail.session.sessions import (
     require_active_session,
     require_owned_active_session,
@@ -476,6 +478,48 @@ def _register_unrestricted_tools(
                     repair_hint=_exec_repair_hint(error),
                 )
             return success_printed_output(outcome.printed_output)
+
+        return await run_blocking(work)
+
+    @server.tool(title="Export session CSV")
+    async def quail_export_csv(session_id: str, dataset_id: str) -> CallToolResult:
+        """Write source columns plus this session's analysis tags to a CSV on this machine.
+
+        Lexical/Semantic on tags is slow until those columns are source. This
+        writes a new file (path in the result); it does not reprocess or edit
+        quail.toml. Keep the same dataset id, point source at that path, stop
+        quail run, quail process, quail run, then quail_start_session. Unchanged
+        text reuses embeddings. Do not use for one-off filters, Slice/regex
+        pipelines, or to persist bindings. Source fields are already fast after
+        process. Local unrestricted only.
+        """
+
+        def work() -> CallToolResult:
+            try:
+                with open_core_db(context.db_path) as db:
+                    session = require_active_session(db, session_id)
+                    if session.workspace_id != context.workspace_id:
+                        raise ValueError("Session does not belong to this workspace")
+                    dest_dir = context.db_path.expanduser().resolve().parent / "exports"
+                    with acquire_session_lock(session_id):
+                        result = export_session_csv(
+                            db,
+                            session_id=session_id,
+                            dataset_id=dataset_id,
+                            dest_dir=dest_dir,
+                        )
+            except Exception as error:
+                return error_result(error=error)
+            return success_result(
+                {
+                    "path": str(result.path),
+                    "session_id": result.session_id,
+                    "dataset_id": result.dataset_id,
+                    "dataset_version_id": result.dataset_version_id,
+                    "columns": list(result.columns),
+                    "row_count": result.row_count,
+                }
+            )
 
         return await run_blocking(work)
 

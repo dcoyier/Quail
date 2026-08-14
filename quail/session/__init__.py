@@ -15,6 +15,7 @@ from quail.session.models import (
     ValueDelete,
     ValueWrite,
 )
+from quail.session.export import ExportCsvResult, export_session_csv
 from quail.session.overlay import (
     analysis_fields,
     analysis_values,
@@ -51,6 +52,8 @@ __all__ = [
     "commit_overlay",
     "create_session",
     "ensure_scope",
+    "export_session_csv",
+    "ExportCsvResult",
     "get_session",
     "require_active_session",
     "require_owned_active_session",

@@ -41,7 +41,9 @@ Python modules under `quail/` use a folder pair (`.py` + `.txt` twin). See
 Agents use the core MCP tools:
 `quail_setup`, `quail_get_api_docs`, `quail_list_datasets`, `quail_start_session`,
 `quail_get_dataset_info`, `quail_exec`, `provide_feedback`, plus Clerk
-workspace tools when `auth.mode = "clerk"`. Connected connectors may add
+workspace tools when `auth.mode = "clerk"`. Unrestricted MCP also has
+`quail_export_csv` (host CSV snapshot of source plus this session's tags;
+not registered in Clerk). Connected connectors may add
 tools, resources, and MCP UI widgets; connector tools are listed only for
 the active workspace. Connect to
 `http://127.0.0.1:8000/mcp`. If you do not have a native MCP client, use

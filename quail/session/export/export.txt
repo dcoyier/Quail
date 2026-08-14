@@ -1,0 +1,41 @@
+There is a private export repair hint pointing at process import limits.
+
+ExportCsvResult remembers path, session_id, dataset_id, dataset_version_id,
+columns, and row_count.
+
+export_session_csv(db, session_id, dataset_id, dest_dir):
+  Resolve the active session onto the dataset's ready active version.
+  Collect source fields then this session's analysis fields.
+  If an analysis field is named id, raise.
+  If source plus analysis field count exceeds MAX_DATASET_FIELDS, raise.
+  If a field name exceeds MAX_SOURCE_FIELD_NAME_BYTES, raise.
+  columns are id then those field names.
+  Load source entries in catalog order.
+  If there are no entries, raise.
+  If row or cell counts exceed import limits, raise.
+  Load all source values and all analysis values for this scope into
+  entry-id maps (decoded JSON).
+  Resolve dest_dir, create it, and build
+  <dataset_id>.<session_id>.csv with unsafe characters replaced.
+  Reject if that path would leave dest_dir.
+  Write a temp file: header, then one row per entry.
+  Untagged or missing cells are empty.
+  Strings write as-is; other JSON-like values write as canonical JSON text.
+  Charge estimated durable bytes for nonempty cells; raise if over the
+  durable-row limit.
+  If the finished file exceeds MAX_CSV_BYTES, raise.
+  Replace the destination with the temp file.
+  On failure, delete the temp file.
+  Give back ExportCsvResult.
+
+_values_by_entry(db, sql, params):
+  Run the query and remember entry_id -> field_name -> decoded value.
+
+_csv_cell(value):
+  Empty for None.
+  Give back a string as-is.
+  Otherwise give back canonical_json text.
+
+_safe_filename_part(value):
+  Keep letters, digits, dot, underscore, and hyphen.
+  If nothing remains or the result is . or .., raise.

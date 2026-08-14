@@ -10,6 +10,9 @@ unrestricted_instructions(workspace_id):
   Give back fixed-workspace connect-time instructions (unrestricted; no sign-in)
   preferring quail_setup → dataset info → exec, including session rules and the
   skip-get_dataset_info-when-docs-already-in-setup note.
+  Also describe quail_export_csv: snapshot tags to a host CSV, keep the same
+  dataset id, process, new session; warmed Lexical/Semantic is for source
+  columns; do not export source-only or one-off filters.
 
 clerk_instructions(locked default false):
   Give back Clerk identity-mode bind-then-quail_setup instructions: token proves
