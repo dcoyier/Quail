@@ -314,6 +314,34 @@ def test_process_new_dataset_id_does_not_copy(tmp_path: Path) -> None:
     }
 
 
+def test_process_new_version_profile_change_does_not_copy(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, revision="v1")
+    config = load_config(manifest)
+    first = process_config(config, embedder_factory=lambda _p: RecordingEmbedder(dimensions=4))
+    first_hash = config.datasets[0].embedding.profile_hash()  # type: ignore[union-attr]
+    manifest = _write_manifest(tmp_path, revision="v2")
+    (tmp_path / "data" / "notes.csv").write_text(
+        "id,title,body,topic\n"
+        "e1,Hello,hydrangea care,climate\n"
+        "e2,Other,climate notes,other\n",
+        encoding="utf-8",
+    )
+    config = load_config(manifest)
+    assert config.datasets[0].embedding is not None
+    assert config.datasets[0].embedding.profile_hash() != first_hash
+    fake = RecordingEmbedder(dimensions=4)
+    second = process_config(config, embedder_factory=lambda _p: fake)
+    assert second.results[0].version_id != first.results[0].version_id
+    assert set(_embedded_texts(fake)) == {
+        "Hello",
+        "hydrangea care",
+        "Other",
+        "climate notes",
+        "climate",
+        "other",
+    }
+
+
 def test_run_gate_fails_without_process(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path)
     config = load_config(manifest)

@@ -17,5 +17,6 @@ copy_forward_cached_vectors(db, workspace_id, dataset_id, version_id, profile_ha
   Insert in fixed-size batches with INSERT OR IGNORE so an existing row for this
   version, or two donor versions of the same hash, do not fail.
   Stamp created_at on the copied rows.
-  Commit once after the batches.
+  Begin one immediate transaction for the whole copy, commit once, and roll back
+  on failure (autocommit is off for that window).
   Do not call the embedding provider.

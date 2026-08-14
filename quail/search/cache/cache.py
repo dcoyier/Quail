@@ -105,40 +105,45 @@ def copy_forward_cached_vectors(
     if not needed:
         return
     connection = db.connection
-    for start in range(0, len(needed), _COPY_FORWARD_HASH_BATCH):
-        chunk = needed[start : start + _COPY_FORWARD_HASH_BATCH]
-        placeholders = ",".join("?" for _ in chunk)
-        connection.execute(
-            f"""
-            INSERT OR IGNORE INTO quail_embedding_vectors(
-              workspace_id, dataset_id, version_id, profile_hash, text_hash,
-              dimensions, vector, created_at
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        for start in range(0, len(needed), _COPY_FORWARD_HASH_BATCH):
+            chunk = needed[start : start + _COPY_FORWARD_HASH_BATCH]
+            placeholders = ",".join("?" for _ in chunk)
+            connection.execute(
+                f"""
+                INSERT OR IGNORE INTO quail_embedding_vectors(
+                  workspace_id, dataset_id, version_id, profile_hash, text_hash,
+                  dimensions, vector, created_at
+                )
+                SELECT
+                  workspace_id,
+                  dataset_id,
+                  ?,
+                  profile_hash,
+                  text_hash,
+                  dimensions,
+                  vector,
+                  strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                FROM quail_embedding_vectors
+                WHERE workspace_id = ?
+                  AND dataset_id = ?
+                  AND profile_hash = ?
+                  AND dimensions = ?
+                  AND version_id != ?
+                  AND text_hash IN ({placeholders})
+                """,
+                (
+                    version_id,
+                    workspace_id,
+                    dataset_id,
+                    profile_hash,
+                    dimensions,
+                    version_id,
+                    *chunk,
+                ),
             )
-            SELECT
-              workspace_id,
-              dataset_id,
-              ?,
-              profile_hash,
-              text_hash,
-              dimensions,
-              vector,
-              strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-            FROM quail_embedding_vectors
-            WHERE workspace_id = ?
-              AND dataset_id = ?
-              AND profile_hash = ?
-              AND dimensions = ?
-              AND version_id != ?
-              AND text_hash IN ({placeholders})
-            """,
-            (
-                version_id,
-                workspace_id,
-                dataset_id,
-                profile_hash,
-                dimensions,
-                version_id,
-                *chunk,
-            ),
-        )
-    connection.commit()
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
