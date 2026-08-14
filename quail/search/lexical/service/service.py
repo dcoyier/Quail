@@ -145,6 +145,52 @@ class LexicalService:
             results.setdefault(entry_id, 0.0)
         return results
 
+    def lexical_scores_for_source_entries(
+        self,
+        *,
+        workspace_id: str,
+        dataset_id: str,
+        version_id: str,
+        entry_ids: Sequence[str],
+        source_field: str,
+        all_entries: bool,
+        query_record: dict[str, Any],
+        input_aggregation: str | None,
+        target_aggregation: str | None,
+    ) -> dict[str, float] | None:
+        """Score a warmed source field without loading its corpus into the exec."""
+
+        queries = _target_queries(query_record)
+        if not queries:
+            raise QuailRuntimeError("Lexical query produced no text targets")
+        corpus = _warmed_field_corpus(
+            self.search,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+            source_field=source_field,
+        )
+        if corpus is None:
+            return None
+        input_mode = input_aggregation or "total"
+        segment_counts: dict[str, int] = {}
+        if input_mode == "avg":
+            segment_counts = load_entry_segment_counts(
+                self.search,
+                corpus,
+                entry_ids=None if all_entries else entry_ids,
+            )
+        return _score_entries(
+            self.search,
+            corpus,
+            queries=queries,
+            entry_ids=entry_ids,
+            segment_counts=segment_counts,
+            input_aggregation=input_mode,
+            target_aggregation=target_aggregation or "total",
+            all_entries=all_entries,
+        )
+
 
 def _try_warmed_field_corpus(
     search: SearchDb,
@@ -159,20 +205,12 @@ def _try_warmed_field_corpus(
 
     if source_field is None:
         return None
-    receipt = get_warm_receipt(
+    corpus = _warmed_field_corpus(
         search,
         workspace_id=workspace_id,
         dataset_id=dataset_id,
         version_id=version_id,
-    )
-    if receipt is None or not receipt.lexical_ready:
-        return None
-    corpus = lookup_field_corpus(
-        search,
-        workspace_id=workspace_id,
-        dataset_id=dataset_id,
-        version_id=version_id,
-        field_name=source_field,
+        source_field=source_field,
     )
     if corpus is None:
         return None
@@ -181,6 +219,33 @@ def _try_warmed_field_corpus(
     if not all(existing.get(entry_id, 0) > 0 for entry_id in entry_ids):
         return None
     return corpus, {entry_id: existing[entry_id] for entry_id in entry_ids}
+
+
+def _warmed_field_corpus(
+    search: SearchDb,
+    *,
+    workspace_id: str,
+    dataset_id: str,
+    version_id: str,
+    source_field: str,
+) -> LexicalCorpus | None:
+    """Return an authoritative process-warmed source-field corpus when ready."""
+
+    receipt = get_warm_receipt(
+        search,
+        workspace_id=workspace_id,
+        dataset_id=dataset_id,
+        version_id=version_id,
+    )
+    if receipt is None or not receipt.lexical_ready:
+        return None
+    return lookup_field_corpus(
+        search,
+        workspace_id=workspace_id,
+        dataset_id=dataset_id,
+        version_id=version_id,
+        field_name=source_field,
+    )
 
 
 def _score_entries(
@@ -192,6 +257,7 @@ def _score_entries(
     segment_counts: Mapping[str, int],
     input_aggregation: str,
     target_aggregation: str,
+    all_entries: bool = False,
 ) -> dict[str, float]:
     expressions = parse_queries(tuple(queries))
     prefixes = expand_prefixes(
@@ -208,6 +274,7 @@ def _score_entries(
             entry_ids=entry_ids,
             segment_counts=segment_counts,
             input_aggregation=input_aggregation,
+            all_entries=all_entries,
         )
     else:
         totals = _score_simple(
@@ -218,6 +285,7 @@ def _score_entries(
             entry_ids=entry_ids,
             segment_counts=segment_counts,
             input_aggregation=input_aggregation,
+            all_entries=all_entries,
         )
     if target_aggregation == "avg":
         divisor = len(expressions)
@@ -234,32 +302,39 @@ def _score_simple(
     entry_ids: Sequence[str],
     segment_counts: Mapping[str, int],
     input_aggregation: str,
+    all_entries: bool = False,
 ) -> dict[str, float]:
     doc_table = validate_table_ident(corpus.doc_table)
     connection = search.connection
-    candidates_json = json.dumps(list(entry_ids), separators=(",", ":"), allow_nan=False)
     output = {entry_id: 0.0 for entry_id in entry_ids}
     match_count = 0
     for expression in expressions:
         compiled = compile_query(expression, prefixes)
         target_totals = {entry_id: 0.0 for entry_id in entry_ids}
         remaining = _MAX_MATCHES - match_count
+        parameters: dict[str, Any] = {
+            "query": compiled,
+            "match_limit": remaining + 1,
+        }
+        candidate_clause = ""
+        if not all_entries:
+            parameters["candidate_ids"] = json.dumps(
+                list(entry_ids), separators=(",", ":"), allow_nan=False
+            )
+            candidate_clause = (
+                "AND entry_id IN "
+                "(SELECT value FROM json_each(:candidate_ids))"
+            )
         try:
             rows = connection.execute(
                 f"""
                 SELECT entry_id, segment_position, fts_score(text, :query)
                 FROM {doc_table}
                 WHERE fts_match(text, :query)
-                  AND entry_id IN (
-                    SELECT value FROM json_each(:candidate_ids)
-                  )
+                  {candidate_clause}
                 LIMIT :match_limit
                 """,
-                {
-                    "query": compiled,
-                    "candidate_ids": candidates_json,
-                    "match_limit": remaining + 1,
-                },
+                parameters,
             ).fetchall()
         except Exception as error:
             if "fts parse error" in str(error).casefold():
@@ -298,26 +373,33 @@ def _score_with_prefixes(
     entry_ids: Sequence[str],
     segment_counts: Mapping[str, int],
     input_aggregation: str,
+    all_entries: bool = False,
 ) -> dict[str, float]:
     doc_table = validate_table_ident(corpus.doc_table)
     connection = search.connection
-    candidates_json = json.dumps(list(entry_ids), separators=(",", ":"), allow_nan=False)
     output = {entry_id: 0.0 for entry_id in entry_ids}
     match_count = 0
     for expression in expressions:
-        parameters: dict[str, Any] = {"candidate_ids": candidates_json}
+        parameters: dict[str, Any] = {}
         predicate = _match_predicate(expression, prefixes, parameters)
         remaining = _MAX_MATCHES - match_count
         parameters["match_limit"] = remaining + 1
+        candidate_clause = ""
+        if not all_entries:
+            parameters["candidate_ids"] = json.dumps(
+                list(entry_ids), separators=(",", ":"), allow_nan=False
+            )
+            candidate_clause = (
+                "AND entry_id IN "
+                "(SELECT value FROM json_each(:candidate_ids))"
+            )
         try:
             rows = connection.execute(
                 f"""
                 SELECT document_id, entry_id, segment_position
                 FROM {doc_table}
                 WHERE ({predicate})
-                  AND entry_id IN (
-                    SELECT value FROM json_each(:candidate_ids)
-                  )
+                  {candidate_clause}
                 LIMIT :match_limit
                 """,
                 parameters,
