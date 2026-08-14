@@ -424,50 +424,52 @@ class SimilarityService:
         if not entry_ids or not target_blobs:
             return {}
 
-        score_columns = ",\n                       ".join(
-            "-vector_distance_dot(v.vector, ?)" for _ in target_blobs
-        )
         candidate_clause = ""
-        parameters: list[Any] = [
-            *target_blobs,
-            workspace_id,
-            dataset_id,
-            version_id,
-            profile_hash,
-            field_id,
-        ]
+        candidate_json: str | None = None
         if not all_entries:
             candidate_clause = "AND s.entry_id IN (SELECT value FROM json_each(?))"
-            parameters.append(
-                json.dumps(list(entry_ids), separators=(",", ":"), allow_nan=False)
+            candidate_json = json.dumps(
+                list(entry_ids), separators=(",", ":"), allow_nan=False
             )
+
+        pairwise: dict[tuple[str, int], list[float]] = {}
         try:
-            rows = self.search.connection.execute(
-                f"""
-                SELECT s.entry_id,
-                       {score_columns}
-                FROM quail_embedding_segments AS s
-                JOIN quail_embedding_vectors AS v
-                  ON v.workspace_id = ?
-                 AND v.dataset_id = ?
-                 AND v.version_id = ?
-                 AND v.profile_hash = ?
-                 AND v.text_hash = s.text_hash
-                WHERE s.field_id = ?
-                  {candidate_clause}
-                """,
-                tuple(parameters),
-            )
-            totals: dict[str, float] = {}
-            counts: dict[str, int] = {}
-            for row in rows:
-                entry_id = str(row[0])
-                segment_score = _aggregate(
-                    tuple(_finite_score(value) for value in row[1:]), target_mode
+            for start in range(0, len(target_blobs), _SCORE_TARGET_BATCH):
+                batch = target_blobs[start : start + _SCORE_TARGET_BATCH]
+                score_columns = ",\n                       ".join(
+                    "-vector_distance_dot(v.vector, ?)" for _ in batch
                 )
-                totals[entry_id] = totals.get(entry_id, 0.0) + segment_score
-                if input_mode == "avg":
-                    counts[entry_id] = counts.get(entry_id, 0) + 1
+                parameters: list[Any] = [
+                    *batch,
+                    workspace_id,
+                    dataset_id,
+                    version_id,
+                    profile_hash,
+                    field_id,
+                ]
+                if candidate_json is not None:
+                    parameters.append(candidate_json)
+                rows = self.search.connection.execute(
+                    f"""
+                    SELECT s.entry_id, s.segment_index,
+                           {score_columns}
+                    FROM quail_embedding_segments AS s
+                    JOIN quail_embedding_vectors AS v
+                      ON v.workspace_id = ?
+                     AND v.dataset_id = ?
+                     AND v.version_id = ?
+                     AND v.profile_hash = ?
+                     AND v.text_hash = s.text_hash
+                    WHERE s.field_id = ?
+                      {candidate_clause}
+                    """,
+                    tuple(parameters),
+                ).fetchall()
+                for row in rows:
+                    key = (str(row[0]), int(row[1]))
+                    scores = pairwise.setdefault(key, [])
+                    for value in row[2:]:
+                        scores.append(_finite_score(value))
         except QuailRuntimeError:
             raise
         except Exception as error:
@@ -476,12 +478,13 @@ class SimilarityService:
                 repair_hint="Retry the whole exec; if it persists, rebuild the search database.",
             ) from error
 
-        if input_mode == "avg":
-            return {
-                entry_id: total / counts[entry_id]
-                for entry_id, total in totals.items()
-            }
-        return totals
+        by_entry: dict[str, list[float]] = {}
+        for (entry_id, _segment_index), scores in pairwise.items():
+            by_entry.setdefault(entry_id, []).append(_aggregate(scores, target_mode))
+        return {
+            entry_id: _aggregate(scores, input_mode)
+            for entry_id, scores in by_entry.items()
+        }
 
     def _client_for(self, profile: EmbeddingProfile) -> EmbeddingClient:
         key = profile.profile_hash()
