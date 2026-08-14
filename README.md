@@ -82,7 +82,7 @@ being warmed and rebuilds them; core CSV data is untouched.
 - **Unrestricted** — fixed workspace, loopback, no sign-in
   ([`examples/quail.toml`](examples/quail.toml)). MCP includes
   `quail_export_csv` to snapshot this session’s tags onto a host CSV; reprocess
-  with the same dataset `id` so unchanged text reuses embeddings.
+  with the same dataset `id` (do not invent a new id).
 - **Clerk** — JWT/OAuth identity + TOML `[[users]]` allowlist on one URL
   ([`examples/quail.clerk.toml`](examples/quail.clerk.toml)).
 

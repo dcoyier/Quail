@@ -67,8 +67,10 @@ def unrestricted_instructions(workspace_id: str) -> str:
         "are source, scoring uses the process-warmed path. This tool does not "
         "reprocess or edit quail.toml. Keep the same dataset id, point source at "
         "the export, stop quail run, quail process, quail run, then "
-        "quail_start_session. Unchanged text reuses embeddings. Do not export to "
-        "copy source fields, for one-off filters, or to persist bindings."
+        "quail_start_session. A new id is a different dataset. Do not overlap "
+        "quail_export_csv with quail_exec on the same session_id (session_busy). "
+        "Do not export to copy source fields, for one-off filters, or to persist "
+        "bindings."
     )
 
 

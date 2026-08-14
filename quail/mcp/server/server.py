@@ -488,10 +488,11 @@ def _register_unrestricted_tools(
         Lexical/Semantic on tags is slow until those columns are source. This
         writes a new file (path in the result); it does not reprocess or edit
         quail.toml. Keep the same dataset id, point source at that path, stop
-        quail run, quail process, quail run, then quail_start_session. Unchanged
-        text reuses embeddings. Do not use for one-off filters, Slice/regex
-        pipelines, or to persist bindings. Source fields are already fast after
-        process. Local unrestricted only.
+        quail run, quail process, quail run, then quail_start_session. A new
+        id is a different dataset. Do not overlap with quail_exec on the same
+        session_id. Do not use for one-off filters, Slice/regex pipelines, or
+        to persist bindings. Source fields are already fast after process.
+        Local unrestricted only.
         """
 
         def work() -> CallToolResult:

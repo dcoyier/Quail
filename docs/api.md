@@ -331,11 +331,10 @@ On **local unrestricted** MCP, `quail_export_csv(session_id, dataset_id)`
 writes source columns plus this session's tags to a new CSV on the host
 (you get `path`, not the file body). It does not reprocess or edit
 `quail.toml`. Point the **same** dataset `id` at that file, stop `quail run`,
-`quail process`, start `run`, then `quail_start_session`. Keeping the same
-`id` reuses embeddings for unchanged text; a new id rebuilds. Bindings are
-not exported. Do not use this for one-off filters, `Slice` / regex pipelines,
-or to copy source fields that are already fast. Clerk MCP does not offer
-this tool.
+`quail process`, start `run`, then `quail_start_session`. A new id is a
+different dataset. Bindings are not exported. Do not use this for one-off
+filters, `Slice` / regex pipelines, or to copy source fields that are
+already fast. Clerk MCP does not offer this tool.
 
 ---
 

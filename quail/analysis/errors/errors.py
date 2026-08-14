@@ -34,7 +34,7 @@ class QuailServerBusyError(QuailRuntimeError):
 
 
 class QuailSessionBusyError(QuailRuntimeError):
-    """Another quail_exec is already running for this session_id."""
+    """Another quail_exec or quail_export_csv is already running for this session_id."""
 
     stable_error_code = "session_busy"
 

@@ -169,6 +169,9 @@ def test_quail_export_csv_busy_when_session_locked(tmp_path: Path) -> None:
                 {"session_id": session_id, "dataset_id": "notes"},
             )
             assert _is_error(failed)
+            payload = _as_dict(failed)
+            assert payload["diagnostic"]["stable_error_code"] == "session_busy"
+            assert "quail_export_csv" in payload["diagnostic"]["message"]
 
     try:
         asyncio.run(run())

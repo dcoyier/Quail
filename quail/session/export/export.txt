@@ -11,8 +11,8 @@ export_session_csv(db, session_id, dataset_id, dest_dir):
   If a field name exceeds MAX_SOURCE_FIELD_NAME_BYTES, raise.
   columns are id then those field names.
   Load source entries in catalog order.
-  If there are no entries, raise.
   If row or cell counts exceed import limits, raise.
+  If there are no entries, raise.
   Load all source values and all analysis values for this scope into
   entry-id maps (decoded JSON).
   Resolve dest_dir, create it, and build

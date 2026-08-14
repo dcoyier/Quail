@@ -1,4 +1,4 @@
-"""In-process lock: one quail_exec at a time per session_id."""
+"""In-process lock: one session call at a time per session_id."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ _held: set[str] = set()
 _lock = threading.Lock()
 
 _BUSY_REPAIR = (
-    "Wait for the in-flight quail_exec on this session_id to finish, "
-    "then retry. Do not overlap execs on the same session_id."
+    "Wait for the in-flight quail_exec or quail_export_csv on this session_id "
+    "to finish, then retry. Do not overlap those calls on the same session_id."
 )
 
 
@@ -27,7 +27,8 @@ def acquire_session_lock(session_id: str) -> Iterator[None]:
     with _lock:
         if key in _held:
             raise QuailSessionBusyError(
-                "Another quail_exec is already running for this session_id.",
+                "Another quail_exec or quail_export_csv is already running "
+                "for this session_id.",
                 repair_hint=_BUSY_REPAIR,
             )
         _held.add(key)
