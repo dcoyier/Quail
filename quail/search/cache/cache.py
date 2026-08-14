@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from quail.search.db import SearchDb
 from quail.search.vectors import pack_unit_vector
+
+_COPY_FORWARD_HASH_BATCH = 500
 
 
 def get_cached_vector_blob(
@@ -79,3 +83,67 @@ def put_cached_vector(
         ),
     )
     db.connection.commit()
+
+
+def copy_forward_cached_vectors(
+    db: SearchDb,
+    *,
+    workspace_id: str,
+    dataset_id: str,
+    version_id: str,
+    profile_hash: str,
+    dimensions: int,
+    text_hashes: Sequence[str],
+) -> None:
+    """Copy matching vectors from other versions of this dataset into version_id.
+
+    Same workspace, dataset id, profile_hash, and dimensions. Any prior version
+    can donate; the first inserted row for each text_hash wins. Does not embed.
+    """
+
+    needed = list(dict.fromkeys(text_hashes))
+    if not needed:
+        return
+    connection = db.connection
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        for start in range(0, len(needed), _COPY_FORWARD_HASH_BATCH):
+            chunk = needed[start : start + _COPY_FORWARD_HASH_BATCH]
+            placeholders = ",".join("?" for _ in chunk)
+            connection.execute(
+                f"""
+                INSERT OR IGNORE INTO quail_embedding_vectors(
+                  workspace_id, dataset_id, version_id, profile_hash, text_hash,
+                  dimensions, vector, created_at
+                )
+                SELECT
+                  workspace_id,
+                  dataset_id,
+                  ?,
+                  profile_hash,
+                  text_hash,
+                  dimensions,
+                  vector,
+                  strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                FROM quail_embedding_vectors
+                WHERE workspace_id = ?
+                  AND dataset_id = ?
+                  AND profile_hash = ?
+                  AND dimensions = ?
+                  AND version_id != ?
+                  AND text_hash IN ({placeholders})
+                """,
+                (
+                    version_id,
+                    workspace_id,
+                    dataset_id,
+                    profile_hash,
+                    dimensions,
+                    version_id,
+                    *chunk,
+                ),
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise

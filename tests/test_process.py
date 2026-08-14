@@ -194,6 +194,154 @@ def test_process_second_pass_is_idempotent(tmp_path: Path) -> None:
     assert first.results[0].version_id == second.results[0].version_id
 
 
+def _embedded_texts(fake: RecordingEmbedder) -> list[str]:
+    return [text for batch in fake.calls for text in batch]
+
+
+def test_process_new_version_copies_unchanged_embeddings(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path)
+    config = load_config(manifest)
+    first = process_config(config, embedder_factory=lambda _p: RecordingEmbedder(dimensions=4))
+    first_version = first.results[0].version_id
+
+    (tmp_path / "data" / "notes.csv").write_text(
+        "id,title,body,topic\n"
+        "e1,Hello,hydrangea care,climate\n"
+        "e2,Other,climate notes,other\n",
+        encoding="utf-8",
+    )
+    config = load_config(manifest)
+    fake = RecordingEmbedder(dimensions=4)
+    second = process_config(config, embedder_factory=lambda _p: fake)
+    second_version = second.results[0].version_id
+    assert second_version != first_version
+    assert second.results[0].unique_text_count == 6
+    assert set(_embedded_texts(fake)) == {"climate", "other"}
+
+    search = open_search_db(config.search_database)  # type: ignore[arg-type]
+    try:
+        profile = config.datasets[0].embedding
+        assert profile is not None
+        for text in ("Hello", "hydrangea care", "Other", "climate notes", "climate", "other"):
+            blob = get_cached_vector_blob(
+                search,
+                workspace_id="local",
+                dataset_id="notes",
+                version_id=second_version,
+                profile_hash=profile.profile_hash(),
+                text_hash=text_hash(text),
+                dimensions=4,
+            )
+            assert blob is not None
+    finally:
+        search.close()
+
+
+def test_process_copy_forward_uses_any_prior_version(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, embedding_fields='["title"]')
+    config = load_config(manifest)
+    first = process_config(config, embedder_factory=lambda _p: RecordingEmbedder(dimensions=4))
+    assert first.results[0].unique_text_count == 2
+
+    (tmp_path / "data" / "notes.csv").write_text(
+        "id,title,body\ne1,Hello,hydrangea care\n",
+        encoding="utf-8",
+    )
+    config = load_config(manifest)
+    dropped = RecordingEmbedder(dimensions=4)
+    second = process_config(config, embedder_factory=lambda _p: dropped)
+    assert second.results[0].version_id != first.results[0].version_id
+    assert _embedded_texts(dropped) == []
+    assert second.results[0].unique_text_count == 1
+
+    (tmp_path / "data" / "notes.csv").write_text(
+        "id,title,body\n"
+        "e1,Hello,hydrangea care\n"
+        "e2,Other,climate notes\n"
+        "e3,Extra,new row\n",
+        encoding="utf-8",
+    )
+    config = load_config(manifest)
+    restored = RecordingEmbedder(dimensions=4)
+    third = process_config(config, embedder_factory=lambda _p: restored)
+    assert third.results[0].version_id not in {
+        first.results[0].version_id,
+        second.results[0].version_id,
+    }
+    assert set(_embedded_texts(restored)) == {"Extra"}
+    assert third.results[0].unique_text_count == 3
+
+
+def test_process_clear_skips_copy_forward(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path)
+    config = load_config(manifest)
+    process_config(config, embedder_factory=lambda _p: RecordingEmbedder(dimensions=4))
+    (tmp_path / "data" / "notes.csv").write_text(
+        "id,title,body,topic\n"
+        "e1,Hello,hydrangea care,climate\n"
+        "e2,Other,climate notes,other\n",
+        encoding="utf-8",
+    )
+    config = load_config(manifest)
+    fake = RecordingEmbedder(dimensions=4)
+    cleared = process_config(config, clear=True, embedder_factory=lambda _p: fake)
+    assert set(_embedded_texts(fake)) == {
+        "Hello",
+        "hydrangea care",
+        "Other",
+        "climate notes",
+        "climate",
+        "other",
+    }
+    assert cleared.results[0].embedded_batches >= 1
+
+
+def test_process_new_dataset_id_does_not_copy(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path)
+    config = load_config(manifest)
+    process_config(config, embedder_factory=lambda _p: RecordingEmbedder(dimensions=4))
+    text = manifest.read_text(encoding="utf-8")
+    manifest.write_text(text.replace('id = "notes"', 'id = "notes2"'), encoding="utf-8")
+    config = load_config(manifest)
+    fake = RecordingEmbedder(dimensions=4)
+    outcome = process_config(config, embedder_factory=lambda _p: fake)
+    assert outcome.results[0].dataset_id == "notes2"
+    assert set(_embedded_texts(fake)) == {
+        "Hello",
+        "hydrangea care",
+        "Other",
+        "climate notes",
+    }
+
+
+def test_process_new_version_profile_change_does_not_copy(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, revision="v1")
+    config = load_config(manifest)
+    first = process_config(config, embedder_factory=lambda _p: RecordingEmbedder(dimensions=4))
+    first_hash = config.datasets[0].embedding.profile_hash()  # type: ignore[union-attr]
+    manifest = _write_manifest(tmp_path, revision="v2")
+    (tmp_path / "data" / "notes.csv").write_text(
+        "id,title,body,topic\n"
+        "e1,Hello,hydrangea care,climate\n"
+        "e2,Other,climate notes,other\n",
+        encoding="utf-8",
+    )
+    config = load_config(manifest)
+    assert config.datasets[0].embedding is not None
+    assert config.datasets[0].embedding.profile_hash() != first_hash
+    fake = RecordingEmbedder(dimensions=4)
+    second = process_config(config, embedder_factory=lambda _p: fake)
+    assert second.results[0].version_id != first.results[0].version_id
+    assert set(_embedded_texts(fake)) == {
+        "Hello",
+        "hydrangea care",
+        "Other",
+        "climate notes",
+        "climate",
+        "other",
+    }
+
+
 def test_run_gate_fails_without_process(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path)
     config = load_config(manifest)

@@ -13,7 +13,11 @@ from quail.config.models import EmbeddingProfile, SearchWarmConfig
 from quail.datasets.catalog import source_entries, source_fields, source_values
 from quail.datasets.db import CoreDb
 from quail.providers import EmbeddingClient, ProviderError
-from quail.search.cache import get_cached_vector_blob, put_cached_vector
+from quail.search.cache import (
+    copy_forward_cached_vectors,
+    get_cached_vector_blob,
+    put_cached_vector,
+)
 from quail.search.db import SearchDb
 from quail.search.lexical.corpus import (
     drop_field_corpora_except,
@@ -398,6 +402,7 @@ def warm_dataset(
             texts=unique_texts,
             warm=warm,
             client=embedder_factory(profile),
+            copy_forward=not clear,
         )
         _replace_embedding_segments(
             search,
@@ -623,8 +628,19 @@ def _warm_embeddings(
     texts: Sequence[str],
     warm: SearchWarmConfig,
     client: EmbeddingClient,
+    copy_forward: bool = True,
 ) -> int:
     profile_key = profile.profile_hash()
+    if copy_forward:
+        copy_forward_cached_vectors(
+            search,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+            profile_hash=profile_key,
+            dimensions=profile.dimensions,
+            text_hashes=[text_hash(text) for text in texts],
+        )
     missing: list[tuple[str, str]] = []
     for text in texts:
         digest = text_hash(text)
