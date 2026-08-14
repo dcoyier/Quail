@@ -25,3 +25,60 @@ semantic_scores_for_entries(workspace_id, dataset_id, version_id, corpus_by_entr
   Aggregate target then input with total or avg.
   Give back entry_id -> score | None.
   Raise QuailRuntimeError with repair_hint when search or provider wiring fails.
+
+semantic_scores_for_source_entries(workspace_id, dataset_id, version_id, entry_ids,
+                                   source_field, all_entries, query_record,
+                                   input_aggregation, target_aggregation):
+  Require the pinned profile and stored profile_hash.
+  If source_field was not registered during embedding warm, give back None so the
+  caller can use dynamic corpus scoring.
+  Embed and cache only missing target text.
+  Score registered source segments directly from the search database.
+  Omit candidate-id filtering when all_entries is true.
+  Aggregate target scores, then segment scores per entry.
+  Give back every requested entry id, using None for entries without segments.
+
+_profile_for:
+  Require and give back the pinned EmbeddingProfile and stored profile_hash.
+
+_ensure_texts:
+  Find uncached unique texts.
+  Embed missing texts once and cache unit-vector blobs.
+  Require the configured dimensions.
+
+_require_blob:
+  Give back one cached vector blob.
+  Raise when the blob is still absent after embedding.
+
+_score_segments_turso:
+  Rebuild the request-local segment stage table for dynamic corpus values.
+  Join staged text hashes to cached vectors.
+  Score exact cosine with Turso -vector_distance_dot.
+  Raise when a cosine is null, non-numeric, or non-finite.
+  Aggregate target scores per segment.
+
+_score_source_entries_turso:
+  Join the field's persistent entry/segment mappings directly to cached vectors.
+  For a subset, restrict entry ids through json_each.
+  For the full corpus, do not serialize or filter candidate ids.
+  Score exact cosine with Turso -vector_distance_dot in batches of
+  _SCORE_TARGET_BATCH targets (same cap as dynamic scoring).
+  Accumulate pairwise scores per (entry_id, segment_index).
+  Raise when a cosine is null, non-numeric, or non-finite.
+  Then aggregate targets per segment, then input segments per entry.
+
+_client_for:
+  Reuse one embedding client per profile_hash.
+  Build it on first use and translate ProviderError to QuailRuntimeError.
+
+_corpus_texts:
+  Give back text segments for a dynamic corpus value.
+
+_target_texts:
+  Give back literal query text targets.
+
+_aggregate:
+  Give back total or average finite scores.
+
+_finite_score:
+  Require a finite number or raise. Do not map null/non-finite cosine to 0.0.
