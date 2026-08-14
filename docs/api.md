@@ -307,6 +307,8 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
   (Turso native FTS). `str`, `list[str]`, entry `GroupExpr`, and `list[Entry]`
   queries all work. Entry-derived targets read the expression root field and are
   quoted as FTS terms (field prose is not parsed as query syntax).
+  On a bare source field (no `Slice` / `AsText` / … in front), scoring uses the
+  process-warmed FTS index and does not load source cells.
 - **Semantic:** exact cosine similarity under the dataset embedding profile
   (configured outside this API; scored in Turso, not approximate ANN). The same
   four query shapes work; entry targets read the expression root field. If search

@@ -167,6 +167,74 @@ def test_lexical_score_reuses_warm_segments_without_rewrite(
     search.close()
 
 
+def test_engine_uses_warmed_source_lexical_without_dynamic_corpus_or_counts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from quail.config.models import SearchWarmConfig
+    from quail.search.warm import warm_dataset
+
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text(
+        "id,body\ne1,climate policy notes\ne2,hydrangea care tips\n",
+        encoding="utf-8",
+    )
+    db = open_core_db(tmp_path / "core.turso")
+    imported = import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+    search = open_search_db(tmp_path / "search.turso")
+    warm_dataset(
+        db,
+        search,
+        workspace_id="ws",
+        dataset_id="notes",
+        version_id=imported.version_id,
+        profile=None,
+        warm=SearchWarmConfig(),
+        embedder_factory=lambda _profile: (_ for _ in ()).throw(RuntimeError("no embed")),
+    )
+    service = LexicalService(search=search)
+    session = create_session(db, "ws")
+
+    def _reject_dynamic(*_args: object, **_kwargs: object) -> dict[str, float]:
+        raise AssertionError("warmed source Lexical must not materialize dynamic corpus")
+
+    def _reject_counts(*_args: object, **_kwargs: object) -> dict[str, int]:
+        raise AssertionError("total aggregation must not count every source segment")
+
+    monkeypatch.setattr(LexicalService, "lexical_scores_for_entries", _reject_dynamic)
+    monkeypatch.setattr(
+        "quail.search.lexical.service.service.load_entry_segment_counts",
+        _reject_counts,
+    )
+
+    def driver(engine: QueryEngine, _prints) -> None:
+        score = Expression(Field("body"), Lexical("hydrangea"))
+        ranked = dispatch_call(
+            engine,
+            "retrieve",
+            (),
+            {
+                "group": G0,
+                "rank": Ranking(expression=score),
+                "limit": 2,
+            },
+        )
+        assert [entry.id for entry in ranked] == ["e2", "e1"]
+        assert dispatch_call(engine, "count", (), {"group": G0.where(score > 0)}) == 1
+
+    try:
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            lexical=service,
+        )
+    finally:
+        search.close()
+        db.close()
+
+
 def test_ensure_entry_segments_commits_in_batches(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

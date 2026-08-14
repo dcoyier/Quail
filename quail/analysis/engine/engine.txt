@@ -101,6 +101,16 @@ field; Lexical Entry* targets are term-quoted. Predicates and rankings that end 
 Lexical/Semantic share one per-exec score cache keyed by Expression.to_record():
 each distinct search-terminal Expression is batch-scored once over needed entry
 ids (gap-fill missing ids), then predicate filters and ranking reuse those scores.
-For Lexical, pass source_field when there are no transforming prefix operations
-and the root resolves to a source field; otherwise scratch scoring.
-_warmed_lexical_source_field encodes that rule for scalar eval.
+For Lexical and Semantic, when there are no transforming prefix operations and
+the root resolves to a source field, _bare_source_search_field gives that name.
+Lexical first asks lexical_scores_for_source_entries to score those entry ids
+directly without loading source values, and tells that path when the candidate
+ids are the complete dataset. If the source field is not warmed, materialize
+corpus values with _corpus_by_entry and use dynamic scoring (still pass
+source_field so the service can reuse a warmed corpus when possible).
+Semantic still materializes corpus values (source-field map lands separately).
+_warmed_lexical_source_field encodes the bare-source rule for scalar eval.
+
+_corpus_by_entry:
+  Materialize requested corpus values only for dynamic or unwarmed search.
+  Apply transforming prefix operations when present.
