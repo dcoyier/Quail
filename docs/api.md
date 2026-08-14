@@ -314,6 +314,11 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
   four query shapes work; entry targets read the expression root field. If search
   isn’t available, you get a repairable runtime diagnostic — fix config and
   rerun the whole exec.
+  On a bare source field (no `Slice` / `AsText` / … in front) that was included
+  in the dataset embedding field set at `quail process`, scoring uses the
+  process-warmed segment map and does not load source cells. Prefix ops,
+  analysis fields, and source fields omitted from that set still materialize
+  cells. Re-run `quail process` after this layout change.
 
 ---
 

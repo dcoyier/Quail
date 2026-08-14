@@ -266,7 +266,260 @@ def test_process_pins_embedding_profile(tmp_path: Path) -> None:
             assert pin.provider == "ollama"
             assert pin.dimensions == 4
             assert pin.revision == "test-v1"
+            fields = search.connection.execute(
+                """
+                SELECT field_name
+                FROM quail_embedding_fields
+                WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+                ORDER BY field_name
+                """,
+                ("local", "notes", version_id),
+            ).fetchall()
+            assert [str(row[0]) for row in fields] == ["body", "title"]
+            segments = search.connection.execute(
+                """
+                SELECT f.field_name, s.entry_id, s.segment_index
+                FROM quail_embedding_segments AS s
+                JOIN quail_embedding_fields AS f ON f.field_id = s.field_id
+                WHERE f.workspace_id = ? AND f.dataset_id = ? AND f.version_id = ?
+                ORDER BY f.field_name, s.entry_id, s.segment_index
+                """,
+                ("local", "notes", version_id),
+            ).fetchall()
+            assert segments == [
+                ("body", "e1", 0),
+                ("body", "e2", 0),
+                ("title", "e1", 0),
+                ("title", "e2", 0),
+            ]
     finally:
+        db.close()
+
+
+def test_engine_uses_warmed_source_semantic_without_dynamic_corpus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = _write_semantic_manifest(tmp_path)
+    (tmp_path / "data" / "notes.csv").write_text(
+        "id,title,body\ne1,Hello,climate notes\ne2,Other,hydrangea care\n",
+        encoding="utf-8",
+    )
+    config = load_config(manifest)
+    process_config(config, embedder_factory=lambda _profile: KeywordEmbedder(dimensions=4))
+    assert config.search_database is not None
+    db = open_core_db(config.database)
+    search = open_search_db(config.search_database)
+    try:
+        session = create_session(db, "local")
+        fake = KeywordEmbedder(dimensions=4)
+        similarity = SimilarityService(
+            search=search,
+            providers=ProvidersConfig(),
+            embedder_factory=lambda _profile: fake,
+        )
+
+        def _reject_dynamic(*_args: object, **_kwargs: object) -> dict[str, float | None]:
+            raise AssertionError("warmed source Semantic must not materialize dynamic corpus")
+
+        monkeypatch.setattr(SimilarityService, "semantic_scores_for_entries", _reject_dynamic)
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            score = Expression(Field("body"), Semantic("hydrangea"))
+            assert dispatch_call(engine, "count", (), {"group": G0.where(score > 0.5)}) == 1
+            ranked = dispatch_call(
+                engine,
+                "retrieve",
+                (),
+                {
+                    "group": G0,
+                    "rank": Ranking(expression=score),
+                    "limit": 2,
+                },
+            )
+            assert [entry.id for entry in ranked] == ["e2", "e1"]
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            similarity=similarity,
+        )
+        assert fake.calls == [("hydrangea",)]
+    finally:
+        search.close()
+        db.close()
+
+
+def test_unregistered_source_semantic_keeps_dynamic_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = _write_semantic_manifest(tmp_path)
+    text = manifest.read_text(encoding="utf-8").replace(
+        'revision = "test-v1"',
+        'revision = "test-v1"\nfields = ["body"]',
+    )
+    manifest.write_text(text, encoding="utf-8")
+    config = load_config(manifest)
+    process_config(config, embedder_factory=lambda _profile: FakeEmbedder(dimensions=4))
+    assert config.search_database is not None
+    db = open_core_db(config.database)
+    search = open_search_db(config.search_database)
+    try:
+        session = create_session(db, "local")
+        fake = FakeEmbedder(dimensions=4)
+        similarity = SimilarityService(
+            search=search,
+            providers=ProvidersConfig(),
+            embedder_factory=lambda _profile: fake,
+        )
+        dynamic_calls: list[object] = []
+        original = SimilarityService.semantic_scores_for_entries
+
+        def _spy_dynamic(*args: object, **kwargs: object) -> dict[str, float | None]:
+            dynamic_calls.append(kwargs["corpus_by_entry"])
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(SimilarityService, "semantic_scores_for_entries", _spy_dynamic)
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            ranked = dispatch_call(
+                engine,
+                "retrieve",
+                (),
+                {
+                    "group": G0,
+                    "rank": Ranking(expression=Expression(Field("title"), Semantic("Hello"))),
+                    "limit": 1,
+                },
+            )
+            assert ranked[0].id == "e1"
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            similarity=similarity,
+        )
+        assert dynamic_calls
+        corpus = dynamic_calls[0]
+        assert isinstance(corpus, dict)
+        assert corpus.get("e1") == "Hello"
+        assert corpus.get("e2") == "Other"
+        assert any("Other" in call for call in fake.calls)
+    finally:
+        search.close()
+        db.close()
+
+
+def test_source_semantic_batches_targets_like_dynamic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from quail.search.similarity import similarity as similarity_mod
+
+    manifest = _write_semantic_manifest(tmp_path)
+    config = load_config(manifest)
+    process_config(config, embedder_factory=lambda _profile: FakeEmbedder(dimensions=4))
+    assert config.search_database is not None
+    db = open_core_db(config.database)
+    search = open_search_db(config.search_database)
+    try:
+        version_id = str(
+            db.connection.execute(
+                "SELECT active_version_id FROM quail_datasets WHERE id = ?",
+                ("notes",),
+            ).fetchone()[0]
+        )
+        fake = FakeEmbedder(dimensions=4)
+        service = SimilarityService(
+            search=search,
+            providers=ProvidersConfig(),
+            embedder_factory=lambda _profile: fake,
+        )
+        query = {"kind": "LiteralTextList", "texts": ["hydrangea", "climate", "garden"]}
+        corpus = {"e1": "hydrangea care", "e2": "climate notes"}
+        dynamic_avg = service.semantic_scores_for_entries(
+            workspace_id="local",
+            dataset_id="notes",
+            version_id=version_id,
+            corpus_by_entry=corpus,
+            query_record=query,
+            input_aggregation="avg",
+            target_aggregation="avg",
+        )
+        dynamic_total = service.semantic_scores_for_entries(
+            workspace_id="local",
+            dataset_id="notes",
+            version_id=version_id,
+            corpus_by_entry=corpus,
+            query_record=query,
+            input_aggregation="total",
+            target_aggregation="total",
+        )
+        monkeypatch.setattr(similarity_mod, "_SCORE_TARGET_BATCH", 2)
+        distance_sql = 0
+        original_execute = search.connection.execute
+
+        def _counting_execute(*args: object, **kwargs: object) -> object:
+            nonlocal distance_sql
+            sql = str(args[0] if args else kwargs.get("sql", ""))
+            if "vector_distance_dot" in sql and "quail_embedding_segments" in sql:
+                distance_sql += 1
+            return original_execute(*args, **kwargs)
+
+        monkeypatch.setattr(search.connection, "execute", _counting_execute)
+
+        def _source(
+            *,
+            entry_ids: list[str],
+            all_entries: bool,
+            input_aggregation: str,
+            target_aggregation: str,
+        ) -> dict[str, float | None]:
+            scored = service.semantic_scores_for_source_entries(
+                workspace_id="local",
+                dataset_id="notes",
+                version_id=version_id,
+                entry_ids=entry_ids,
+                source_field="body",
+                all_entries=all_entries,
+                query_record=query,
+                input_aggregation=input_aggregation,
+                target_aggregation=target_aggregation,
+            )
+            assert scored is not None
+            return scored
+
+        source_avg = _source(
+            entry_ids=["e1", "e2"],
+            all_entries=True,
+            input_aggregation="avg",
+            target_aggregation="avg",
+        )
+        source_total = _source(
+            entry_ids=["e1", "e2"],
+            all_entries=True,
+            input_aggregation="total",
+            target_aggregation="total",
+        )
+        subset = _source(
+            entry_ids=["e2"],
+            all_entries=False,
+            input_aggregation="avg",
+            target_aggregation="avg",
+        )
+        assert distance_sql == 6
+        assert source_avg["e1"] == pytest.approx(dynamic_avg["e1"])
+        assert source_avg["e2"] == pytest.approx(dynamic_avg["e2"])
+        assert source_total["e1"] == pytest.approx(dynamic_total["e1"])
+        assert source_total["e2"] == pytest.approx(dynamic_total["e2"])
+        assert subset["e2"] == pytest.approx(dynamic_avg["e2"])
+        assert "e1" not in subset
+    finally:
+        search.close()
         db.close()
 
 
