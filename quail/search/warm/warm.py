@@ -167,12 +167,11 @@ def clear_search_version(
             """,
             (workspace_id, dataset_id, version_id),
         )
-        connection.execute(
-            """
-            DELETE FROM quail_embedding_fields
-            WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
-            """,
-            (workspace_id, dataset_id, version_id),
+        _delete_embedding_field_maps(
+            search,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
         )
         connection.execute(
             """
@@ -332,12 +331,11 @@ def warm_dataset(
             """,
             (workspace_id, dataset_id, version_id),
         )
-        search.connection.execute(
-            """
-            DELETE FROM quail_embedding_fields
-            WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
-            """,
-            (workspace_id, dataset_id, version_id),
+        _delete_embedding_field_maps(
+            search,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
         )
         search.connection.commit()
     if profile is None:
@@ -347,12 +345,11 @@ def warm_dataset(
             dataset_id=dataset_id,
             version_id=version_id,
         )
-        search.connection.execute(
-            """
-            DELETE FROM quail_embedding_fields
-            WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
-            """,
-            (workspace_id, dataset_id, version_id),
+        _delete_embedding_field_maps(
+            search,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
         )
         search.connection.commit()
     for field_name, entry_segments in field_corpora.items():
@@ -522,6 +519,35 @@ def _unique_texts(texts: Sequence[str]) -> list[str]:
     return unique
 
 
+def _delete_embedding_field_maps(
+    search: SearchDb,
+    *,
+    workspace_id: str,
+    dataset_id: str,
+    version_id: str,
+) -> None:
+    """Drop compact field/segment maps for one version (children first)."""
+
+    connection = search.connection
+    connection.execute(
+        """
+        DELETE FROM quail_embedding_segments
+        WHERE field_id IN (
+          SELECT field_id FROM quail_embedding_fields
+          WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+        )
+        """,
+        (workspace_id, dataset_id, version_id),
+    )
+    connection.execute(
+        """
+        DELETE FROM quail_embedding_fields
+        WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+        """,
+        (workspace_id, dataset_id, version_id),
+    )
+
+
 def _replace_embedding_segments(
     search: SearchDb,
     *,
@@ -534,12 +560,11 @@ def _replace_embedding_segments(
     """Replace compact source entry/segment mappings for one embedding profile."""
 
     connection = search.connection
-    connection.execute(
-        """
-        DELETE FROM quail_embedding_fields
-        WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
-        """,
-        (workspace_id, dataset_id, version_id),
+    _delete_embedding_field_maps(
+        search,
+        workspace_id=workspace_id,
+        dataset_id=dataset_id,
+        version_id=version_id,
     )
     rows: list[tuple[int, str, int, str]] = []
 

@@ -61,6 +61,9 @@ def open_search_db(path: str | Path) -> SearchDb:
         connection.execute("PRAGMA journal_mode = WAL")
         connection.execute("PRAGMA synchronous = FULL")
         connection.execute("PRAGMA busy_timeout = 5000")
+        enabled = int(connection.execute("PRAGMA foreign_keys").fetchone()[0])
+        if enabled != 1:
+            raise SearchError("Turso did not enable foreign-key enforcement")
         _apply_migrations(connection)
     except Exception:
         connection.close()

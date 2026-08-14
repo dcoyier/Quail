@@ -439,17 +439,27 @@ def test_source_semantic_batches_targets_like_dynamic(
             providers=ProvidersConfig(),
             embedder_factory=lambda _profile: fake,
         )
-        query = {"kind": "LiteralTextList", "texts": ["hydrangea", "climate"]}
-        dynamic = service.semantic_scores_for_entries(
+        query = {"kind": "LiteralTextList", "texts": ["hydrangea", "climate", "garden"]}
+        corpus = {"e1": "hydrangea care", "e2": "climate notes"}
+        dynamic_avg = service.semantic_scores_for_entries(
             workspace_id="local",
             dataset_id="notes",
             version_id=version_id,
-            corpus_by_entry={"e1": "hydrangea care", "e2": "climate notes"},
+            corpus_by_entry=corpus,
             query_record=query,
             input_aggregation="avg",
             target_aggregation="avg",
         )
-        monkeypatch.setattr(similarity_mod, "_SCORE_TARGET_BATCH", 1)
+        dynamic_total = service.semantic_scores_for_entries(
+            workspace_id="local",
+            dataset_id="notes",
+            version_id=version_id,
+            corpus_by_entry=corpus,
+            query_record=query,
+            input_aggregation="total",
+            target_aggregation="total",
+        )
+        monkeypatch.setattr(similarity_mod, "_SCORE_TARGET_BATCH", 2)
         distance_sql = 0
         original_execute = search.connection.execute
 
@@ -461,21 +471,53 @@ def test_source_semantic_batches_targets_like_dynamic(
             return original_execute(*args, **kwargs)
 
         monkeypatch.setattr(search.connection, "execute", _counting_execute)
-        source = service.semantic_scores_for_source_entries(
-            workspace_id="local",
-            dataset_id="notes",
-            version_id=version_id,
+
+        def _source(
+            *,
+            entry_ids: list[str],
+            all_entries: bool,
+            input_aggregation: str,
+            target_aggregation: str,
+        ) -> dict[str, float | None]:
+            scored = service.semantic_scores_for_source_entries(
+                workspace_id="local",
+                dataset_id="notes",
+                version_id=version_id,
+                entry_ids=entry_ids,
+                source_field="body",
+                all_entries=all_entries,
+                query_record=query,
+                input_aggregation=input_aggregation,
+                target_aggregation=target_aggregation,
+            )
+            assert scored is not None
+            return scored
+
+        source_avg = _source(
             entry_ids=["e1", "e2"],
-            source_field="body",
             all_entries=True,
-            query_record=query,
             input_aggregation="avg",
             target_aggregation="avg",
         )
-        assert source is not None
-        assert distance_sql == 2
-        assert source["e1"] == pytest.approx(dynamic["e1"])
-        assert source["e2"] == pytest.approx(dynamic["e2"])
+        source_total = _source(
+            entry_ids=["e1", "e2"],
+            all_entries=True,
+            input_aggregation="total",
+            target_aggregation="total",
+        )
+        subset = _source(
+            entry_ids=["e2"],
+            all_entries=False,
+            input_aggregation="avg",
+            target_aggregation="avg",
+        )
+        assert distance_sql == 6
+        assert source_avg["e1"] == pytest.approx(dynamic_avg["e1"])
+        assert source_avg["e2"] == pytest.approx(dynamic_avg["e2"])
+        assert source_total["e1"] == pytest.approx(dynamic_total["e1"])
+        assert source_total["e2"] == pytest.approx(dynamic_total["e2"])
+        assert subset["e2"] == pytest.approx(dynamic_avg["e2"])
+        assert "e1" not in subset
     finally:
         search.close()
         db.close()

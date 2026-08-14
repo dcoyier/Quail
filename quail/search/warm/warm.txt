@@ -56,8 +56,12 @@ warm_dataset:
   Write a ready warm receipt storing the search-build fingerprint.
   Give back WarmDatasetResult.
 
+_delete_embedding_field_maps:
+  Delete quail_embedding_segments for the version's field_ids first, then
+  delete quail_embedding_fields. Do not rely on CASCADE alone.
+
 _replace_embedding_segments:
-  Delete prior field registrations and mappings for the dataset version.
+  Call _delete_embedding_field_maps for the dataset version.
   Register every embedding source field collected for this warm.
   Give each field registration a compact integer field_id.
   For each field, remember field_id, entry id, segment index, and text_hash.
