@@ -319,6 +319,8 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
   process-warmed segment map and does not load source cells. Prefix ops,
   analysis fields, and source fields omitted from that set still materialize
   cells. Re-run `quail process` after this layout change.
+  If that cell-load path hits exec time/RSS on tags you will keep scoring,
+  see **Promote tags locally**.
 
 ---
 
@@ -327,14 +329,18 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
 Analysis tags are session-only. `Lexical` / `Semantic` on them still loads
 cells. After `quail process`, **source** fields use the warmed indexes.
 
-On **local unrestricted** MCP, `quail_export_csv(session_id, dataset_id)`
-writes source columns plus this session's tags to a new CSV on the host
-(you get `path`, not the file body). It does not reprocess or edit
+If you are hitting those limits on an **analysis field**, tag the values you
+will reuse, then on **local unrestricted** MCP call
+`quail_export_csv(session_id, dataset_id)`. Prefix ops (`Slice` / `AsText`)
+on source also load cells — export does not freeze those expressions; `tag`
+the computed text first if it should become a source column.
+The tool writes source columns plus this session's tags to a new CSV on the
+host (you get `path`, not the file body). It does not reprocess or edit
 `quail.toml`. Point the **same** dataset `id` at that file, stop `quail run`,
 `quail process`, start `run`, then `quail_start_session`. A new id is a
-different dataset. Bindings are not exported. Do not use this for one-off
-filters, `Slice` / regex pipelines, or to copy source fields that are
-already fast. Clerk MCP does not offer this tool.
+different dataset. Bindings are not exported. Skip this for one-off filters
+or to copy source fields that are already fast. Clerk MCP does not offer
+this tool.
 
 ---
 
