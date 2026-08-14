@@ -266,7 +266,133 @@ def test_process_pins_embedding_profile(tmp_path: Path) -> None:
             assert pin.provider == "ollama"
             assert pin.dimensions == 4
             assert pin.revision == "test-v1"
+            fields = search.connection.execute(
+                """
+                SELECT field_name
+                FROM quail_embedding_fields
+                WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+                ORDER BY field_name
+                """,
+                ("local", "notes", version_id),
+            ).fetchall()
+            assert [str(row[0]) for row in fields] == ["body", "title"]
+            segments = search.connection.execute(
+                """
+                SELECT f.field_name, s.entry_id, s.segment_index
+                FROM quail_embedding_segments AS s
+                JOIN quail_embedding_fields AS f ON f.field_id = s.field_id
+                WHERE f.workspace_id = ? AND f.dataset_id = ? AND f.version_id = ?
+                ORDER BY f.field_name, s.entry_id, s.segment_index
+                """,
+                ("local", "notes", version_id),
+            ).fetchall()
+            assert segments == [
+                ("body", "e1", 0),
+                ("body", "e2", 0),
+                ("title", "e1", 0),
+                ("title", "e2", 0),
+            ]
     finally:
+        db.close()
+
+
+def test_engine_uses_warmed_source_semantic_without_dynamic_corpus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = _write_semantic_manifest(tmp_path)
+    config = load_config(manifest)
+    process_config(config, embedder_factory=lambda _profile: KeywordEmbedder(dimensions=4))
+    assert config.search_database is not None
+    db = open_core_db(config.database)
+    search = open_search_db(config.search_database)
+    try:
+        session = create_session(db, "local")
+        fake = KeywordEmbedder(dimensions=4)
+        similarity = SimilarityService(
+            search=search,
+            providers=ProvidersConfig(),
+            embedder_factory=lambda _profile: fake,
+        )
+
+        def _reject_dynamic(*_args: object, **_kwargs: object) -> dict[str, float | None]:
+            raise AssertionError("warmed source Semantic must not materialize dynamic corpus")
+
+        monkeypatch.setattr(SimilarityService, "semantic_scores_for_entries", _reject_dynamic)
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            ranked = dispatch_call(
+                engine,
+                "retrieve",
+                (),
+                {
+                    "group": G0,
+                    "rank": Ranking(
+                        expression=Expression(Field("body"), Semantic("hydrangea"))
+                    ),
+                    "limit": 2,
+                },
+            )
+            assert [entry.id for entry in ranked] == ["e1", "e2"]
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            similarity=similarity,
+        )
+        assert fake.calls == [("hydrangea",)]
+    finally:
+        search.close()
+        db.close()
+
+
+def test_unregistered_source_semantic_keeps_dynamic_fallback(tmp_path: Path) -> None:
+    manifest = _write_semantic_manifest(tmp_path)
+    text = manifest.read_text(encoding="utf-8").replace(
+        'revision = "test-v1"',
+        'revision = "test-v1"\nfields = ["body"]',
+    )
+    manifest.write_text(text, encoding="utf-8")
+    config = load_config(manifest)
+    process_config(config, embedder_factory=lambda _profile: KeywordEmbedder(dimensions=4))
+    assert config.search_database is not None
+    db = open_core_db(config.database)
+    search = open_search_db(config.search_database)
+    try:
+        session = create_session(db, "local")
+        fake = KeywordEmbedder(dimensions=4)
+        similarity = SimilarityService(
+            search=search,
+            providers=ProvidersConfig(),
+            embedder_factory=lambda _profile: fake,
+        )
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            ranked = dispatch_call(
+                engine,
+                "retrieve",
+                (),
+                {
+                    "group": G0,
+                    "rank": Ranking(expression=Expression(Field("title"), Semantic("Hello"))),
+                    "limit": 1,
+                },
+            )
+            assert ranked[0].id == "e1"
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            similarity=similarity,
+        )
+        assert any("Hello" in call for call in fake.calls)
+    finally:
+        search.close()
         db.close()
 
 

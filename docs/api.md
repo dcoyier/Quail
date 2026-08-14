@@ -314,6 +314,9 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
   four query shapes work; entry targets read the expression root field. If search
   isn’t available, you get a repairable runtime diagnostic — fix config and
   rerun the whole exec.
+  On a bare source field (no `Slice` / `AsText` / … in front), scoring uses the
+  process-warmed segment map and does not load source cells. Re-run
+  `quail process` after this layout change.
 
 ---
 
