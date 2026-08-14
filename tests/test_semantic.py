@@ -523,6 +523,71 @@ def test_source_semantic_batches_targets_like_dynamic(
         db.close()
 
 
+def test_dynamic_and_source_semantic_share_cosine_batches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = _write_semantic_manifest(tmp_path)
+    config = load_config(manifest)
+    process_config(config, embedder_factory=lambda _profile: FakeEmbedder(dimensions=4))
+    assert config.search_database is not None
+    db = open_core_db(config.database)
+    search = open_search_db(config.search_database)
+    try:
+        version_id = str(
+            db.connection.execute(
+                "SELECT active_version_id FROM quail_datasets WHERE id = ?",
+                ("notes",),
+            ).fetchone()[0]
+        )
+        service = SimilarityService(
+            search=search,
+            providers=ProvidersConfig(),
+            embedder_factory=lambda _profile: FakeEmbedder(dimensions=4),
+        )
+        tables: list[str] = []
+        original = SimilarityService._pairwise_cosine_batches
+
+        def _spy(self: SimilarityService, *args: object, **kwargs: object) -> object:
+            sql = str(kwargs["segment_sql"])
+            if "quail_semantic_score_stage" in sql:
+                tables.append("stage")
+            elif "quail_embedding_segments" in sql:
+                tables.append("source")
+            else:
+                tables.append("other")
+            return original(self, *args, **kwargs)
+
+        monkeypatch.setattr(SimilarityService, "_pairwise_cosine_batches", _spy)
+        query = {"kind": "LiteralText", "text": "hydrangea"}
+        dynamic = service.semantic_scores_for_entries(
+            workspace_id="local",
+            dataset_id="notes",
+            version_id=version_id,
+            corpus_by_entry={"e1": "hydrangea care", "e2": "climate notes"},
+            query_record=query,
+            input_aggregation=None,
+            target_aggregation=None,
+        )
+        source = service.semantic_scores_for_source_entries(
+            workspace_id="local",
+            dataset_id="notes",
+            version_id=version_id,
+            entry_ids=["e1", "e2"],
+            source_field="body",
+            all_entries=True,
+            query_record=query,
+            input_aggregation=None,
+            target_aggregation=None,
+        )
+        assert tables == ["stage", "source"]
+        assert source is not None
+        assert source["e1"] == pytest.approx(dynamic["e1"])
+        assert source["e2"] == pytest.approx(dynamic["e2"])
+    finally:
+        search.close()
+        db.close()
+
+
 def test_semantic_ranks_with_fake_embedder(tmp_path: Path) -> None:
     csv_path = tmp_path / "notes.csv"
     csv_path.write_text(
