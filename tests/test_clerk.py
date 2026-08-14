@@ -537,3 +537,132 @@ def test_clerk_connector_file_route_requires_bearer(tmp_path: Path) -> None:
     ok = client.get(url, headers={"Authorization": "Bearer alice-token"})
     assert ok.status_code == 200
     assert ok.content.startswith(b"\x89PNG")
+
+
+def _acme_ping_catalog() -> object:
+    from quail.connectors.load import ConnectedProvider, ConnectorCatalog, WorkspaceConnectorBundle
+    from quail.connectors.sdk import ConnectorManifest, ToolResult, ToolSpec
+
+    class _PingProvider:
+        def call_tool(self, context, name, arguments):
+            del context, name, arguments
+            return ToolResult(structured_content={"ok": True})
+
+        def dataset_document(self, context, dataset_id):
+            del context, dataset_id
+            return None
+
+        def handle_route(self, context, route_id, path_params):
+            del context, route_id, path_params
+            return None
+
+    class _PingConnector:
+        def __init__(self) -> None:
+            self._manifest = ConnectorManifest(
+                id="garden_gate",
+                version="1.0.0",
+                tools=(
+                    ToolSpec(
+                        name="garden_ping",
+                        title="Ping",
+                        description="Workspace-bound ping.",
+                        input_schema={
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": False,
+                        },
+                    ),
+                ),
+            )
+
+        @property
+        def manifest(self):
+            return self._manifest
+
+        def read_resource(self, uri: str) -> str:
+            raise ValueError(uri)
+
+        def connect(self, runtime):
+            del runtime
+            return _PingProvider()
+
+    connector = _PingConnector()
+    connected = ConnectedProvider(
+        extension_id="garden_gate",
+        version="1.0.0",
+        manifest=connector.manifest,
+        connector=connector,
+        provider=_PingProvider(),
+        dataset_ids=frozenset(),
+        provides_docs=False,
+    )
+    return ConnectorCatalog(
+        by_workspace={
+            "acme": WorkspaceConnectorBundle(
+                workspace_id="acme",
+                providers=(connected,),
+                docs_by_dataset={},
+            )
+        }
+    )
+
+
+def test_clerk_tools_list_follows_sticky_workspace(tmp_path: Path) -> None:
+    from quail.mcp.server import create_clerk_mcp_server
+
+    catalog = _acme_ping_catalog()
+    manifest = _write_clerk_manifest(tmp_path)
+    config = load_config(manifest)
+    apply_config(config).close()
+    verifier = StaticTokenVerifier({"alice-token": "user_alice"})
+    server = create_clerk_mcp_server(config, verifier=verifier, connector_catalog=catalog)
+
+    async def run() -> None:
+        with bearer_token("alice-token"):
+            names = {tool.name for tool in await server.list_tools()}
+            assert "garden_ping" in names
+            assert "quail_exec" in names
+            assert "quail_switch_workspace" in names
+            ping = _as_dict(await server.call_tool("garden_ping", {}))
+            assert ping["ok"] is True
+            switched = _as_dict(
+                await server.call_tool("quail_switch_workspace", {"workspace_id": "labs"})
+            )
+            assert switched["active_workspace_id"] == "labs"
+            names = {tool.name for tool in await server.list_tools()}
+            assert "garden_ping" not in names
+            assert "quail_exec" in names
+            assert "quail_switch_workspace" in names
+            failed = await server.call_tool("garden_ping", {})
+            assert _is_error(failed)
+            assert (
+                _as_dict(failed)["diagnostic"]["stable_error_code"]
+                == "connector_not_in_workspace"
+            )
+
+    asyncio.run(run())
+
+
+def test_clerk_tools_list_omits_connectors_when_unbound(tmp_path: Path) -> None:
+    from quail.mcp.server import create_clerk_mcp_server
+
+    catalog = _acme_ping_catalog()
+    manifest = _write_clerk_manifest(tmp_path, alice_default=None)
+    config = load_config(manifest)
+    apply_config(config).close()
+    verifier = StaticTokenVerifier({"alice-token": "user_alice"})
+    server = create_clerk_mcp_server(config, verifier=verifier, connector_catalog=catalog)
+
+    async def run() -> None:
+        with bearer_token("alice-token"):
+            names = {tool.name for tool in await server.list_tools()}
+            assert "garden_ping" not in names
+            assert "quail_switch_workspace" in names
+            switched = _as_dict(
+                await server.call_tool("quail_switch_workspace", {"workspace_id": "acme"})
+            )
+            assert switched["active_workspace_id"] == "acme"
+            names = {tool.name for tool in await server.list_tools()}
+            assert "garden_ping" in names
+
+    asyncio.run(run())

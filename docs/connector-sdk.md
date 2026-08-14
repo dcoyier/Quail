@@ -54,8 +54,10 @@ such as preview base64). `structuredContent` stays JSON-only.
 3. On `quail run`, Quail loads the entry point, checks version match, connects
    each workspace binding, and **fails closed** if two+ bound connectors both
    return documentation for the same `dataset_id`.
-4. MCP registers tools / resources / widgets. `quail_get_dataset_info` calls
-   the owning provider’s `dataset_document` when present.
+4. MCP registers tools / resources / widgets. `tools/list` shows connector
+   tools only for the active workspace (core tools stay listed).
+   `quail_get_dataset_info` calls the owning provider’s `dataset_document`
+   when present.
 
 Tools may overlap on the same dataset; only competing **docs** are rejected.
 Tool names must not match the core MCP surface (`quail_exec`, `quail_setup`,
@@ -123,4 +125,4 @@ package (tool + notes docs + widget) and install notes.
 | Two connectors document the same bound `dataset_id` | `quail run` fails |
 | Two connectors claim the same tool name | `quail run` fails |
 | Connector tool name matches a core MCP tool | `quail run` fails |
-| Connector active only in workspace A | Does not appear in workspace B |
+| Connector active only in workspace A | `tools/list` omits it in workspace B; calls fail `CONNECTOR_NOT_IN_WORKSPACE` |
