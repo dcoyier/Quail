@@ -115,6 +115,26 @@ name = "Notes"
     return manifest
 
 
+def _embedding_map_counts(search: object, version_id: str) -> tuple[int, int]:
+    fields = search.connection.execute(  # type: ignore[attr-defined]
+        """
+        SELECT COUNT(*) FROM quail_embedding_fields
+        WHERE workspace_id = ? AND dataset_id = ? AND version_id = ?
+        """,
+        ("local", "notes", version_id),
+    ).fetchone()
+    segments = search.connection.execute(  # type: ignore[attr-defined]
+        """
+        SELECT COUNT(*)
+        FROM quail_embedding_segments AS s
+        JOIN quail_embedding_fields AS f ON f.field_id = s.field_id
+        WHERE f.workspace_id = ? AND f.dataset_id = ? AND f.version_id = ?
+        """,
+        ("local", "notes", version_id),
+    ).fetchone()
+    return int(fields[0]), int(segments[0])
+
+
 def test_process_warms_lexical_and_embeddings(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path)
     config = load_config(manifest)
@@ -244,12 +264,25 @@ def test_fingerprint_change_marks_not_ready_before_deleting_vectors(
                 ).fetchone()
                 assert row is not None
                 events.append(f"vectors={int(row[0])}")
+                fields_n, segs_n = _embedding_map_counts(search, version)
+                events.append(f"maps={fields_n},{segs_n}")
             original_put(*args, **kwargs)
 
         def wrapped_execute(sql: object, parameters: object = ()) -> object:
             sql_text = " ".join(str(sql).split())
             if "DELETE FROM quail_embedding_vectors" in sql_text:
                 events.append("delete_vectors")
+                receipt = get_warm_receipt(
+                    search,
+                    workspace_id="local",
+                    dataset_id="notes",
+                    version_id=version,
+                )
+                assert receipt is not None
+                assert receipt.lexical_ready is False
+                assert receipt.embedding_ready is False
+            if "DELETE FROM quail_embedding_segments" in sql_text:
+                events.append("delete_maps")
                 receipt = get_warm_receipt(
                     search,
                     workspace_id="local",
@@ -281,9 +314,15 @@ def test_fingerprint_change_marks_not_ready_before_deleting_vectors(
         )
         assert "not_ready" in events
         assert "delete_vectors" in events
+        assert "delete_maps" in events
         assert events.index("not_ready") < events.index("delete_vectors")
+        assert events.index("not_ready") < events.index("delete_maps")
         vector_marks = [item for item in events if item.startswith("vectors=")]
         assert vector_marks and int(vector_marks[0].split("=", 1)[1]) > 0
+        map_marks = [item for item in events if item.startswith("maps=")]
+        assert map_marks
+        fields_n, segs_n = map_marks[0].split("=", 1)[1].split(",")
+        assert int(fields_n) > 0 and int(segs_n) > 0
     finally:
         search.close()
         db.close()
@@ -384,6 +423,8 @@ def test_clear_wipes_then_rewarms(tmp_path: Path) -> None:
             ("local", "notes", version),
         ).fetchone()
         assert vector_count is not None and int(vector_count[0]) > 0
+        fields_n, segs_n = _embedding_map_counts(search, version)
+        assert fields_n > 0 and segs_n > 0
     finally:
         search.close()
 
@@ -906,6 +947,7 @@ def test_process_deletes_pin_when_embedding_removed(tmp_path: Path) -> None:
             )
             is not None
         )
+        assert _embedding_map_counts(search, version)[0] > 0
     finally:
         search.close()
 
@@ -919,6 +961,7 @@ def test_process_deletes_pin_when_embedding_removed(tmp_path: Path) -> None:
             )
             is None
         )
+        assert _embedding_map_counts(search2, version) == (0, 0)
     finally:
         search2.close()
 
@@ -943,6 +986,7 @@ def test_warm_deletes_pin_before_ready_receipt_when_embedding_omitted(
             )
             is not None
         )
+        assert _embedding_map_counts(search, version)[0] > 0
         warm_dataset(
             db,
             search,
@@ -959,6 +1003,7 @@ def test_warm_deletes_pin_before_ready_receipt_when_embedding_omitted(
             )
             is None
         )
+        assert _embedding_map_counts(search, version) == (0, 0)
         require_warm_ready(
             search,
             workspace_id="local",

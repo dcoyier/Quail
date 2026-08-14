@@ -815,20 +815,34 @@ class QueryEngine:
                         "Semantic search is not configured",
                         repair_hint=_SEMANTIC_NOT_CONFIGURED_HINT,
                     )
-                scored = self._similarity.semantic_scores_for_entries(
-                    workspace_id=self._scope.workspace_id,
-                    dataset_id=self._scope.dataset_id,
-                    version_id=self._scope.dataset_version_id,
-                    corpus_by_entry=self._corpus_by_entry(
-                        expression,
-                        prefix_ops,
-                        missing_ids,
-                        search_scores,
-                    ),
-                    query_record=query_record,
-                    input_aggregation=operation.params.get("input_aggregation"),
-                    target_aggregation=operation.params.get("target_aggregation"),
-                )
+                scored = None
+                if source_field is not None:
+                    scored = self._similarity.semantic_scores_for_source_entries(
+                        workspace_id=self._scope.workspace_id,
+                        dataset_id=self._scope.dataset_id,
+                        version_id=self._scope.dataset_version_id,
+                        entry_ids=missing_ids,
+                        source_field=source_field,
+                        all_entries=all_entries,
+                        query_record=query_record,
+                        input_aggregation=operation.params.get("input_aggregation"),
+                        target_aggregation=operation.params.get("target_aggregation"),
+                    )
+                if scored is None:
+                    scored = self._similarity.semantic_scores_for_entries(
+                        workspace_id=self._scope.workspace_id,
+                        dataset_id=self._scope.dataset_id,
+                        version_id=self._scope.dataset_version_id,
+                        corpus_by_entry=self._corpus_by_entry(
+                            expression,
+                            prefix_ops,
+                            missing_ids,
+                            search_scores,
+                        ),
+                        query_record=query_record,
+                        input_aggregation=operation.params.get("input_aggregation"),
+                        target_aggregation=operation.params.get("target_aggregation"),
+                    )
             else:
                 if self._lexical is None:
                     raise QuailRuntimeError(
