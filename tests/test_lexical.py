@@ -175,7 +175,7 @@ def test_engine_uses_warmed_source_lexical_without_dynamic_corpus_or_counts(
 
     csv_path = tmp_path / "notes.csv"
     csv_path.write_text(
-        "id,body\ne1,hydrangea care tips\ne2,climate policy notes\n",
+        "id,body\ne1,climate policy notes\ne2,hydrangea care tips\n",
         encoding="utf-8",
     )
     db = open_core_db(tmp_path / "core.turso")
@@ -218,7 +218,8 @@ def test_engine_uses_warmed_source_lexical_without_dynamic_corpus_or_counts(
                 "limit": 2,
             },
         )
-        assert [entry.id for entry in ranked] == ["e1", "e2"]
+        assert [entry.id for entry in ranked] == ["e2", "e1"]
+        assert dispatch_call(engine, "count", (), {"group": G0.where(score > 0)}) == 1
 
     try:
         run_analysis(
