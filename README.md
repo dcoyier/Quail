@@ -71,8 +71,13 @@ uv run python -m quail.mcp_client call quail_exec @exec.json
   TOML, then serves MCP. Never activates.
 
 Re-run `process` after changing `[datasets.embedding]` (including `fields`) or
-`[search.warm]`. `quail process --clear` wipes search artifacts for versions
-being warmed and rebuilds them; core CSV data is untouched.
+`[search.warm]`. Keep the same dataset `id` when the CSV changes: embeddings
+for unchanged text are copied from any prior version of that `id` with the same
+embedding profile; only new strings are embedded. A new `id` rebuilds from
+scratch. Changing the embedding profile (provider, model, dimensions, revision,
+or `fields`) also rebuilds. `quail process --clear` wipes search artifacts for
+versions being warmed and rebuilds them without copying; core CSV data is
+untouched.
 
 `[hosting] max_concurrent_executions` (default `2`) caps simultaneous
 `quail_exec` work process-wide. Restart `quail run` after changing it.
