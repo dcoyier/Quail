@@ -471,6 +471,14 @@ def test_field_group_members_resolve_against_catalog(tmp_path: Path) -> None:
                 dispatch_call(
                     engine, "retrieve", (), {"unit": fields, "group": unknown, "limit": 50}
                 )
+            foreign = Field("title", bound_dataset_id="elsewhere")
+            with pytest.raises(QuailScopeError, match="no join"):
+                dispatch_call(
+                    engine,
+                    "retrieve",
+                    (),
+                    {"unit": Unit("values", foreign), "limit": 5},
+                )
 
         run_analysis(
             db,

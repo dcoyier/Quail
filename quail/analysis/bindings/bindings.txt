@@ -48,3 +48,10 @@ require_namespace_name(name):
 binding_to_payload / binding_from_payload / bindings_to_payload /
 bindings_from_payload:
   Convert EncodedBinding maps for the worker NDJSON protocol.
+
+stamp_encoded_bindings(bindings, dataset_id):
+  Require a non-empty dataset_id.
+  Walk each EncodedBinding value.
+  On Field records and GroupExpr records that lack bound_dataset_id, remember
+  dataset_id.
+  Give back a new EncodedBinding map.

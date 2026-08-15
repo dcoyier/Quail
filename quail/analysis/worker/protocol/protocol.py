@@ -33,7 +33,10 @@ def encode_value(value: Any) -> dict[str, Any]:
     if value is None or isinstance(value, bool | int | float | str):
         return {"kind": "literal", "value": value}
     if isinstance(value, Field):
-        return {"kind": "Field", "name": value.name, "field_kind": value.kind}
+        encoded = {"kind": "Field", "name": value.name, "field_kind": value.kind}
+        if value.bound_dataset_id:
+            encoded["bound_dataset_id"] = value.bound_dataset_id
+        return encoded
     if isinstance(value, Entry):
         return {
             "kind": "Entry",
@@ -70,7 +73,7 @@ def encode_value(value: Any) -> dict[str, Any]:
             encoded["right"] = encode_value(value.right)
         return encoded
     if isinstance(value, GroupExpr):
-        return {
+        encoded = {
             "kind": "GroupExpr",
             "scope": value.scope,
             "name": value.name,
@@ -82,6 +85,9 @@ def encode_value(value: Any) -> dict[str, Any]:
             "operator": value.operator,
             "right": None if value.right is None else encode_value(value.right),
         }
+        if value.bound_dataset_id:
+            encoded["bound_dataset_id"] = value.bound_dataset_id
+        return encoded
     if isinstance(value, Ranking):
         return {
             "kind": "Ranking",
@@ -107,7 +113,11 @@ def decode_value(payload: dict[str, Any]) -> Any:
     if kind == "literal":
         return payload.get("value")
     if kind == "Field":
-        return Field(payload["name"], kind=payload.get("field_kind"))
+        return Field(
+            payload["name"],
+            kind=payload.get("field_kind"),
+            bound_dataset_id=payload.get("bound_dataset_id"),
+        )
     if kind == "Entry":
         return make_entry(
             payload["id"],
@@ -144,6 +154,7 @@ def decode_value(payload: dict[str, Any]) -> Any:
             and payload.get("operator") is None
             and payload.get("predicate") is None
             and payload.get("members") is None
+            and not payload.get("bound_dataset_id")
         ):
             return base
         kwargs: dict[str, Any] = {"scope": payload["scope"]}
@@ -158,6 +169,9 @@ def decode_value(payload: dict[str, Any]) -> Any:
             kwargs["operator"] = payload["operator"]
             if payload.get("right") is not None:
                 kwargs["right"] = decode_value(payload["right"])
+        bound_dataset_id = payload.get("bound_dataset_id")
+        if isinstance(bound_dataset_id, str) and bound_dataset_id:
+            kwargs["bound_dataset_id"] = bound_dataset_id
         return GroupExpr(**kwargs)
     if kind == "Ranking":
         if payload.get("expression") is not None:

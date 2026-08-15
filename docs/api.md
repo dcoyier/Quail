@@ -140,6 +140,10 @@ Use `== None` / `!= None`, not `is None`.
 ## Core rules (do not violate these)
 
 1. **One dataset per exec** — the active immutable version of `dataset_id`.
+   Bindings (Field, GroupExpr, Entry) saved against another `dataset_id` fail
+   here; there is no join. Switch `dataset_id` or rebuild the recipe. Analysis
+   tags live on that dataset **version**; after the active version changes,
+   retag on the new version.
 2. **Source data is frozen** — only analysis fields/tags change, and only in-session.
 3. **Print-only output** — success returns the print buffer; failure returns none of it.
 4. **Atomic exec** — all tags/bindings/prints commit together or not at all.

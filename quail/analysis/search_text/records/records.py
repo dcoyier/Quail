@@ -35,6 +35,7 @@ def group_expr_from_record(record: Any) -> GroupExpr:
         and predicate_record is None
         and members_record is None
         and operator is None
+        and not record.get("bound_dataset_id")
     ):
         return G0 if name == "G0" else G1
 
@@ -52,6 +53,9 @@ def group_expr_from_record(record: Any) -> GroupExpr:
         kwargs["left"] = group_expr_from_record(left_record)
         if right_record is not None:
             kwargs["right"] = group_expr_from_record(right_record)
+    bound_dataset_id = record.get("bound_dataset_id")
+    if isinstance(bound_dataset_id, str) and bound_dataset_id:
+        kwargs["bound_dataset_id"] = bound_dataset_id
     return GroupExpr(**kwargs)
 
 
@@ -101,7 +105,12 @@ def field_from_record(record: Any) -> Field:
     kind = record.get("kind")
     if not isinstance(name, str) or not name:
         raise QuailSyntaxError("Field record is malformed")
-    return Field(name, kind=kind)
+    bound_dataset_id = record.get("bound_dataset_id")
+    if bound_dataset_id is not None and (
+        not isinstance(bound_dataset_id, str) or not bound_dataset_id
+    ):
+        raise QuailSyntaxError("Field record is malformed")
+    return Field(name, kind=kind, bound_dataset_id=bound_dataset_id)
 
 
 def operation_from_record(record: Any) -> Operation:

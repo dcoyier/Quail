@@ -1,7 +1,8 @@
 group_expr_from_record(record):
   Rebuild a GroupExpr from GroupExpr.to_record() output.
-  Bare G0 / G1 records give back the built-ins.
+  Bare G0 / G1 records without bound_dataset_id give back the built-ins.
   Otherwise rebuild name, predicate, members, or composition forms.
+  Remember bound_dataset_id when it is a non-empty string.
   Raise QuailRuntimeError when the record is malformed.
 
 entry_from_record(record):
@@ -11,3 +12,4 @@ entry_from_record(record):
 predicate_from_record / expression_from_record / field_from_record /
 operation_from_record:
   Rebuild nested symbolic objects from their to_record payloads.
+  field_from_record remembers bound_dataset_id when it is a non-empty string.

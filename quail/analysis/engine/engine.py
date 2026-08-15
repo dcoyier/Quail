@@ -88,6 +88,9 @@ class QueryEngine:
         return tuple(self._mutations)
 
     def retrieve(self, plan: RetrievePlan) -> list[Any]:
+        self._reject_foreign_dataset(plan.unit)
+        self._reject_foreign_dataset(plan.group)
+        self._reject_foreign_dataset(plan.ranking)
         if isinstance(plan.unit, Unit) and plan.unit.scope == "fields":
             fields = self._evaluate_field_group(plan.group)
             return self._apply_limit(fields, plan.limit, plan.order)
@@ -129,6 +132,8 @@ class QueryEngine:
         raise QuailSyntaxError(f"Unsupported unit scope: {plan.unit.scope}")
 
     def count(self, plan: CountPlan) -> int:
+        self._reject_foreign_dataset(plan.unit)
+        self._reject_foreign_dataset(plan.group)
         if isinstance(plan.unit, Unit) and plan.unit.scope == "fields":
             return len(self._evaluate_field_group(plan.group))
         search_scores = self._search_scores
@@ -165,6 +170,7 @@ class QueryEngine:
 
     def tag(self, plan: TagPlan) -> None:
         field = self._require_analysis_field(plan.field)
+        self._reject_foreign_dataset(plan.group)
         field_name = field.name
         mutated = False
         for entry_id in self._tag_entry_ids(plan.group):
@@ -176,6 +182,7 @@ class QueryEngine:
 
     def untag(self, plan: UntagPlan) -> None:
         field = self._require_analysis_field(plan.field)
+        self._reject_foreign_dataset(plan.group)
         field_name = field.name
         mutated = False
         for entry_id in self._tag_entry_ids(plan.group):
@@ -230,7 +237,11 @@ class QueryEngine:
 
         label = operation_kind or "Entry"
         if entry.dataset_id and entry.dataset_id != self._scope.dataset_id:
-            raise QuailScopeError(f"{label} does not belong to this dataset")
+            raise QuailScopeError(
+                f"{label} does not belong to this dataset. There is no join. "
+                f"Call quail_exec with dataset_id={entry.dataset_id!r}, "
+                "or rebuild the recipe on this dataset."
+            )
         if entry.dataset_version_id and entry.dataset_version_id != self._scope.dataset_version_id:
             raise QuailScopeError(f"{label} does not belong to this dataset version")
 
@@ -257,6 +268,7 @@ class QueryEngine:
         if isinstance(field, Field):
             name = field.name
             requested_kind = field.kind
+            self._reject_foreign_dataset(field)
         elif isinstance(field, str) and field:
             name = field
             requested_kind = None
@@ -275,9 +287,7 @@ class QueryEngine:
                 f"Field {name!r} is registered as {same_name.kind}, not {requested_kind}; "
                 f"use Field({name!r}, kind={same_name.kind!r}) or omit kind"
             )
-        if requested_kind is None:
-            raise QuailFieldError(f"Unknown field: {name}")
-        raise QuailFieldError(f"Unknown {requested_kind} field: {name}")
+        raise self._unknown_field_error(name, requested_kind)
 
     def check_bound_field_kind(self, field: Field) -> None:
         """At bind restore/commit: enforce explicit kind vs catalog; skip unknown names."""
@@ -323,6 +333,51 @@ class QueryEngine:
         self._all_entry_ids()
         assert self._entry_positions is not None
         return self._entry_positions.get(entry_id, len(self._entry_positions))
+
+    def _unknown_field_error(self, name: str, requested_kind: str | None) -> QuailFieldError:
+        if requested_kind is None:
+            message = f"Unknown field: {name}"
+        else:
+            message = f"Unknown {requested_kind} field: {name}"
+        if self._analysis_name_on_other_version(name):
+            message += (
+                "; analysis tags are per dataset version. "
+                "Retag on the active version."
+            )
+        return QuailFieldError(message)
+
+    def _analysis_name_on_other_version(self, name: str) -> bool:
+        row = self._db.connection.execute(
+            """
+            SELECT 1 FROM quail_analysis_fields
+            WHERE session_id = ? AND workspace_id = ? AND dataset_id = ?
+              AND name = ? AND dataset_version_id != ?
+            LIMIT 1
+            """,
+            (
+                self._scope.session_id,
+                self._scope.workspace_id,
+                self._scope.dataset_id,
+                name,
+                self._scope.dataset_version_id,
+            ),
+        ).fetchone()
+        return row is not None
+
+    def _reject_foreign_dataset(self, value: Any) -> None:
+        """Fail when a persisted recipe was built against another dataset_id."""
+
+        found = _collect_bound_dataset_ids(value)
+        current = self._scope.dataset_id
+        foreign = {item for item in found if item and item != current}
+        if not foreign:
+            return
+        built = next(iter(sorted(foreign)))
+        raise QuailScopeError(
+            f"This call is dataset {current!r}; that name was built for "
+            f"{built!r}. There is no join. Call quail_exec with "
+            f"dataset_id={built!r}, or rebuild the recipe on this dataset."
+        )
 
     def _evaluate_entry_group(
         self,
@@ -996,6 +1051,52 @@ def _expression_score_key(expression: Expression) -> str:
 
 def _is_search_terminal_expression(expression: Expression) -> bool:
     return bool(expression.operations and expression.operations[-1].kind in ("Lexical", "Semantic"))
+
+
+def _collect_bound_dataset_ids(value: Any, *, _seen: set[int] | None = None) -> set[str]:
+    """Collect bound_dataset_id stamps from Field and GroupExpr recipes."""
+
+    seen = set() if _seen is None else _seen
+    found: set[str] = set()
+    if value is None or isinstance(value, str | bytes | int | float | bool):
+        return found
+    identity = id(value)
+    if identity in seen:
+        return found
+    seen.add(identity)
+    if isinstance(value, Field):
+        if value.bound_dataset_id:
+            found.add(value.bound_dataset_id)
+        return found
+    if isinstance(value, Entry):
+        return found
+    if isinstance(value, Expression):
+        return _collect_bound_dataset_ids(value.root, _seen=seen)
+    if isinstance(value, Unit):
+        return _collect_bound_dataset_ids(value.field, _seen=seen)
+    if isinstance(value, Predicate):
+        found |= _collect_bound_dataset_ids(value.left, _seen=seen)
+        found |= _collect_bound_dataset_ids(value.right, _seen=seen)
+        return found
+    if isinstance(value, GroupExpr):
+        if value.bound_dataset_id:
+            found.add(value.bound_dataset_id)
+        found |= _collect_bound_dataset_ids(value.predicate, _seen=seen)
+        if value.members is not None:
+            for member in value.members:
+                found |= _collect_bound_dataset_ids(member, _seen=seen)
+        found |= _collect_bound_dataset_ids(value.left, _seen=seen)
+        found |= _collect_bound_dataset_ids(value.right, _seen=seen)
+        return found
+    if isinstance(value, Ranking):
+        found |= _collect_bound_dataset_ids(value.expression, _seen=seen)
+        found |= _collect_bound_dataset_ids(value.left, _seen=seen)
+        found |= _collect_bound_dataset_ids(value.right, _seen=seen)
+        return found
+    if isinstance(value, list | tuple):
+        for item in value:
+            found |= _collect_bound_dataset_ids(item, _seen=seen)
+    return found
 
 
 def _distinct_value_key(value: Any) -> str:

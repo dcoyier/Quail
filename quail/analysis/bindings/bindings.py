@@ -324,7 +324,7 @@ def _validate_binding_fields_node(
 def _field_from_binding_record(value: Mapping[Any, Any]) -> Field | None:
     """Recognize a Field.to_record() map nested inside Operation params / group records."""
 
-    if "name" not in value or set(value.keys()) - {"name", "kind"}:
+    if "name" not in value or set(value.keys()) - {"name", "kind", "bound_dataset_id"}:
         return None
     name = value["name"]
     kind = value.get("kind")
@@ -332,7 +332,12 @@ def _field_from_binding_record(value: Mapping[Any, Any]) -> Field | None:
         return None
     if kind not in (None, "source", "analysis"):
         return None
-    return Field(name, kind)
+    bound_dataset_id = value.get("bound_dataset_id")
+    if bound_dataset_id is not None and (
+        not isinstance(bound_dataset_id, str) or not bound_dataset_id
+    ):
+        return None
+    return Field(name, kind, bound_dataset_id=bound_dataset_id)
 
 
 def canonical_binding_bytes(binding: EncodedBinding) -> bytes:
@@ -427,6 +432,57 @@ def binding_from_payload(payload: Any) -> EncodedBinding:
     if not isinstance(value_kind, str) or value_kind not in BINDING_KINDS:
         raise QuailRuntimeError("Binding payload value_kind is invalid")
     return EncodedBinding(value_kind, payload.get("value"))  # type: ignore[arg-type]
+
+
+def stamp_encoded_bindings(
+    bindings: Mapping[str, EncodedBinding],
+    dataset_id: str,
+) -> dict[str, EncodedBinding]:
+    """Remember dataset_id on persisted symbolic bindings that lack a stamp."""
+
+    if not isinstance(dataset_id, str) or not dataset_id:
+        raise QuailRuntimeError("stamp dataset_id must be a non-empty string")
+    stamped: dict[str, EncodedBinding] = {}
+    for name, binding in bindings.items():
+        require_namespace_name(name)
+        if not isinstance(binding, EncodedBinding):
+            raise QuailRuntimeError(f"Stored binding for {name!r} must be an EncodedBinding")
+        stamped[name] = EncodedBinding(
+            binding.value_kind,
+            _stamp_binding_node(binding.value, dataset_id),
+        )
+    return stamped
+
+
+def _stamp_binding_node(value: Any, dataset_id: str) -> Any:
+    if isinstance(value, dict):
+        nested = {key: _stamp_binding_node(item, dataset_id) for key, item in value.items()}
+        if _is_field_binding_record(nested) or _is_group_binding_record(nested):
+            if not nested.get("bound_dataset_id"):
+                nested = {**nested, "bound_dataset_id": dataset_id}
+        return nested
+    if isinstance(value, list):
+        return [_stamp_binding_node(item, dataset_id) for item in value]
+    return value
+
+
+def _is_field_binding_record(value: Mapping[str, Any]) -> bool:
+    keys = set(value.keys())
+    if "name" not in keys or keys - {"name", "kind", "bound_dataset_id"}:
+        return False
+    name = value.get("name")
+    kind = value.get("kind")
+    return isinstance(name, str) and bool(name) and kind in (None, "source", "analysis")
+
+
+def _is_group_binding_record(value: Mapping[str, Any]) -> bool:
+    if value.get("scope") not in ("entries", "fields"):
+        return False
+    required = {"scope", "name", "predicate", "members", "left", "operator", "right"}
+    keys = set(value.keys())
+    if not required <= keys:
+        return False
+    return not (keys - required - {"bound_dataset_id"})
 
 
 def bindings_to_payload(bindings: Mapping[str, EncodedBinding]) -> dict[str, Any]:
@@ -622,6 +678,7 @@ def _decode_group_expr(record: Any) -> GroupExpr:
         and predicate_record is None
         and members_record is None
         and operator is None
+        and not record.get("bound_dataset_id")
     ):
         return G0 if name == "G0" else G1
     kwargs: dict[str, Any] = {"scope": scope}
@@ -641,4 +698,7 @@ def _decode_group_expr(record: Any) -> GroupExpr:
         kwargs["left"] = _decode_group_expr(left_record)
         if right_record is not None:
             kwargs["right"] = _decode_group_expr(right_record)
+    bound_dataset_id = record.get("bound_dataset_id")
+    if isinstance(bound_dataset_id, str) and bound_dataset_id:
+        kwargs["bound_dataset_id"] = bound_dataset_id
     return GroupExpr(**kwargs)

@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from quail.analysis.admission import acquire_execution_slot
-from quail.analysis.bindings import validate_encoded_bindings
+from quail.analysis.bindings import stamp_encoded_bindings, validate_encoded_bindings
 from quail.analysis.cancel import interrupt_connections_on_cancel, raise_if_cancelled
 from quail.analysis.engine import QueryEngine
 from quail.analysis.limits import ExecLimits
@@ -163,8 +163,12 @@ def exec_script(
                         limits=active_limits,
                         cancel_event=host_cancel,
                     )
-                validate_encoded_bindings(
+                changed = stamp_encoded_bindings(
                     worker_result.changed_bindings,
+                    dataset_id,
+                )
+                validate_encoded_bindings(
+                    changed,
                     engine.check_bound_field_kind,
                 )
                 revision = commit_overlay(
@@ -172,7 +176,7 @@ def exec_script(
                     scope,
                     expected_revision=expected_revision,
                     mutations=engine.mutations,
-                    bindings=worker_result.changed_bindings,
+                    bindings=changed,
                     binding_deletes=worker_result.deleted_bindings,
                 )
             finally:

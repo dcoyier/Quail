@@ -9,13 +9,15 @@ import pytest
 from quail.analysis.bindings import (
     decode_binding_value,
     encode_binding_value,
+    stamp_encoded_bindings,
     validate_binding_fields,
 )
 from quail.analysis.entry import make_entry
-from quail.analysis.errors import QuailFieldError, QuailRuntimeError
+from quail.analysis.errors import QuailFieldError, QuailRuntimeError, QuailScopeError
 from quail.analysis.exec_host import exec_script
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
+from quail.analysis.group import G0
 from quail.analysis.operations import Length, Value
 from quail.analysis.unit import Unit
 from quail.datasets import import_csv_dataset, open_core_db
@@ -266,3 +268,129 @@ def test_stale_kind_field_binding_survives_dataset_switch(tmp_path: Path) -> Non
         )
         assert recovered.printed_output == "1\n"
         assert "f" not in load_bindings(db, session.id)
+
+
+def test_stamp_encoded_bindings_stamps_field_and_group_once() -> None:
+    field = encode_binding_value(Field("body"))
+    group = encode_binding_value(G0)
+    stamped = stamp_encoded_bindings(
+        {"body": field, "all_rows": group, "n": encode_binding_value(1)},
+        "notes",
+    )
+    decoded_field = decode_binding_value(stamped["body"].value_kind, stamped["body"].value)
+    assert decoded_field == Field("body")
+    assert decoded_field.bound_dataset_id == "notes"
+    decoded_group = decode_binding_value(
+        stamped["all_rows"].value_kind, stamped["all_rows"].value
+    )
+    assert decoded_group.name == "G0"
+    assert decoded_group.bound_dataset_id == "notes"
+    assert decode_binding_value(stamped["n"].value_kind, stamped["n"].value) == 1
+    assert "bound_dataset_id" not in field.value
+
+    already = encode_binding_value(Field("body", bound_dataset_id="notes"))
+    kept = stamp_encoded_bindings({"body": already}, "articles")
+    decoded_kept = decode_binding_value(kept["body"].value_kind, kept["body"].value)
+    assert decoded_kept.bound_dataset_id == "notes"
+
+
+def test_bound_field_and_group_rejected_on_other_dataset(tmp_path: Path) -> None:
+    notes = tmp_path / "notes.csv"
+    articles = tmp_path / "articles.csv"
+    notes.write_text("id,title,body\ne1,Hello,hydrangea care tips\n", encoding="utf-8")
+    articles.write_text("id,title,body\na1,World,climate notes\n", encoding="utf-8")
+    db = open_core_db(tmp_path / "core.turso")
+    import_csv_dataset(db, "ws", "notes", notes, activate=True)
+    import_csv_dataset(db, "ws", "articles", articles, activate=True)
+    session = create_session(db, "ws")
+    with db:
+        first = exec_script(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            code=(
+                "body = Field('body')\n"
+                "matching = G0.where(Expression(body, RegexSearch('hydrangea')) != None)\n"
+                "print(count(group=matching))\n"
+            ),
+        )
+        assert first.printed_output == "1\n"
+        loaded = load_bindings(db, session.id)
+        body = decode_binding_value(loaded["body"].value_kind, loaded["body"].value)
+        matching = decode_binding_value(
+            loaded["matching"].value_kind, loaded["matching"].value
+        )
+        assert body.bound_dataset_id == "notes"
+        assert matching.bound_dataset_id == "notes"
+
+        with pytest.raises(QuailScopeError, match="no join"):
+            exec_script(
+                db,
+                session_id=session.id,
+                dataset_id="articles",
+                expected_revision=first.state_revision,
+                code="print(retrieve(unit=Unit('values', body), limit=5))\n",
+            )
+        with pytest.raises(QuailScopeError, match="no join"):
+            exec_script(
+                db,
+                session_id=session.id,
+                dataset_id="articles",
+                expected_revision=first.state_revision,
+                code="print(count(group=matching))\n",
+            )
+
+        reused = exec_script(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=first.state_revision,
+            code="print(count(group=matching))\n",
+        )
+        assert reused.printed_output == "1\n"
+
+
+def test_unknown_analysis_field_after_version_evolve_hints_retag(tmp_path: Path) -> None:
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text("id,title,body\ne1,Hello,hydrangea\n", encoding="utf-8")
+    db = open_core_db(tmp_path / "core.turso")
+    import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+    session = create_session(db, "ws")
+    with db:
+        first = exec_script(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            code=(
+                "topic = create_field('topic')\n"
+                "tag(retrieve(limit=1), topic, 'plants')\n"
+                "print('tagged')\n"
+            ),
+        )
+        assert first.printed_output == "tagged\n"
+
+        csv_path.write_text(
+            "id,title,body\ne1,Hello,hydrangea\ne2,Other,climate\n",
+            encoding="utf-8",
+        )
+        import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+
+        with pytest.raises(QuailFieldError, match="Retag on the active version"):
+            exec_script(
+                db,
+                session_id=session.id,
+                dataset_id="notes",
+                expected_revision=first.state_revision,
+                code="print(retrieve(unit=Unit('values', Field('topic')), limit=5))\n",
+            )
+
+        with pytest.raises(QuailFieldError, match="Unknown field: content$"):
+            exec_script(
+                db,
+                session_id=session.id,
+                dataset_id="notes",
+                expected_revision=first.state_revision,
+                code="print(retrieve(unit=Unit('values', Field('content')), limit=5))\n",
+            )

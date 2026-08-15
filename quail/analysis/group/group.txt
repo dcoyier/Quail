@@ -9,6 +9,7 @@ A GroupExpr remembers:
   left (optional)
   operator (optional)
   right (optional)
+  bound_dataset_id (optional) — set when a binding is saved
 
 To create a GroupExpr:
   Require scope is "entries" or "fields".
@@ -27,6 +28,7 @@ To create a GroupExpr:
     For not, require right is omitted.
     For and or or, require right is a compatible GroupExpr.
   Remember all fields, storing members as a tuple when present.
+  If bound_dataset_id is set, require a non-empty string and remember it.
 
 where(predicate):
   Require entry scope.
@@ -35,6 +37,7 @@ where(predicate):
 
 to_record:
   Give back scope, name, predicate record, member records, left record, operator, and right record.
+  Include bound_dataset_id only when set.
 
 and / or / invert:
   Build composed GroupExpr values with operators and, or, or not.

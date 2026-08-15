@@ -22,15 +22,23 @@ class Field:
 
     name: str
     kind: str | None = None
+    bound_dataset_id: str | None = None
 
     def __post_init__(self) -> None:
         _require_nonempty_name(self.name)
         _require_allowed_kind(self.kind)
+        if self.bound_dataset_id is not None and (
+            not isinstance(self.bound_dataset_id, str) or not self.bound_dataset_id
+        ):
+            raise QuailSyntaxError("Field bound_dataset_id must be a non-empty string or None")
 
     def to_record(self) -> dict[str, Any]:
         """Plain dict for debugging / later serialization — not agent-facing day to day."""
 
-        return {"name": self.name, "kind": self.kind}
+        record: dict[str, Any] = {"name": self.name, "kind": self.kind}
+        if self.bound_dataset_id:
+            record["bound_dataset_id"] = self.bound_dataset_id
+        return record
 
     # --- equality: Field↔Field ok for hosts/tests; Field↔value is always wrong ---
 

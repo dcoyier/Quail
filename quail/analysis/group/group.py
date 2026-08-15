@@ -22,6 +22,7 @@ class GroupExpr:
     left: GroupExpr | None = None
     operator: str | None = None
     right: GroupExpr | None = None
+    bound_dataset_id: str | None = None
 
     def __init__(
         self,
@@ -32,6 +33,7 @@ class GroupExpr:
         left: GroupExpr | None = None,
         operator: str | None = None,
         right: GroupExpr | None = None,
+        bound_dataset_id: str | None = None,
     ) -> None:
         if scope not in ("entries", "fields"):
             raise QuailSyntaxError('GroupExpr scope must be "entries" or "fields"')
@@ -81,6 +83,11 @@ class GroupExpr:
         object.__setattr__(self, "left", left)
         object.__setattr__(self, "operator", operator)
         object.__setattr__(self, "right", right)
+        if bound_dataset_id is not None and (
+            not isinstance(bound_dataset_id, str) or not bound_dataset_id
+        ):
+            raise QuailSyntaxError("GroupExpr bound_dataset_id must be a non-empty string or None")
+        object.__setattr__(self, "bound_dataset_id", bound_dataset_id)
 
     def where(self, predicate: Predicate) -> GroupExpr:
         if self.scope != "entries":
@@ -92,7 +99,7 @@ class GroupExpr:
         return self & GroupExpr(scope="entries", predicate=predicate)
 
     def to_record(self) -> dict[str, Any]:
-        return {
+        record = {
             "scope": self.scope,
             "name": self.name,
             "predicate": None if self.predicate is None else self.predicate.to_record(),
@@ -105,6 +112,9 @@ class GroupExpr:
             "operator": self.operator,
             "right": None if self.right is None else self.right.to_record(),
         }
+        if self.bound_dataset_id:
+            record["bound_dataset_id"] = self.bound_dataset_id
+        return record
 
     def __and__(self, other: GroupExpr) -> GroupExpr:
         return GroupExpr(scope=self.scope, left=self, operator="and", right=other)

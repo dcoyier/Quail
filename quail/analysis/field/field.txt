@@ -6,14 +6,16 @@ It points at a column header, not at cell values in any row.
 A Field remembers:
   name
   kind (default None)
+  bound_dataset_id (default None) — set when a binding is saved; not part of equality
 
 After creating a Field:
   Require that name is a non-empty string.
   Require that kind is allowed.
+  If bound_dataset_id is set, require a non-empty string.
 
 to_record:
   Give back a plain dictionary of name and kind.
-  Used for debugging or later serialization.
+  Include bound_dataset_id only when set.
 
 Equality between two Fields:
   If the other value is not a Field, raise a syntax error that Field comparisons are not supported and values must be compared with Expression(Field(name), Value()).

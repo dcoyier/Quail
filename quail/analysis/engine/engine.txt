@@ -15,8 +15,11 @@ mutations:
 
 resolve_field(field):
   Resolve a Field or name against the catalog.
+  Reject a Field stamped with another dataset_id (there is no join).
   When kind is set and does not match the catalog, raise QuailFieldError.
-  Unknown names raise QuailFieldError.
+  Unknown names raise QuailFieldError. If that name was an analysis field on
+  another version of this dataset, the message says tags are per version and
+  to retag on the active version.
 
 check_bound_field_kind(field):
   When field.kind is set and the name exists in the catalog with a different
@@ -24,6 +27,7 @@ check_bound_field_kind(field):
   kind=None and unknown names do nothing (forward refs stay allowed on bind).
 
 retrieve(plan):
+  Reject unit, group, and ranking recipes stamped for another dataset_id.
   For fields units, evaluate the field group and apply limit/order.
   Otherwise evaluate entry ids.
   For Unit("values", field), collect distinct present values over the full
@@ -34,6 +38,7 @@ retrieve(plan):
   Materialize Expression values, Entry handles, or present field values.
 
 count(plan):
+  Reject unit and group recipes stamped for another dataset_id.
   Same candidate sets as retrieve, but give back the length.
   Values-unit counts use len(_distinct_present_values(...)).
 
@@ -44,6 +49,7 @@ create_field(plan):
 
 tag(plan):
   Require an analysis field (via resolve_field).
+  Reject group recipes stamped for another dataset_id.
   Require each Entry handle in a tuple group to belong to this scope.
   For each selected entry, stage ValueWrite and update the overlay.
   If any ValueWrite was staged, clear the per-exec Lexical/Semantic score cache.
@@ -58,8 +64,22 @@ entry_value / entry_fields:
   Read through overlay then the field snapshot (bulk-loaded once per field).
 
 _require_entry_in_scope(entry):
-  When dataset_id or dataset_version_id is stamped and differs from scope,
-  raise QuailScopeError.
+  When dataset_id differs from scope, raise QuailScopeError that there is no
+  join.
+  When dataset_version_id is stamped and differs from scope, raise
+  QuailScopeError.
+
+_reject_foreign_dataset(value):
+  Walk Field.bound_dataset_id and GroupExpr.bound_dataset_id in the recipe.
+  Entry handles stay on _require_entry_in_scope.
+  If any stamp is a different dataset_id than this exec, raise QuailScopeError
+  that this call is dataset X, that name was built for Y, and there is no join.
+
+_unknown_field_error(name, requested_kind):
+  Build Unknown field / Unknown <kind> field.
+  If that name is an analysis field on another version of this dataset in this
+  session, append that tags are per dataset version and to retag on the active
+  version.
 
 Helpers evaluate groups and predicates, run expression pipelines (Value, AsText,
 AsNumber, regex, Slice, Length, Lexical via LexicalService, Semantic via
