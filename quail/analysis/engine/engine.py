@@ -964,7 +964,9 @@ class QueryEngine:
         if order == "top":
             return items[:limit]
         if order == "bottom":
-            return items[-limit:] if limit < len(items) else list(items)
+            # Reverse of the ranked/processing sequence (worst-first), then limit.
+            reversed_items = list(reversed(items))
+            return reversed_items[:limit]
         # middle
         if len(items) <= limit:
             return list(items)

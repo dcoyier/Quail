@@ -13,11 +13,17 @@ from quail.analysis.expression import Expression
 from quail.analysis.field import Field
 from quail.analysis.group import G0, G1, GroupExpr
 from quail.analysis.operations import AsText, Lexical, RegexSearch, RegexSub, Value
-from quail.analysis.planner import plan_create_field
+from quail.analysis.planner import plan_create_field, plan_retrieve
 from quail.analysis.unit import Unit, fields
 from quail.datasets import import_csv_dataset, open_core_db
 from quail.search import LexicalService, open_search_db
 from quail.session import analysis_values, catalog_fields, create_session, get_session
+
+
+def test_plan_retrieve_default_limit_is_five() -> None:
+    plan = plan_retrieve()
+    assert plan.limit == 5
+    assert plan.order == "top"
 
 
 def _seed(tmp_path: Path):
@@ -58,6 +64,49 @@ def test_retrieve_fields_and_entry_value(tmp_path: Path) -> None:
         )
         assert outcome.printed_output == "Hello\n"
         assert outcome.state_revision == 0
+
+
+def test_retrieve_omitted_limit_defaults_to_five(tmp_path: Path) -> None:
+    csv_path = tmp_path / "notes.csv"
+    rows = ["id,title,body"] + [f"e{i},t{i},b{i}" for i in range(1, 9)]
+    csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    db = open_core_db(tmp_path / "core.turso")
+    import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+    session = create_session(db, "ws")
+    with db:
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            omitted = dispatch_call(engine, "retrieve", ())
+            assert [entry.id for entry in omitted] == [f"e{i}" for i in range(1, 6)]
+            bottom = dispatch_call(engine, "retrieve", (), {"order": "bottom"})
+            assert [entry.id for entry in bottom] == [f"e{i}" for i in range(8, 3, -1)]
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+        )
+
+
+def test_retrieve_bottom_reverses_even_when_limit_covers_all(tmp_path: Path) -> None:
+    db, session = _seed(tmp_path)
+    with db:
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            top = dispatch_call(engine, "retrieve", (), {"limit": 50, "order": "top"})
+            bottom = dispatch_call(engine, "retrieve", (), {"limit": 50, "order": "bottom"})
+            assert [entry.id for entry in top] == ["e1", "e2", "e3"]
+            assert [entry.id for entry in bottom] == ["e3", "e2", "e1"]
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+        )
 
 
 def test_regex_filter_count_and_retrieve(tmp_path: Path) -> None:
@@ -427,7 +476,11 @@ def test_values_limit_applies_after_full_group_dedupe(tmp_path: Path) -> None:
             bottom = dispatch_call(
                 engine, "retrieve", (), {"unit": unit, "limit": 3, "order": "bottom"}
             )
-            assert bottom == ["a8", "a9", "a10"]
+            assert bottom == ["a10", "a9", "a8"]
+            reversed_all = dispatch_call(
+                engine, "retrieve", (), {"unit": unit, "limit": 50, "order": "bottom"}
+            )
+            assert reversed_all == ["a10", "a9", "a8", "a7", "a6", "170"]
             middle = dispatch_call(
                 engine, "retrieve", (), {"unit": unit, "limit": 2, "order": "middle"}
             )

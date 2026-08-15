@@ -259,14 +259,17 @@ scores.
 ## `retrieve` and `count`
 
 ```python
-retrieve(unit=entries, group=G0, limit=1, order="top", rank=Ranking())
+retrieve(unit=entries, group=G0, limit=5, order="top", rank=Ranking())
 count(unit=entries, group=G0)
 ```
 
 - `retrieve` always returns a **list** (possibly empty).
-- Omitted `limit` defaults to **1** (not the whole group).
+- Omitted `limit` defaults to **5** (not the whole group).
 - `unit` may be a `Unit` or an `Expression` (expression → one value per entry).
-- `order`: `"top"` | `"middle"` | `"bottom"`.
+- `order`: `"top"` | `"middle"` | `"bottom"`. `"top"` is highest-first (or
+  processing order when unranked). `"bottom"` is **reverse rank** — worst-first
+  (or reverse processing order when unranked), then `limit`. A large `limit`
+  still reverses; it does not equal `"top"`.
 - Narrow with `.where` **before** expensive ranking when you can — ranking
   scores the whole candidate set before applying `limit`.
 

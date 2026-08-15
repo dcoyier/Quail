@@ -82,8 +82,11 @@ Field reads bulk-load each referenced field once into an entry_id map; overlay
 wins. Ranking tie-breaks with a precomputed position map.
 
 _apply_limit(items, limit, order):
-  Give back top, bottom, or middle slice of items by order.
   Empty items give back [].
+  top: first `limit` items (highest scores / processing order).
+  bottom: reverse the sequence (worst-first), then first `limit` items.
+  middle: a centered slice of `limit` items.
+  When limit covers the whole list, bottom still reverses; top does not.
 
 _distinct_present_values(field, entry_ids):
   Walk entry_ids in order.

@@ -96,7 +96,7 @@ class UntagPlan:
 def plan_retrieve(
     unit: Any = entries,
     group: Any = None,
-    limit: int = 1,
+    limit: int = 5,
     order: str = "top",
     rank: Ranking | None = None,
 ) -> RetrievePlan:

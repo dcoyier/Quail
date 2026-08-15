@@ -9,7 +9,7 @@ TagPlan remembers group (GroupExpr or Entry tuple), field, and value.
 UntagPlan remembers group, field, and optional value.
 
 plan_retrieve(unit, group, limit, order, rank):
-  Default group to G0 and rank to empty Ranking.
+  Default group to G0, limit to 5, and rank to empty Ranking.
   Require unit is Unit or Expression.
   Require group is GroupExpr.
   Require positive limit and order in top, middle, bottom.
