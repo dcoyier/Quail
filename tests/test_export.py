@@ -1,4 +1,4 @@
-"""Session CSV export for local process snapshots."""
+"""Session CSV export for serve-host process snapshots."""
 
 from __future__ import annotations
 

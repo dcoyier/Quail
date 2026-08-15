@@ -76,9 +76,58 @@ def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
         assert "dataset_id" in tools["quail_exec"].inputSchema["properties"]
         assert "session_id" in tools["quail_export_csv"].inputSchema["properties"]
         assert "dataset_id" in tools["quail_export_csv"].inputSchema["properties"]
+        export_desc = (tools["quail_export_csv"].description or "").lower()
+        assert "unrestricted mcp" in export_desc
+        assert "public bind" in export_desc
+        assert "not clerk" in export_desc
+        assert "remote client" in export_desc
         assert "message" in tools["provide_feedback"].inputSchema["properties"]
 
     asyncio.run(run())
+
+
+def test_export_csv_registers_on_public_unrestricted(tmp_path: Path) -> None:
+    from quail.config import load_config
+    from quail.mcp import create_mcp_server_from_config
+
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "notes.csv").write_text("id,title\ne1,Hello\n", encoding="utf-8")
+    manifest = tmp_path / "quail.toml"
+    manifest.write_text(
+        """
+[core]
+database = "data/quail.turso"
+feedback = "data/feedback.jsonl"
+
+[auth]
+mode = "unrestricted"
+workspace = "local"
+
+[hosting]
+bind = "0.0.0.0"
+port = 8765
+public_base_url = "https://example.trycloudflare.com"
+allow_public_unrestricted = true
+
+[[datasets]]
+id = "notes"
+source = "data/notes.csv"
+""",
+        encoding="utf-8",
+    )
+    config = load_config(manifest)
+    assert config.allow_public_unrestricted is True
+    prepared = create_mcp_server_from_config(config)
+    try:
+
+        async def run() -> None:
+            names = {tool.name for tool in await prepared.server.list_tools()}
+            assert "quail_export_csv" in names
+
+        asyncio.run(run())
+    finally:
+        prepared.close()
 
 
 def test_quail_setup_returns_docs_catalog_and_session(tmp_path: Path) -> None:
@@ -114,7 +163,7 @@ def test_quail_export_csv_writes_host_file(tmp_path: Path) -> None:
 
     async def run() -> None:
         setup = _as_dict(await _call(server, "quail_setup"))
-        assert "Promote tags locally" in setup["documentation"]
+        assert "Promote tags to source" in setup["documentation"]
         session_id = setup["session_id"]
         tagged = _as_dict(
             await _call(

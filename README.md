@@ -79,12 +79,15 @@ being warmed and rebuilds them; core CSV data is untouched.
 
 ## Modes
 
-- **Unrestricted** — fixed workspace, loopback, no sign-in
+- **Unrestricted** — fixed workspace, no sign-in (loopback by default)
   ([`examples/quail.toml`](examples/quail.toml)). MCP includes
-  `quail_export_csv` to snapshot this session’s tags onto a host CSV; reprocess
-  with the same dataset `id` (do not invent a new id).
+  `quail_export_csv` to snapshot this session’s tags onto a CSV on the machine
+  running `quail run`; reprocess with the same dataset `id` (do not invent a
+  new id). A public bind is still unrestricted MCP: the tool is registered;
+  the result is a host filesystem path, not a download.
 - **Clerk** — JWT/OAuth identity + TOML `[[users]]` allowlist on one URL
-  ([`examples/quail.clerk.toml`](examples/quail.clerk.toml)).
+  ([`examples/quail.clerk.toml`](examples/quail.clerk.toml)). Does not
+  register `quail_export_csv`.
 
 Public unrestricted tunnel: set `hosting.allow_public_unrestricted = true`
 (fail-closed without it). Clerk public origins should be `https://` unless you

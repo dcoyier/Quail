@@ -119,7 +119,7 @@ def create_mcp_server(
     connector_catalog: Any | None = None,
     include_dataset_docs_in_setup: bool = False,
 ) -> FastMCP:
-    """Build an unrestricted loopback FastMCP app with the core tools."""
+    """Build an unrestricted FastMCP app with the core tools."""
 
     docs_path = Path(api_docs_path).expanduser().resolve() if api_docs_path is not None else None
     context = McpContext(
@@ -304,6 +304,7 @@ def _register_unrestricted_tools(
     *,
     connector_catalog: Any | None = None,
 ) -> None:
+    """Register core tools for auth.mode unrestricted (loopback or public bind)."""
     @server.tool(title="Set up Quail workspace")
     async def quail_setup() -> CallToolResult:
         """Cold-start this workspace for analysis: return the analysis-language docs,
@@ -492,8 +493,9 @@ def _register_unrestricted_tools(
         id is a different dataset. Do not overlap with quail_exec on the same
         session_id. Do not use for one-off filters, Slice/regex pipelines, or
         to persist bindings. Source fields are already fast after process.
-        Unrestricted MCP only (not Clerk). The file is on the machine running
-        quail run; a remote client gets that host path, not a download.
+        Registered on unrestricted MCP (loopback or public bind), not Clerk.
+        A remote client can still call this; they get a path on the machine
+        running quail run, not a download.
         """
 
         def work() -> CallToolResult:
