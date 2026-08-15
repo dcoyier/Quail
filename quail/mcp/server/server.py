@@ -476,10 +476,13 @@ def _register_unrestricted_tools(
 
         code must follow quail_get_api_docs. Success: printed_output only.
         Failure: diagnostic with execution_id null; no tags/bindings/prints
-        are kept. Reuse one session_id serially; do not overlap quail_exec
-        calls on the same session_id. time_window is "standard" (30s wall /
-        15s CPU) or "extended" (100s wall / 60s CPU); worker RSS is capped
-        at 256 MiB.
+        are kept. Bindings persist on this session_id after success. Pass
+        exactly one dataset_id (no join). Reuse one session_id serially; overlap
+        on the same session_id fails with session_busy. A full process exec slot
+        fails with server_busy (raise hosting.max_concurrent_executions and
+        restart quail run). Omitted retrieve limit follows api.md.
+        time_window is "standard" (30s wall / 15s CPU) or "extended"
+        (100s wall / 60s CPU); worker RSS is capped at 256 MiB.
         """
 
         def work() -> CallToolResult:
@@ -512,10 +515,10 @@ def _register_unrestricted_tools(
     async def quail_export_csv(session_id: str, dataset_id: str) -> CallToolResult:
         """Write source columns plus this session's analysis tags to a CSV on the serve host.
 
-        That is the route to warm-path speed for session tags: after process
-        those columns are source, so Lexical/Semantic skip cell load. The
-        result is a filesystem path, not a download. Export itself does not
-        reprocess. Do not overlap with quail_exec on the same session_id.
+        Result is a filesystem path, not a download. Stop quail run, point
+        quail.toml source at that path, then quail process so tags become
+        source (warm-path). Export itself does not reprocess. Do not overlap
+        with quail_exec on the same session_id (session_busy).
         """
 
         def work() -> CallToolResult:
@@ -848,8 +851,12 @@ def _register_clerk_tools(
     ) -> CallToolResult:
         """Run bounded Quail Python for one session and dataset in the active workspace.
 
-        Reuse one session_id serially; do not overlap quail_exec calls on the
-        same session_id. After switching workspace, start a new session first.
+        Bindings persist on this session_id after success. Pass exactly one
+        dataset_id (no join). Reuse one session_id serially; overlap fails with
+        session_busy. A full process exec slot fails with server_busy (raise
+        hosting.max_concurrent_executions and restart quail run). After
+        switching workspace, start a new session first. Omitted retrieve limit
+        follows api.md.
         """
 
         def work() -> CallToolResult:
@@ -896,10 +903,10 @@ def _register_clerk_tools(
     ) -> CallToolResult:
         """Write source columns plus this session's analysis tags to a CSV on the serve host.
 
-        That is the route to warm-path speed for session tags: after process
-        those columns are source, so Lexical/Semantic skip cell load. The
-        result is a filesystem path, not a download. Export itself does not
-        reprocess. Do not overlap with quail_exec on the same session_id.
+        Result is a filesystem path, not a download. Stop quail run, point
+        quail.toml source at that path, then quail process so tags become
+        source (warm-path). Export itself does not reprocess. Do not overlap
+        with quail_exec on the same session_id (session_busy).
         """
 
         def work() -> CallToolResult:

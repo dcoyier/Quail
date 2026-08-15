@@ -74,6 +74,11 @@ def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
         assert "cold-start" in (tools["quail_setup"].description or "").lower()
         assert "analysis-language" in (tools["quail_get_api_docs"].description or "").lower()
         assert "dataset_id" in tools["quail_exec"].inputSchema["properties"]
+        exec_desc = (tools["quail_exec"].description or "").lower()
+        assert "session_busy" in exec_desc
+        assert "server_busy" in exec_desc
+        assert "bindings persist" in exec_desc
+        assert "one dataset_id" in exec_desc
         assert "session_id" in tools["quail_export_csv"].inputSchema["properties"]
         assert "dataset_id" in tools["quail_export_csv"].inputSchema["properties"]
         export_desc = (tools["quail_export_csv"].description or "").lower()
@@ -94,6 +99,8 @@ def test_quail_setup_returns_docs_catalog_and_session(tmp_path: Path) -> None:
         assert setup["state_revision"] == 0
         assert setup["session_id"]
         assert "Quail Analysis API" in setup["documentation"]
+        assert "Notes for maintainers" not in setup["documentation"]
+        assert "Open knobs" not in setup["documentation"]
         assert setup["datasets"][0]["dataset_id"] == "notes"
         assert setup["datasets"][0]["active_version_id"]
         assert "documentation" not in setup["datasets"][0]
@@ -216,6 +223,7 @@ def test_quail_get_api_docs(tmp_path: Path) -> None:
     async def run() -> None:
         result = _as_dict(await _call(server, "quail_get_api_docs"))
         assert "Quail Analysis API" in result["documentation"]
+        assert "Notes for maintainers" not in result["documentation"]
         assert "provide_feedback(message" not in result["documentation"]
         assert "Feedback is stored outside" not in result["documentation"]
 

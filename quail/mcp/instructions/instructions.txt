@@ -2,11 +2,12 @@ There are repair hint strings for unbound and locked workspace cases.
 There is a private locked-user instructions addendum.
 There is a private unrestricted session-rules string (one fixed workspace;
 reuse session_id serially; one quail_exec in flight per session_id; overlap
-fails with session_busy).
+fails with session_busy; a full process exec slot fails with server_busy —
+raise hosting.max_concurrent_executions and restart quail run).
 There is a private Clerk session-rules string (workspace-scoped sessions owned
 by the creating user; after switch call quail_setup or quail_start_session
 again; do not use another user's session_id; one quail_exec in flight per
-session_id; overlap fails with session_busy).
+session_id; overlap fails with session_busy; same server_busy slot ceiling).
 
 There is a private export-rules string (quail_export_csv writes a serve-host
 CSV of source plus this session's tags; path is not a download; that is the

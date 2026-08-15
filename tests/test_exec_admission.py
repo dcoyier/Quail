@@ -158,6 +158,7 @@ def test_instructions_state_session_rules() -> None:
     for text in (unrestricted, clerk):
         assert "one quail_exec in flight per session_id" in text
         assert "session_busy" in text
+        assert "server_busy" in text
     assert "quail_switch_workspace" not in unrestricted
     assert "workspace switch" not in unrestricted
     assert "workspace-scoped" in clerk

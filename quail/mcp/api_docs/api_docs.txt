@@ -4,7 +4,9 @@ There is a private repo fallback path at docs/api.md relative to the package roo
 There is a packaged resource at quail/data/api.md (force-included from docs/api.md).
 
 load_api_docs(override default None):
-  If override is set, read that path and give back the text.
-  Else if the packaged quail/data/api.md resource exists, give back its text.
-  Else if the repo docs/api.md exists, give back its text.
+  If override is set, read that path.
+  Else if the packaged quail/data/api.md resource exists, read it.
+  Else if the repo docs/api.md exists, read it.
   Else raise FileNotFoundError.
+  Strip from "## Notes for maintainers" to the end so agents do not see
+  operator knobs. Give back the remaining text.

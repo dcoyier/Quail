@@ -13,9 +13,14 @@ _REPO_API_DOCS = _REPO_ROOT / "docs" / "api.md"
 
 
 def test_load_api_docs_default_matches_repo() -> None:
+    full = _REPO_API_DOCS.read_text(encoding="utf-8")
     text = load_api_docs()
     assert "Quail Analysis API" in text
-    assert text == _REPO_API_DOCS.read_text(encoding="utf-8")
+    assert "Notes for maintainers" in full
+    assert "Notes for maintainers" not in text
+    assert "Open knobs" not in text
+    cut = full.index("\n## Notes for maintainers")
+    assert text == full[:cut].rstrip() + "\n"
 
 
 def test_load_api_docs_override(tmp_path: Path) -> None:

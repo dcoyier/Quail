@@ -22,7 +22,8 @@ _UNRESTRICTED_SESSION_RULES = (
     "This deployment has one fixed workspace. Reuse the same session_id serially "
     "in this workspace. Run only one quail_exec in flight per session_id "
     "(serial chaining is fine; parallel execs on the same session fail with "
-    "session_busy)."
+    "session_busy). A full process-wide exec slot fails with server_busy; "
+    "raise hosting.max_concurrent_executions and restart quail run."
 )
 
 _CLERK_SESSION_RULES = (
@@ -30,7 +31,9 @@ _CLERK_SESSION_RULES = (
     "quail_switch_workspace, call quail_setup again (or quail_start_session) and "
     "do not reuse a prior session_id. Do not use another user's session_id. "
     "Run only one quail_exec in flight per session_id (serial chaining is fine; "
-    "parallel execs on the same session fail with session_busy)."
+    "parallel execs on the same session fail with session_busy). A full "
+    "process-wide exec slot fails with server_busy; raise "
+    "hosting.max_concurrent_executions and restart quail run."
 )
 
 _EXPORT_RULES = (
