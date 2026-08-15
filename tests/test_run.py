@@ -201,6 +201,29 @@ def test_cli_run_requires_absolute_config(
     assert "absolute" in err
 
 
+def test_cli_process_prints_repair_hint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from quail.analysis.errors import QuailRuntimeError
+
+    manifest = _write_unrestricted_hosting(tmp_path)
+
+    def boom(_config: object, clear: bool = False) -> None:
+        del clear
+        raise QuailRuntimeError(
+            "Another Quail process holds the deployment lease (x.quail.lock).",
+            repair_hint="Stop the running Quail server, then retry.",
+        )
+
+    monkeypatch.setattr("quail.cli.cli.process_config", boom)
+    with pytest.raises(SystemExit) as exited:
+        cli_main(["process", "--config", str(manifest.resolve())])
+    assert exited.value.code == 1
+    err = capsys.readouterr().err
+    assert "deployment lease" in err
+    assert "Stop the running Quail server" in err
+
+
 def test_parse_config_allows_empty_datasets(tmp_path: Path) -> None:
     manifest = tmp_path / "quail.toml"
     manifest.write_text(

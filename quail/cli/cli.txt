@@ -1,5 +1,9 @@
 Operator CLI. It reads quail.toml only. It never writes the TOML.
 
+_print_cli_error(error):
+  Print `quail: <message>` to stderr.
+  If error.repair_hint is a nonempty string, print `quail: <hint>` next.
+
 main(argv default None):
   Parse subcommands run and process. Both require --config as an absolute path.
   run:
@@ -7,7 +11,8 @@ main(argv default None):
     Description: take a deployment lease, import without activating, fail closed
     unless each imported version is already active and warm, then serve MCP.
     Never activates. Unrestricted and Clerk both use this command.
-    Load config, call serve. ConfigError exits 2. Other errors exit 1.
+    Load config, call serve. ConfigError exits 2. Other errors exit 1 via
+    _print_cli_error.
   process:
     Help says import, warm search, then publish activation.
     Description: take a deployment lease, import without activating, warm
@@ -21,5 +26,5 @@ main(argv default None):
     that import activated with no search warm.
     Otherwise print one summary line per dataset (texts, unique, embed batches,
     lexical, embedding yes/no).
-    ConfigError exits 2. Other errors exit 1.
+    ConfigError exits 2. Other errors exit 1 via _print_cli_error.
   Unknown command: argparse error.

@@ -70,6 +70,10 @@ uv run python -m quail.mcp_client call quail_exec @exec.json
   unless each imported version is already active and warm receipts match the
   TOML, then serves MCP. Never activates.
 
+`process` and `run` cannot hold the same deployment lease at once. Stop
+`quail run` before `quail process`. If the lease is held, the CLI prints the
+error and a repair hint (`Stop the running Quail server…`).
+
 Re-run `process` after changing `[datasets.embedding]` (including `fields`) or
 `[search.warm]`. Keep the same dataset `id` when the CSV changes: embeddings
 for unchanged text are copied from any prior version of that `id` with the same
