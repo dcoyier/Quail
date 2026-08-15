@@ -336,7 +336,7 @@ def _register_unrestricted_tools(
         """Cold-start this workspace for analysis: return the analysis-language docs,
         the dataset catalog, and a fresh session_id in one call.
 
-        Call once after connect (and again after quail_switch_workspace). Do not call
+        Call once after connect. Do not call
         on every quail_exec — reuse session_id serially. Sharper tools remain:
         quail_get_api_docs, quail_list_datasets, quail_start_session for refresh or
         partial use; quail_get_dataset_info after you pick a dataset_id (unless the

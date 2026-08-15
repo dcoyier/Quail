@@ -18,9 +18,17 @@ _LOCKED_ADDENDUM = (
     "quail_setup → quail_get_dataset_info (when needed) → quail_exec."
 )
 
-_SESSION_RULES = (
-    "Sessions are workspace-scoped: after quail_switch_workspace, call "
-    "quail_setup again (or quail_start_session) and do not reuse a prior session_id. "
+_UNRESTRICTED_SESSION_RULES = (
+    "This deployment has one fixed workspace. Reuse the same session_id serially "
+    "in this workspace. Run only one quail_exec in flight per session_id "
+    "(serial chaining is fine; parallel execs on the same session fail with "
+    "session_busy)."
+)
+
+_CLERK_SESSION_RULES = (
+    "Sessions are workspace-scoped and owned by the user who created them: after "
+    "quail_switch_workspace, call quail_setup again (or quail_start_session) and "
+    "do not reuse a prior session_id. Do not use another user's session_id. "
     "Run only one quail_exec in flight per session_id (serial chaining is fine; "
     "parallel execs on the same session fail with session_busy)."
 )
@@ -34,14 +42,6 @@ _EXPORT_RULES = (
     "quail_exec on the same session_id (session_busy)."
 )
 
-_CLERK_SESSION_RULES = (
-    "Sessions are workspace-scoped and owned by the user who created them: after "
-    "quail_switch_workspace, call quail_setup again (or quail_start_session) and "
-    "do not reuse a prior session_id. Do not use another user's session_id. "
-    "Run only one quail_exec in flight per session_id (serial chaining is fine; "
-    "parallel execs on the same session fail with session_busy)."
-)
-
 
 def unrestricted_instructions(workspace_id: str) -> str:
     return (
@@ -51,11 +51,11 @@ def unrestricted_instructions(workspace_id: str) -> str:
         "quail_exec(session_id, dataset_id, code). Reuse the same session_id "
         "serially within this workspace.\n"
         "\n"
-        f"{_SESSION_RULES}\n"
+        f"{_UNRESTRICTED_SESSION_RULES}\n"
         "\n"
         "quail_setup returns analysis-language docs, the dataset catalog, and a "
-        "fresh session_id. Call it once at cold start (and again after a workspace "
-        "switch). Prefer it over separately calling quail_get_api_docs, "
+        "fresh session_id. Call it once at cold start. Prefer it over separately "
+        "calling quail_get_api_docs, "
         "quail_list_datasets, and quail_start_session unless you need a refresh "
         "or only one of those pieces.\n"
         "\n"

@@ -156,9 +156,12 @@ def test_instructions_state_session_rules() -> None:
     unrestricted = unrestricted_instructions("local")
     clerk = clerk_instructions()
     for text in (unrestricted, clerk):
-        assert "workspace-scoped" in text
-        assert "quail_setup again" in text or "quail_start_session again" in text
         assert "one quail_exec in flight per session_id" in text
+        assert "session_busy" in text
+    assert "quail_switch_workspace" not in unrestricted
+    assert "workspace switch" not in unrestricted
+    assert "workspace-scoped" in clerk
+    assert "quail_setup again" in clerk or "quail_start_session again" in clerk
     assert "quail_export_csv" in unrestricted
     assert "not a download" in unrestricted
     assert "warm-path" in unrestricted
