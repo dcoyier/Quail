@@ -30,6 +30,7 @@ validate_operation_pipeline(operations):
       Continue.
     If kind is RegexSub or Slice:
       Require current_type is any, text, list_text, or text_or_list.
+      For RegexSub, reject replacement backrefs (\\1, $1, \\g<...>).
       If current_type was any, set it to text_or_list.
       Continue.
     If kind is Length:
@@ -60,6 +61,7 @@ RegexFindAll(pattern, flags default 0):
 
 RegexSub(pattern, replacement, flags default 0):
   Require replacement is a string and valid regex text.
+  Raise if replacement looks like a backref (\\1, $1, \\g<...>).
   Build a regex Operation kind RegexSub including replacement.
 
 Slice(start, end default None):
@@ -79,7 +81,7 @@ Semantic(query, input_aggregation default None, target_aggregation default None)
 _regex_operation(kind, pattern, flags default 0, extra params):
   Require pattern is valid regex text.
   Validate flags.
-  For RegexSub, require a string replacement.
+  For RegexSub, require a string replacement and reject backrefs in it.
   Compile with RE2 now so lookaround and backrefs fail at construction.
   Give back Operation with pattern, flags, and extra params.
 
@@ -94,3 +96,8 @@ _similarity_query_record(operation_kind, query):
   If query is a list of strings with at least one non-empty string, record kind LiteralTextList.
   If query is a non-empty list of Entry handles, record kind EntryList with entry records.
   Otherwise raise a syntax error about allowed query shapes.
+
+_reject_sub_backrefs(replacement):
+  Walk the replacement string.
+  If it contains \\digit, $digit, $&, $`, $', or \\g<, raise that RegexSub
+  replacement is literal and backrefs such as \\1 or $1 are not supported.

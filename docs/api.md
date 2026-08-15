@@ -205,7 +205,7 @@ Comparisons (`==`, `!=`, `<`, …) produce a **Predicate**.
 | `AsNumber()` | Finite float from number or numeric string |
 | `RegexSearch(pattern, flags=0)` | First match substring, or `None` |
 | `RegexFindAll(pattern, flags=0)` | `list[str]` of matches |
-| `RegexSub(pattern, replacement, flags=0)` | Literal replace (no backrefs) |
+| `RegexSub(pattern, replacement, flags=0)` | Literal replace; `\\1` / `$1` are rejected |
 | `Slice(start, end=None)` | Python slice `[start:end]` on text **or** list |
 | `Length()` | len(text), len(list), or `0` for `None` |
 | `Lexical(query, ...)` | Lexical relevance score (ends the pipeline) |

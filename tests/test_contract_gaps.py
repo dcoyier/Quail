@@ -76,8 +76,12 @@ def test_tag_rejects_nested_none() -> None:
 
 
 def test_regex_sub_literal_and_rejects_lookaround() -> None:
-    op = RegexSub("Blue", r"\1")
+    op = RegexSub("Blue", "Green")
     assert op.kind == "RegexSub"
+    with pytest.raises(QuailSyntaxError, match="literal text"):
+        RegexSub("Blue", r"\1")
+    with pytest.raises(QuailSyntaxError, match="literal text"):
+        RegexSub("Blue", "$1")
     with pytest.raises(QuailSyntaxError, match="lookaround|backreference"):
         RegexSearch(r"(?=a)")
     with pytest.raises(QuailSyntaxError, match="backreference"):

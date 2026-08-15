@@ -63,6 +63,10 @@ def validate_operation_pipeline(operations: tuple[Operation, ...]) -> None:
         if kind in ("RegexSub", "Slice"):
             if current_type not in ("any", "text", "list_text", "text_or_list"):
                 raise QuailSyntaxError(f"{kind} requires a text or list[text] expression")
+            if kind == "RegexSub":
+                replacement = operation.params.get("replacement")
+                if isinstance(replacement, str):
+                    _reject_sub_backrefs(replacement)
             if current_type == "any":
                 current_type = "text_or_list"
             continue
@@ -107,6 +111,7 @@ def RegexSub(pattern: str, replacement: str, flags: int = 0) -> Operation:
     if not isinstance(replacement, str):
         raise QuailSyntaxError("RegexSub replacement must be a string")
     require_regex_text(replacement, "RegexSub replacement")
+    _reject_sub_backrefs(replacement)
     return _regex_operation("RegexSub", pattern, flags=flags, replacement=replacement)
 
 
@@ -156,6 +161,7 @@ def _regex_operation(kind: str, pattern: str, *, flags: int = 0, **params: Any) 
         if not isinstance(replacement, str):
             raise QuailSyntaxError("RegexSub replacement must be a string")
         require_regex_text(replacement, "RegexSub replacement")
+        _reject_sub_backrefs(replacement)
     compile_regex(pattern, flags)
     return Operation(kind, {"pattern": pattern, "flags": flags, **params})
 
@@ -216,3 +222,20 @@ def _similarity_query_record(operation_kind: str, query: Any) -> dict[str, Any]:
     raise QuailSyntaxError(
         f"{operation_kind} query must be text, list[str], an entry group, or list[Entry]"
     )
+
+
+def _reject_sub_backrefs(replacement: str) -> None:
+    """Fail when a RegexSub replacement looks like a backreference."""
+
+    for index, char in enumerate(replacement):
+        nxt = replacement[index + 1] if index + 1 < len(replacement) else ""
+        if char == "\\" and (nxt.isdigit() or replacement.startswith("g<", index + 1)):
+            raise QuailSyntaxError(
+                "RegexSub replacement is literal text; backrefs such as \\1 or $1 "
+                "are not supported"
+            )
+        if char == "$" and (nxt.isdigit() or nxt in "&`'"):
+            raise QuailSyntaxError(
+                "RegexSub replacement is literal text; backrefs such as \\1 or $1 "
+                "are not supported"
+            )
