@@ -16,6 +16,8 @@ def test_load_api_docs_default_matches_repo() -> None:
     text = load_api_docs()
     assert "Quail Analysis API" in text
     assert text == _REPO_API_DOCS.read_text(encoding="utf-8")
+    assert "last-write-wins" in text
+    assert "empty source is None and omitted" in text
 
 
 def test_load_api_docs_override(tmp_path: Path) -> None:

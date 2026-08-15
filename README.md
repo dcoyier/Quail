@@ -122,6 +122,6 @@ enforce them from the token. Sessions belong to the creating user.
 3. Invite users in Clerk; paste each `user_…` id into `[[users]]` with
    workspace memberships.
 4. Set `hosting.public_base_url` to the origin clients use (defaults to
-   `http://{bind}:{port}`). Expose that origin and `/mcp` (proxy or ngrok).
+   `http://{bind}:{port}`). Expose that origin and `/mcp` (reverse proxy).
 5. `quail process` then `quail run`, and add `{public_base_url}/mcp` in Cursor
    or Claude. Sign-in is Clerk; Quail still enforces the TOML allowlist.

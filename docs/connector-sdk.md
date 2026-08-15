@@ -16,7 +16,7 @@ connector package =
 
 Operators install a wheel, pin it in hand-edited TOML, and activate it per
 workspace. Quail finds packages via entry points (`quail.connectors`), not
-file paths in TOML. Hosting / ngrok stays outside the SDK
+file paths in TOML. Hosting / `public_base_url` stays outside the SDK
 (`hosting.public_base_url`).
 
 ## Public types

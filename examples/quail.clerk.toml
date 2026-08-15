@@ -19,7 +19,7 @@ clerk_authorized_parties = ["your_clerk_application_id"]
 [hosting]
 bind = "127.0.0.1"
 port = 8000
-# Public origin clients use to reach this MCP (ngrok/HTTPS URL in production).
+# Public origin clients use to reach this MCP (HTTPS URL in production).
 # Defaults to http://{bind}:{port}. Resource metadata uses {public_base_url}/mcp.
 # public_base_url = "https://your-tunnel.example"
 # max_concurrent_executions = 2

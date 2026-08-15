@@ -16,7 +16,7 @@ Pass arguments by name.
 
 | Argument | Meaning |
 | --- | --- |
-| `session_id` | Durable analysis context in one workspace. Bindings and tags stick to this session. MCP binds the workspace; if the workspace changes, start a new session. Run one `quail_exec` at a time per `session_id` — overlap (including `quail_export_csv` on the same session) fails with `session_busy`. |
+| `session_id` | Durable analysis context in one workspace. Bindings stick to this session. Tags are per dataset version. MCP binds the workspace; if the workspace changes, start a new session. Run one `quail_exec` at a time per `session_id` — overlap (including `quail_export_csv` on the same session) fails with `session_busy`. |
 | `dataset_id` | Exactly one dataset for this call (its active immutable version). |
 | `code` | Bounded Quail Python (no imports, no files, no network). |
 | `time_window` | `"standard"` (30s wall / 15s CPU) or `"extended"` (100s wall / 60s CPU). Both are finite; extended is just longer. Worker RSS is always capped at 256 MiB. |
@@ -112,6 +112,43 @@ tag(selected, topic, "climate")
 print(count(group=G0.where(Expression(topic, Value()) == "climate")))
 ```
 
+### 6. Code a theme (last-write-wins)
+
+Later `tag()` on the same entry overwrites. Use flag fields, not lists.
+
+```python
+body = Field("body")
+theme = create_field("theme")
+tag(G0.where(Expression(body, RegexSearch("hydrangea", flags=re.I)) != None), theme, "plants")
+tag(G0.where(Expression(body, RegexSearch("climate", flags=re.I)) != None), theme, "climate")
+print(retrieve(unit=Unit("values", theme), limit=50))
+```
+
+### 7. Regex vs Lexical vs prefix
+
+`RegexSearch` is the first match substring or `None` (a filter). `Lexical` is
+FTS relevance (unquoted spaces are OR; quote a phrase; `term*` is prefix).
+Do not put `Lexical` after `RegexSearch` in one pipeline — filter first, then
+search the field. `RegexSub` returns new text; it is not a mutation.
+
+```python
+body = Field("body")
+filtered = G0.where(Expression(body, RegexSearch("hydrangea", flags=re.I)) != None)
+score = Expression(body, Lexical("hydrangea*"))
+print(retrieve(group=filtered, rank=Ranking(expression=score), limit=10))
+```
+
+### 8. Histogram and match counts
+
+`Unit("values")` is a distinct-value histogram. Character `Length()` swamps
+BM25; count regex hits instead.
+
+```python
+print(retrieve(unit=Unit("values", Field("title")), limit=50))
+hits = Expression(Field("body"), AsText(), RegexFindAll(r"\w+"), Length())
+print(retrieve(unit=hits, limit=10))
+```
+
 ---
 
 ## What you can use (injected namespace)
@@ -186,7 +223,7 @@ From `retrieve`. Attributes: `.id`, `.dataset_id`, `.dataset_version_id`, `.data
 
 ```python
 entry.value(field, default=None)  # Field or name string
-entry.fields()                    # list[Field] present on this entry
+entry.fields()                    # present fields only; empty source is None and omitted
 ```
 
 ### `Expression(input, operation, ...)`
