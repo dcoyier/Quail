@@ -26,8 +26,8 @@ _TIME_REPAIR_STANDARD = (
 _TIME_REPAIR_EXTENDED = "Potential routes for revision: " + _TIME_REPAIR_BODY
 
 _MEMORY_LIMIT_REPAIR = (
-    "Reduce materialized results and large local values, then retry. "
-    "Failed exec does not commit tags or bindings."
+    "Reduce materialized results and large local values (use len or bytes), "
+    "then retry. Failed exec does not commit tags or bindings."
 )
 
 
@@ -100,19 +100,19 @@ def cpu_timeout_error(
     *,
     already_extended: bool = False,
 ) -> Exception:
-    from quail.analysis.errors import QuailRuntimeError
+    from quail.analysis.errors import QuailCpuTimeoutError
 
-    return QuailRuntimeError(
+    return QuailCpuTimeoutError(
         f"quail_exec exceeded its {cpu_seconds:g}s CPU-time limit",
         repair_hint=time_repair_hint(already_extended=already_extended),
     )
 
 
 def memory_limit_error(max_memory_bytes: int) -> Exception:
-    from quail.analysis.errors import QuailRuntimeError
+    from quail.analysis.errors import QuailRssLimitError
 
     mib = max_memory_bytes // (1024 * 1024)
-    return QuailRuntimeError(
-        f"quail_exec exceeded its {mib} MiB worker memory limit",
+    return QuailRssLimitError(
+        f"quail_exec exceeded its {mib} MiB worker RSS limit",
         repair_hint=_MEMORY_LIMIT_REPAIR,
     )

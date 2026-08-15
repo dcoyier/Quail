@@ -39,6 +39,18 @@ class QuailSessionBusyError(QuailRuntimeError):
     stable_error_code = "session_busy"
 
 
+class QuailCpuTimeoutError(QuailRuntimeError):
+    """Worker CPU-time ceiling exceeded."""
+
+    stable_error_code = "cpu_timeout"
+
+
+class QuailRssLimitError(QuailRuntimeError):
+    """Worker RSS memory ceiling exceeded."""
+
+    stable_error_code = "rss_limit"
+
+
 _WIRE_ERROR_TYPES: dict[str, type[QuailError]] = {
     "QuailSyntaxError": QuailSyntaxError,
     "QuailScopeError": QuailScopeError,
@@ -46,6 +58,8 @@ _WIRE_ERROR_TYPES: dict[str, type[QuailError]] = {
     "QuailRuntimeError": QuailRuntimeError,
     "QuailServerBusyError": QuailServerBusyError,
     "QuailSessionBusyError": QuailSessionBusyError,
+    "QuailCpuTimeoutError": QuailCpuTimeoutError,
+    "QuailRssLimitError": QuailRssLimitError,
     "QuailError": QuailError,
 }
 
@@ -65,10 +79,8 @@ def rehydrate_quail_error(
             text = text[len(prefix) :]
     hint = repair_hint if isinstance(repair_hint, str) and repair_hint else None
     cls = _WIRE_ERROR_TYPES.get(type_name, QuailRuntimeError)
-    if cls is QuailServerBusyError:
-        return QuailServerBusyError(text, repair_hint=hint)
-    if cls is QuailSessionBusyError:
-        return QuailSessionBusyError(text, repair_hint=hint)
+    if issubclass(cls, QuailRuntimeError) and cls is not QuailRuntimeError:
+        return cls(text, repair_hint=hint)
     if cls is QuailRuntimeError:
         return QuailRuntimeError(text, repair_hint=hint)
     return cls(text)

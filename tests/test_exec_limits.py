@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from quail.analysis.errors import QuailRuntimeError
+from quail.analysis.errors import QuailCpuTimeoutError, QuailRssLimitError, QuailRuntimeError
 from quail.analysis.exec_host import exec_script
 from quail.analysis.limits import (
     EXTENDED_LIMITS,
@@ -95,6 +95,9 @@ def test_cpu_timeout_kills_busy_loop(tmp_path: Path) -> None:
                 code="x = 0\nwhile True:\n    x = x + 1\n",
                 limits=ExecLimits(wall_seconds=30.0, cpu_seconds=1),
             )
+        assert isinstance(raised.value, QuailCpuTimeoutError)
+        diagnostic = diagnostic_from_exception(raised.value)
+        assert diagnostic["stable_error_code"] == "cpu_timeout"
         assert raised.value.repair_hint is not None
         assert "extended" in raised.value.repair_hint
         refreshed = get_session(db, session.id)
@@ -113,17 +116,20 @@ def test_memory_limit_kills_when_rss_exceeds_ceiling() -> None:
     def rss_sampler(_pid: int) -> int:
         return tiny + 1
 
-    with pytest.raises(QuailRuntimeError, match="memory limit") as raised:
+    with pytest.raises(QuailRuntimeError, match="worker RSS limit") as raised:
         run_worker_script(
             "print(count())",
             on_api_call=on_api_call,
             limits=ExecLimits(wall_seconds=30.0, cpu_seconds=30, max_memory_bytes=tiny),
             rss_sampler=rss_sampler,
         )
+    assert isinstance(raised.value, QuailRssLimitError)
     assert raised.value.repair_hint is not None
     assert "materialized" in raised.value.repair_hint
+    assert "bytes" in raised.value.repair_hint
     diagnostic = diagnostic_from_exception(raised.value)
     assert diagnostic["repair_hint"] == raised.value.repair_hint
+    assert diagnostic["stable_error_code"] == "rss_limit"
 
 
 def test_successful_exec_under_limits(tmp_path: Path) -> None:
@@ -136,5 +142,18 @@ def test_successful_exec_under_limits(tmp_path: Path) -> None:
             expected_revision=0,
             code="print(count())",
             time_window="standard",
+        )
+        assert outcome.printed_output == "2\n"
+
+
+def test_bytes_builtin_is_injected(tmp_path: Path) -> None:
+    db, session = _seed(tmp_path)
+    with db:
+        outcome = exec_script(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            code='print(len(bytes("ab", "utf-8")))\n',
         )
         assert outcome.printed_output == "2\n"

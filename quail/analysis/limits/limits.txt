@@ -15,8 +15,10 @@ limits_for_time_window(time_window):
   Give back the hardcoded ExecLimits for that window.
 
 wall_timeout_error / cpu_timeout_error / memory_limit_error:
-  Build QuailRuntimeError with a repair_hint matched to the failure.
+  Build QuailRuntimeError (CPU: QuailCpuTimeoutError / cpu_timeout; RSS:
+  QuailRssLimitError / rss_limit) with a repair_hint matched to the failure.
   Time timeouts omit the "retry with extended" clause when already extended.
+  The RSS message names RSS. The RSS hint mentions len and bytes.
 
 time_repair_hint(already_extended):
   Give back the standard or extended-window timeout repair text.

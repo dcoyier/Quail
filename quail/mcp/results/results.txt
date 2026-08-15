@@ -32,4 +32,6 @@ classify_exception(error):
   ValueError becomes QuailSyntaxError / quail_syntax_error (tool arg shape).
   QuailServerBusyError becomes QuailRuntimeError / server_busy.
   QuailSessionBusyError becomes QuailRuntimeError / session_busy.
+  QuailCpuTimeoutError becomes QuailRuntimeError / cpu_timeout.
+  QuailRssLimitError becomes QuailRuntimeError / rss_limit.
   Unknown errors become InternalError / internal_error.

@@ -144,6 +144,7 @@ def build_namespace(endpoint: HostEndpoint, prints: PrintBuffer) -> dict[str, An
         "all": all,
         "any": any,
         "bool": bool,
+        "bytes": bytes,
         "dict": dict,
         "enumerate": enumerate,
         "float": float,

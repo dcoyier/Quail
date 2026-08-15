@@ -369,6 +369,8 @@ Not allowed: imports, `def`/`lambda`, comprehensions, f-strings, `try`/`except`,
 `is`, `open`/`eval`/`exec`, mutating methods on containers (rebind instead),
 anything that reaches outside the sandbox.
 
+Safe builtins include `len` and `bytes` (for size checks under the RSS cap).
+
 Exception classes exist for diagnostics; you cannot catch them inside
 `quail_exec`. Read the diagnostic, fix the code, rerun the whole call.
 
@@ -383,7 +385,7 @@ Failures are atomic. Typical categories:
 | `QuailSyntaxError` | Bad API shape, illegal Python construct, bad symbolic combo |
 | `QuailScopeError` | Wrong group/unit/session/version pairing |
 | `QuailFieldError` | Unknown field, kind mismatch, source mutation |
-| `QuailRuntimeError` | Bad data for an op, search down, timeout, resource limit |
+| `QuailRuntimeError` | Bad data for an op, search down, timeout, resource limit (`cpu_timeout` / `rss_limit`) |
 
 Tool errors include `stable_error_code`, `message`, optional `repair_hint`, and
 optional source location. Prefer fixing from that over guessing.

@@ -20,11 +20,17 @@ QuailSessionBusyError means another quail_exec or quail_export_csv already
 holds this session_id.
 It is a QuailRuntimeError with stable_error_code session_busy.
 
+QuailCpuTimeoutError means the worker CPU-time ceiling was exceeded.
+It is a QuailRuntimeError with stable_error_code cpu_timeout.
+
+QuailRssLimitError means the worker RSS memory ceiling was exceeded.
+It is a QuailRuntimeError with stable_error_code rss_limit.
+
 rehydrate_quail_error(exception_type, message, repair_hint default None):
   Rebuild a Quail error from worker/host wire fields.
   Map known type names to QuailSyntaxError, QuailScopeError, QuailFieldError,
-  QuailRuntimeError, busy subclasses, or QuailError.
+  QuailRuntimeError, busy/cpu/rss subclasses, or QuailError.
   Strip a redundant "TypeName: " prefix from the message when present.
   Unknown types become QuailRuntimeError.
   If repair_hint is a non-empty string, remember it on QuailRuntimeError and
-  the busy subclasses. Other types ignore it.
+  its subclasses. Other types ignore it.

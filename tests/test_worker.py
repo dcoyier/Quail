@@ -164,6 +164,16 @@ def test_rehydrate_quail_error_preserves_repair_hint() -> None:
     assert isinstance(bare, QuailRuntimeError)
     assert bare.repair_hint is None
 
+    rss = rehydrate_quail_error(
+        "QuailRssLimitError",
+        "quail_exec exceeded its 256 MiB worker RSS limit",
+        "Reduce materialized results.",
+    )
+    from quail.analysis.errors import QuailRssLimitError
+
+    assert isinstance(rss, QuailRssLimitError)
+    assert rss.repair_hint == "Reduce materialized results."
+
 
 def test_worker_rpc_preserves_runtime_repair_hint() -> None:
     hint = "Set core.search_database, re-run quail, then retry the whole exec."
