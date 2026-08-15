@@ -205,7 +205,7 @@ def _csv_cell(value: Any) -> str:
 
 
 def _safe_filename_part(value: str) -> str:
-    cleaned = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in value)
-    if not cleaned or cleaned in {".", ".."}:
+    allowed = all(ch.isalnum() or ch in "._-" for ch in value)
+    if not allowed or not value or value in {".", ".."}:
         raise SessionSyntaxError("Export filename cannot be built from this id")
-    return cleaned
+    return value

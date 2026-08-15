@@ -16,7 +16,7 @@ export_session_csv(db, session_id, dataset_id, dest_dir):
   Load all source values and all analysis values for this scope into
   entry-id maps (decoded JSON).
   Resolve dest_dir, create it, and build
-  <dataset_id>.<session_id>.csv with unsafe characters replaced.
+  <dataset_id>.<session_id>.csv; ids must already be safe filename parts.
   Reject if that path would leave dest_dir.
   Write a temp file: header, then one row per entry.
   Untagged or missing cells are empty.
@@ -37,5 +37,6 @@ _csv_cell(value):
   Otherwise give back canonical_json text.
 
 _safe_filename_part(value):
-  Keep letters, digits, dot, underscore, and hyphen.
-  If nothing remains or the result is . or .., raise.
+  Require letters, digits, dot, underscore, and hyphen only.
+  If empty, ., .., or any other character, raise.
+  Give back the id unchanged.

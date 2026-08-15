@@ -267,6 +267,12 @@ def test_clerk_session_workspace_mismatch_after_switch(tmp_path: Path) -> None:
                 },
             )
             assert _is_error(failed)
+            exported = await server.call_tool(
+                "quail_export_csv",
+                {"session_id": session_id, "dataset_id": "other"},
+            )
+            assert _is_error(exported)
+            assert _as_dict(exported)["diagnostic"]["stable_error_code"] == "quail_syntax_error"
 
     asyncio.run(run())
 
@@ -399,6 +405,10 @@ default_workspace = "acme"
                 {"session_id": session_id, "dataset_id": "notes"},
             )
             assert _is_error(stolen_export)
+            assert (
+                _as_dict(stolen_export)["diagnostic"]["stable_error_code"]
+                == "quail_scope_error"
+            )
 
     asyncio.run(run())
 
