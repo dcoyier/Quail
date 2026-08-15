@@ -78,7 +78,8 @@ def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
         assert "dataset_id" in tools["quail_export_csv"].inputSchema["properties"]
         export_desc = (tools["quail_export_csv"].description or "").lower()
         assert "not a download" in export_desc
-        assert "does not reprocess" in export_desc or "not a reprocess" in export_desc
+        assert "reprocess" in export_desc
+        assert "warm-path" in export_desc
         assert "message" in tools["provide_feedback"].inputSchema["properties"]
 
     asyncio.run(run())
@@ -163,6 +164,7 @@ def test_quail_export_csv_writes_host_file(tmp_path: Path) -> None:
         setup = _as_dict(await _call(server, "quail_setup"))
         assert "quail_export_csv" in setup["documentation"]
         assert "does not reprocess" in setup["documentation"]
+        assert "warm-path" in setup["documentation"]
         session_id = setup["session_id"]
         tagged = _as_dict(
             await _call(

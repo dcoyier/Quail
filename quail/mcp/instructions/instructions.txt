@@ -7,9 +7,9 @@ There is a private Clerk session-rules string (same, plus sessions are owned by
 the creating user; do not use another user's session_id).
 
 There is a private export-rules string (quail_export_csv writes a serve-host
-CSV of source plus this session's tags; path is not a download; warmed
-Lexical/Semantic is for bare source; export does not reprocess or make
-scoring fast; do not overlap with quail_exec).
+CSV of source plus this session's tags; path is not a download; that is the
+route to warm-path speed after process makes those columns source; export
+does not reprocess; do not overlap with quail_exec).
 
 unrestricted_instructions(workspace_id):
   Give back fixed-workspace connect-time instructions (unrestricted; no sign-in)

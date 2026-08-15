@@ -161,6 +161,7 @@ def test_instructions_state_session_rules() -> None:
         assert "one quail_exec in flight per session_id" in text
     assert "quail_export_csv" in unrestricted
     assert "not a download" in unrestricted
-    assert "warmed scoring" in unrestricted or "warmed" in unrestricted
+    assert "warm-path" in unrestricted
     assert "quail_export_csv" in clerk
     assert "not a download" in clerk
+    assert "warm-path" in clerk

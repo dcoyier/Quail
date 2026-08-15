@@ -513,10 +513,10 @@ def _register_unrestricted_tools(
     async def quail_export_csv(session_id: str, dataset_id: str) -> CallToolResult:
         """Write source columns plus this session's analysis tags to a CSV on the serve host.
 
-        Lexical/Semantic on tags load cells; warmed scoring is for bare source.
-        The result is a filesystem path, not a download. It does not reprocess
-        or make scoring fast. Do not overlap with quail_exec on the same
-        session_id.
+        That is the route to warm-path speed for session tags: after process
+        those columns are source, so Lexical/Semantic skip cell load. The
+        result is a filesystem path, not a download. Export itself does not
+        reprocess. Do not overlap with quail_exec on the same session_id.
         """
 
         def work() -> CallToolResult:
@@ -897,10 +897,10 @@ def _register_clerk_tools(
     ) -> CallToolResult:
         """Write source columns plus this session's analysis tags to a CSV on the serve host.
 
-        Lexical/Semantic on tags load cells; warmed scoring is for bare source.
-        The result is a filesystem path, not a download. It does not reprocess
-        or make scoring fast. Do not overlap with quail_exec on the same
-        session_id.
+        That is the route to warm-path speed for session tags: after process
+        those columns are source, so Lexical/Semantic skip cell load. The
+        result is a filesystem path, not a download. Export itself does not
+        reprocess. Do not overlap with quail_exec on the same session_id.
         """
 
         def work() -> CallToolResult:

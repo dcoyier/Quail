@@ -28,10 +28,10 @@ _SESSION_RULES = (
 _EXPORT_RULES = (
     "quail_export_csv(session_id, dataset_id) writes source columns plus this "
     "session's tags to a CSV on the serve host (path in the result, not a "
-    "download). Lexical/Semantic on analysis tags load cells; warmed scoring "
-    "is for bare source. Export does not reprocess or make scoring fast. Do "
-    "not overlap quail_export_csv with quail_exec on the same session_id "
-    "(session_busy)."
+    "download). That is the route to warm-path speed for session tags: after "
+    "process those columns are source, so Lexical/Semantic skip cell load. "
+    "Export itself does not reprocess. Do not overlap quail_export_csv with "
+    "quail_exec on the same session_id (session_busy)."
 )
 
 _CLERK_SESSION_RULES = (

@@ -322,8 +322,9 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
 
 `quail_export_csv(session_id, dataset_id)` writes source columns plus this
 session's tags to a CSV on the serve host (a filesystem `path`, not the
-file body). Export does not reprocess and does not make scoring fast:
-warmed `Lexical` / `Semantic` apply to bare **source**, not to analysis tags.
+file body). That is the route to warm-path speed for session tags: after
+`quail process` those columns are **source**, so `Lexical` / `Semantic` skip
+cell load. Export itself does not reprocess.
 
 ---
 
