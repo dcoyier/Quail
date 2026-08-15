@@ -39,6 +39,8 @@ validate_operation_pipeline(operations):
     If kind is Lexical or Semantic:
       Require current_type is any, text, list_text, or text_or_list.
       Require this is the last operation.
+      If any earlier operation is RegexSearch, raise: filter with
+      RegexSearch(...) != None, then run Lexical/Semantic on the field.
       Set current_type to score.
       Continue.
     Otherwise raise unsupported operation.

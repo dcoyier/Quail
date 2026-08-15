@@ -78,6 +78,12 @@ def validate_operation_pipeline(operations: tuple[Operation, ...]) -> None:
                 raise QuailSyntaxError(
                     "Lexical(...) and Semantic(...) must end the expression pipeline"
                 )
+            if any(prior.kind == "RegexSearch" for prior in operations[:index]):
+                raise QuailSyntaxError(
+                    f"{kind}(...) cannot follow RegexSearch() in the same pipeline. "
+                    "Filter with RegexSearch(...) != None, then run "
+                    f"{kind}(...) on the field."
+                )
             current_type = "score"
             continue
         raise QuailSyntaxError(f"Unsupported operation: {kind}")

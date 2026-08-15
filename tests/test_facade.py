@@ -87,6 +87,20 @@ def test_lexical_must_end_pipeline() -> None:
         Expression(Field("content"), Lexical("a"), AsText())
 
 
+def test_lexical_cannot_follow_regexsearch() -> None:
+    with pytest.raises(QuailSyntaxError, match="cannot follow RegexSearch"):
+        Expression(Field("body"), RegexSearch("hydrangea"), Lexical("care"))
+    with pytest.raises(QuailSyntaxError, match="cannot follow RegexSearch"):
+        Expression(Field("body"), RegexSearch("hydrangea"), AsText(), Semantic("care"))
+    # Filter + separate Lexical on the field remains legal.
+    mentions = Expression(Field("body"), RegexSearch("hydrangea")) != None  # noqa: E711
+    score = Expression(Field("body"), Lexical("hydrangea care"))
+    group = G0.where(mentions)
+    rank = Ranking(expression=score)
+    assert group.right is not None
+    assert rank.expression is score
+
+
 def test_search_query_rejects_field_scoped_group() -> None:
     with pytest.raises(QuailScopeError, match="entry-scoped"):
         Lexical(G1)
