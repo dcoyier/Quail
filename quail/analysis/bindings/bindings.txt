@@ -17,7 +17,8 @@ encode_binding_value(value):
   Encode None, bool, int, float, and str as literal.
   Encode plain list and dict as literal_v2 when fully JSON-like.
   Encode lists with symbolic items as result_list plain_list.
-  Raise for tuples, sets, callables, re, cycles, and non-finite floats.
+  Raise for tuples (say rebind as a list), sets, callables, re, cycles, and
+  non-finite floats.
 
 decode_binding_value(value_kind, value):
   Rehydrate one binding through the matching decoder.

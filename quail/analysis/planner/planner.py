@@ -117,7 +117,7 @@ def plan_retrieve(
         and unit.scope in ("fields", "values")
         and not _ranking_empty(ranking)
     ):
-        raise QuailScopeError("fields and values units cannot be ranked")
+        raise QuailScopeError("fields and values units cannot be ranked; drop rank=")
     return RetrievePlan(unit=unit, group=group, limit=limit, order=order, ranking=ranking)
 
 

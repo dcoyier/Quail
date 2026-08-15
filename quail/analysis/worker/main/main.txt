@@ -12,6 +12,8 @@ serve(stdin, stdout):
   On BindingEncodingError or other failure write result not ok with exception_type,
   message, an empty printed_output, optional repair_hint when the error is a
   QuailRuntimeError that has one, and no binding commit on the host.
+  NameError messages say to assign that name again in this session because
+  failed execs do not keep bindings.
   Always clear the Entry host-call context var.
 
 _failure_result(error, message):

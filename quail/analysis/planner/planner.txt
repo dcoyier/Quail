@@ -14,7 +14,7 @@ plan_retrieve(unit, group, limit, order, rank):
   Require group is GroupExpr.
   Require positive limit and order in top, middle, bottom.
   Require unit and group scopes match.
-  Reject ranking for fields and values units.
+  Reject ranking for fields and values units; the message says drop rank=.
   Give back a RetrievePlan.
 
 plan_count(unit, group):

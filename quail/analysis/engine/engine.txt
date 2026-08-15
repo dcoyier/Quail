@@ -1,7 +1,7 @@
 QueryEngine evaluates plans for one Scope against catalog data and an in-memory overlay.
 
-There is a repair hint _LEXICAL_NOT_CONFIGURED_HINT to set core.search_database,
-re-run quail process, then retry the whole exec.
+There is a repair hint _LEXICAL_NOT_CONFIGURED_HINT to pin core.search_database,
+re-run quail process, restart quail run, then retry the whole exec.
 There is a repair hint _SEMANTIC_NOT_CONFIGURED_HINT that also names
 [providers.*] and [datasets.embedding].
 
@@ -15,8 +15,11 @@ mutations:
 
 resolve_field(field):
   Resolve a Field or name against the catalog.
-  When kind is set and does not match the catalog, raise QuailFieldError.
-  Unknown names raise QuailFieldError.
+  When kind is set and does not match the catalog, raise QuailFieldError
+  and mention del name then assign again if the Field is a stale binding.
+  Unknown names raise QuailFieldError. If the name is id, say CSV id is
+  entry.id. Otherwise say inspect retrieve(unit=fields, group=G1) or use
+  entry.id.
 
 check_bound_field_kind(field):
   When field.kind is set and the name exists in the catalog with a different

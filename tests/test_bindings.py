@@ -46,7 +46,7 @@ def test_binding_codec_scalars_and_reject() -> None:
     encoded = encode_binding_value({"b": 1, "a": 2})
     decoded = decode_binding_value(encoded.value_kind, encoded.value)
     assert list(decoded.keys()) == ["b", "a"]
-    with pytest.raises(QuailRuntimeError):
+    with pytest.raises(QuailRuntimeError, match="rebind as a list"):
         encode_binding_value((1, 2))
     with pytest.raises(QuailRuntimeError):
         encode_binding_value({1, 2})

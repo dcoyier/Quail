@@ -12,8 +12,9 @@ from quail.analysis.exec_host import dispatch_call, run_analysis
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
 from quail.analysis.group import G0, G1, GroupExpr
-from quail.analysis.operations import AsText, Lexical, RegexSearch, RegexSub, Value
-from quail.analysis.planner import plan_create_field
+from quail.analysis.operations import AsText, Length, Lexical, RegexSearch, RegexSub, Value
+from quail.analysis.planner import plan_create_field, plan_retrieve
+from quail.analysis.ranking import Ranking
 from quail.analysis.unit import Unit, fields
 from quail.datasets import import_csv_dataset, open_core_db
 from quail.search import LexicalService, open_search_db
@@ -381,6 +382,12 @@ def test_plan_create_field_strips_field_name() -> None:
         plan_create_field(Field("   "))
 
 
+def test_values_unit_rank_says_drop_rank() -> None:
+    score = Expression(Field("title"), Length())
+    with pytest.raises(QuailScopeError, match="drop rank="):
+        plan_retrieve(unit=Unit("values", Field("title")), rank=Ranking(expression=score))
+
+
 def test_distinct_values_normalize_dict_key_order(tmp_path: Path) -> None:
     db, session = _seed(tmp_path)
     with db:
@@ -467,10 +474,12 @@ def test_field_group_members_resolve_against_catalog(tmp_path: Path) -> None:
                 ("body", "source"),
             ]
             unknown = GroupExpr(scope="fields", members=[Field("missing")])
-            with pytest.raises(QuailFieldError, match="Unknown field"):
+            with pytest.raises(QuailFieldError, match="group=G1"):
                 dispatch_call(
                     engine, "retrieve", (), {"unit": fields, "group": unknown, "limit": 50}
                 )
+            with pytest.raises(QuailFieldError, match="entry.id"):
+                dispatch_call(engine, "retrieve", (), {"unit": Unit("values", Field("id")), "limit": 5})
 
         run_analysis(
             db,

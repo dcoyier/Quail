@@ -43,11 +43,12 @@ from quail.session.models import FieldCreate, Scope, ValueDelete, ValueWrite
 from quail.session.overlay import analysis_fields, analysis_values, catalog_fields
 
 _LEXICAL_NOT_CONFIGURED_HINT = (
-    "Set core.search_database, re-run quail process, then retry the whole exec."
+    "Pin core.search_database, re-run quail process, restart quail run, "
+    "then retry the whole exec."
 )
 _SEMANTIC_NOT_CONFIGURED_HINT = (
-    "Set core.search_database, [providers.*], and [datasets.embedding], "
-    "re-run quail process, then retry the whole exec."
+    "Pin core.search_database, [providers.*], and [datasets.embedding], "
+    "re-run quail process, restart quail run, then retry the whole exec."
 )
 
 
@@ -273,11 +274,22 @@ class QueryEngine:
         if requested_kind is not None and same_name is not None:
             raise QuailFieldError(
                 f"Field {name!r} is registered as {same_name.kind}, not {requested_kind}; "
-                f"use Field({name!r}, kind={same_name.kind!r}) or omit kind"
+                f"use Field({name!r}, kind={same_name.kind!r}) or omit kind. "
+                f"If this Field is a stale binding, del {name} and assign again "
+                "in this session"
             )
+        raise self._unknown_field_error(name, requested_kind)
+
+    def _unknown_field_error(self, name: str, requested_kind: str | None) -> QuailFieldError:
         if requested_kind is None:
-            raise QuailFieldError(f"Unknown field: {name}")
-        raise QuailFieldError(f"Unknown {requested_kind} field: {name}")
+            message = f"Unknown field: {name}"
+        else:
+            message = f"Unknown {requested_kind} field: {name}"
+        if name == "id":
+            message += '; the CSV id column is entry.id, not Field("id")'
+        else:
+            message += "; inspect retrieve(unit=fields, group=G1) or use entry.id"
+        return QuailFieldError(message)
 
     def check_bound_field_kind(self, field: Field) -> None:
         """At bind restore/commit: enforce explicit kind vs catalog; skip unknown names."""
@@ -293,7 +305,9 @@ class QueryEngine:
                 raise QuailFieldError(
                     f"Field {field.name!r} is registered as {catalog_field.kind}, "
                     f"not {field.kind}; "
-                    f"use Field({field.name!r}, kind={catalog_field.kind!r}) or omit kind"
+                    f"use Field({field.name!r}, kind={catalog_field.kind!r}) or omit kind. "
+                    f"If this Field is a stale binding, del {field.name} and assign again "
+                    "in this session"
                 )
             return
 

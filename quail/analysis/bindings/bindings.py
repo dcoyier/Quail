@@ -161,7 +161,8 @@ def encode_binding_value(value: Any) -> EncodedBinding:
     if type(value) is dict:
         return _encoded_binding("literal_v2", encode_ordered_literal(value))
     if isinstance(value, tuple | set | frozenset):
-        raise QuailRuntimeError(f"Cannot persist value of type {type(value).__name__}")
+        extra = "; rebind as a list" if isinstance(value, tuple) else ""
+        raise QuailRuntimeError(f"Cannot persist value of type {type(value).__name__}{extra}")
     raise QuailRuntimeError(f"Cannot persist value of type {type(value).__name__}")
 
 

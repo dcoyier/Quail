@@ -111,6 +111,19 @@ print(count(group=G0.where(Expression(topic, Value()) == "climate")))
         assert analysis_values(db, scope, "topic") == [None, "climate", None]
 
 
+def test_name_error_says_assign_again_in_this_session(tmp_path: Path) -> None:
+    db, session = _seed(tmp_path)
+    with db:
+        with pytest.raises(QuailRuntimeError, match="Assign that name again in this session"):
+            exec_script(
+                db,
+                session_id=session.id,
+                dataset_id="notes",
+                expected_revision=0,
+                code="print(missing_name)\n",
+            )
+
+
 def test_worker_failure_does_not_commit(tmp_path: Path) -> None:
     db, session = _seed(tmp_path)
     with db:

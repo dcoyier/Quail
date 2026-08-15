@@ -130,9 +130,15 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
     except (QuailError, QuailSyntaxError, QuailRuntimeError) as error:
         _write(output_stream, _failure_result(error, message=str(error)))
     except Exception as error:  # noqa: BLE001 - sandbox boundary
+        message = f"{type(error).__name__}: {error}"
+        if isinstance(error, NameError):
+            message += (
+                ". Assign that name again in this session; "
+                "failed execs do not keep bindings"
+            )
         _write(
             output_stream,
-            _failure_result(error, message=f"{type(error).__name__}: {error}"),
+            _failure_result(error, message=message),
         )
     finally:
         reset_host_call(token)
