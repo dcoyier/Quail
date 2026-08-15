@@ -608,11 +608,15 @@ def test_example_package_surface(tmp_path: Path) -> None:
         docs = provider.dataset_document(context, "notes")
         assert docs is not None
         assert "Lexical" in docs
+        assert "per dataset version" in docs
         result = provider.call_tool(context, "notes_describe_dataset", {"dataset_id": "notes"})
         assert isinstance(result, ToolResult)
         assert result.structured_content["heading"] == "Notes"
+        assert "Prefer body" in (result.text or "")
         html = connector.read_resource("ui://notes/dataset-card.html")
         assert "notes_describe_dataset" in html
+        assert "Prefer" in html
+        assert "body" in html
 
 
 def test_production_shaped_toml_loads_notes_via_entry_point(tmp_path: Path) -> None:

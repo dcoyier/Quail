@@ -58,8 +58,8 @@ Small sample CSV (`id`, `title`, `body`) for connector and analysis smoke tests.
 
 - Prefer `body` for Lexical and Semantic search and for `RegexSearch`.
 - `title` is a short label; `id` is stable across imports.
-- Imported source data is immutable; analysis tags and bindings stay on the
-  session.
+- Imported source data is immutable; analysis tags are per dataset version;
+  bindings stay on the session.
 
 Use `{tool}` for a short card, then `quail_exec` with `quail_get_api_docs`.
 """.format(tool=_TOOL_NAME)
@@ -107,7 +107,10 @@ class NotesProvider:
         }
         return ToolResult(
             structured_content=payload,
-            text=f"{self._heading}: {dataset.name or dataset.id}",
+            text=(
+                f"{self._heading}: {dataset.name or dataset.id}. "
+                "Prefer body for Lexical, Semantic, and RegexSearch."
+            ),
         )
 
     def dataset_document(self, context: ConnectorContext, dataset_id: str) -> str | None:
