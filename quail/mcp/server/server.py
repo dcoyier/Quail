@@ -485,7 +485,7 @@ def _register_unrestricted_tools(
         exactly one dataset_id (no join). Reuse one session_id serially; overlap
         on the same session_id fails with session_busy. A full process exec slot
         fails with server_busy (raise hosting.max_concurrent_executions and
-        restart quail run). Omitted retrieve limit is 5.
+        restart quail run). Omitted retrieve limit follows api.md.
         time_window is "standard" (30s wall / 15s CPU) or "extended"
         (100s wall / 60s CPU); worker RSS is capped at 256 MiB.
         """
@@ -861,7 +861,7 @@ def _register_clerk_tools(
         session_busy. A full process exec slot fails with server_busy (raise
         hosting.max_concurrent_executions and restart quail run). After
         switching workspace, start a new session first. Omitted retrieve limit
-        is 5.
+        follows api.md.
         """
 
         def work() -> CallToolResult:

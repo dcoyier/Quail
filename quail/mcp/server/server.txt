@@ -58,7 +58,7 @@ Unrestricted quail_setup docstring says call once after connect (no
 quail_switch_workspace).
 quail_exec docstring: bindings persist, one dataset_id, session_busy vs
 server_busy (raise hosting.max_concurrent_executions and restart run),
-omitted retrieve limit is 5.
+omitted retrieve limit follows api.md.
 quail_exec passes context.search_runtime into exec_script (pool checkout per exec).
 
 Clerk tools:

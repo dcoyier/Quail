@@ -79,7 +79,7 @@ def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
         assert "server_busy" in exec_desc
         assert "bindings persist" in exec_desc
         assert "one dataset_id" in exec_desc
-        assert "omitted retrieve limit is 5" in exec_desc
+        assert "follows api.md" in exec_desc
         assert "session_id" in tools["quail_export_csv"].inputSchema["properties"]
         assert "dataset_id" in tools["quail_export_csv"].inputSchema["properties"]
         export_desc = (tools["quail_export_csv"].description or "").lower()
