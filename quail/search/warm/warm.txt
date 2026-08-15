@@ -51,6 +51,9 @@ warm_dataset:
   then embed unique missing texts in batches with at most
   max_concurrent_embed_requests in flight (provider calls only; cache writes
   stay on the main thread).
+  Unless clear is set, copy cached vectors for those unique texts from any
+  other version of the same workspace and dataset id with the same
+  profile_hash and dimensions before embedding misses. --clear skips that copy.
   Replace the compact source-field entry/segment-to-text-hash mappings after
   embeddings succeed.
   Write a ready warm receipt storing the search-build fingerprint.

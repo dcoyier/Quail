@@ -318,7 +318,11 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
   in the dataset embedding field set at `quail process`, scoring uses the
   process-warmed segment map and does not load source cells. Prefix ops,
   analysis fields, and source fields omitted from that set still materialize
-  cells.
+  cells. Re-run `quail process` after this layout change.
+  Re-processing the **same dataset id** (same `[[datasets]] id`) reuses
+  embeddings for unchanged text when the embedding profile is unchanged.
+  `--clear` and a new id rebuild. Analysis tags stay session-only and do not
+  use the warmed path.
 
 `quail_export_csv(session_id, dataset_id)` writes source columns plus this
 session's tags to a CSV on the serve host (a filesystem `path`, not the
