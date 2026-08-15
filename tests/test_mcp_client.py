@@ -74,6 +74,43 @@ def test_main_call_connection_failure_exits_1(capsys: pytest.CaptureFixture[str]
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "mcp_client:" in captured.err
+    assert "TaskGroup" not in captured.err
+
+
+def test_main_url_before_subcommand_connects_to_that_url(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seen: list[str] = []
+
+    async def _capture(url: str, *_args: object, **_kwargs: object) -> None:
+        seen.append(url)
+        raise ConnectionError("refused")
+
+    monkeypatch.setattr("quail.mcp_client.mcp_client.call_tool", _capture)
+    code = main(
+        [
+            "--url",
+            "http://127.0.0.1:1/mcp",
+            "call",
+            "quail_setup",
+            "{}",
+        ]
+    )
+    assert code == 1
+    assert seen == ["http://127.0.0.1:1/mcp"]
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "mcp_client:" in captured.err
+    assert "invalid choice" not in captured.err
+    assert "refused" in captured.err
+
+
+def test_client_error_message_unwraps_exception_group() -> None:
+    from quail.mcp_client.mcp_client import _client_error_message
+
+    inner = ConnectionError("All connection attempts failed")
+    grouped = ExceptionGroup("unhandled errors in a TaskGroup (1 sub-exception)", [inner])
+    assert _client_error_message(grouped) == "All connection attempts failed"
 
 
 def test_main_call_sdk_value_error_exits_1(

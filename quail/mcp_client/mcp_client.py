@@ -34,8 +34,9 @@ def main(argv: list[str] | None = None) -> int:
         return int(code) if isinstance(code, int) else 2
 
     try:
+        url = _mcp_url(args)
         if args.command == "list":
-            payload = asyncio.run(list_tools(args.url))
+            payload = asyncio.run(list_tools(url))
             _print_json(payload)
             return 0
         try:
@@ -43,11 +44,11 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as error:
             print(f"mcp_client: {error}", file=sys.stderr)
             return 2
-        result = asyncio.run(call_tool(args.url, args.tool_name, arguments))
+        result = asyncio.run(call_tool(url, args.tool_name, arguments))
         _print_json(_call_result_payload(result))
         return 1 if result.isError else 0
     except Exception as error:
-        print(f"mcp_client: {error}", file=sys.stderr)
+        print(f"mcp_client: {_client_error_message(error)}", file=sys.stderr)
         return 1
 
 
@@ -115,12 +116,19 @@ def _build_parser() -> argparse.ArgumentParser:
             "Use when you do not have a native MCP client."
         ),
     )
+    parser.add_argument(
+        "--url",
+        dest="url_before",
+        default=None,
+        help=f"MCP endpoint URL (default: {DEFAULT_URL})",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     list_parser = sub.add_parser("list", help="List tools from an MCP server")
     list_parser.add_argument(
         "--url",
-        default=DEFAULT_URL,
+        dest="url_after",
+        default=None,
         help=f"MCP endpoint URL (default: {DEFAULT_URL})",
     )
 
@@ -132,10 +140,35 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     call_parser.add_argument(
         "--url",
-        default=DEFAULT_URL,
+        dest="url_after",
+        default=None,
         help=f"MCP endpoint URL (default: {DEFAULT_URL})",
     )
     return parser
+
+
+def _mcp_url(args: argparse.Namespace) -> str:
+    """Prefer --url after the subcommand, then before it, then DEFAULT_URL."""
+
+    after = getattr(args, "url_after", None)
+    before = getattr(args, "url_before", None)
+    return after or before or DEFAULT_URL
+
+
+def _client_error_message(error: BaseException) -> str:
+    """Unwrap TaskGroup/ExceptionGroup so connection failures are readable."""
+
+    current: BaseException = error
+    while isinstance(current, BaseExceptionGroup) and current.exceptions:
+        current = current.exceptions[0]
+    text = str(current).strip()
+    if (not text) or "TaskGroup" in text or "unhandled errors" in text.lower():
+        nested = current.__cause__ or current.__context__
+        if nested is not None:
+            nested_text = str(nested).strip()
+            if nested_text:
+                return nested_text
+    return text or type(current).__name__
 
 
 @asynccontextmanager

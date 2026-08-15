@@ -54,13 +54,14 @@ uv run quail run --config /absolute/path/to/quail.toml
 
 ```sh
 uv run python -m quail.mcp_client list
+uv run python -m quail.mcp_client --url http://127.0.0.1:8000/mcp list
 uv run python -m quail.mcp_client call quail_setup '{}'
 uv run python -m quail.mcp_client call quail_exec @exec.json
 ```
 
-   Default URL is `http://127.0.0.1:8000/mcp`. Pass `--url` to override.
-   Arguments are a JSON object, `@path.json`, or `-` (stdin). stdout is JSON
-   only.
+   Default URL is `http://127.0.0.1:8000/mcp`. `--url` may sit before or after
+   the subcommand (`list --url …` still works). Arguments are a JSON object,
+   `@path.json`, or `-` (stdin). stdout is JSON only.
 
 ### process vs run
 
