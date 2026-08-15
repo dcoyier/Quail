@@ -16,7 +16,7 @@ Pass arguments by name.
 
 | Argument | Meaning |
 | --- | --- |
-| `session_id` | Durable analysis context in one workspace. Bindings and tags stick to this session. MCP binds the workspace; after a workspace switch, start a new session. Run one quail_exec at a time per session_id. |
+| `session_id` | Durable analysis context in one workspace. Bindings and tags stick to this session. MCP binds the workspace; if the workspace changes, start a new session. Run one `quail_exec` at a time per `session_id` — overlap (including `quail_export_csv` on the same session) fails with `session_busy`. |
 | `dataset_id` | Exactly one dataset for this call (its active immutable version). |
 | `code` | Bounded Quail Python (no imports, no files, no network). |
 | `time_window` | `"standard"` (30s wall / 15s CPU) or `"extended"` (100s wall / 60s CPU). Both are finite; extended is just longer. Worker RSS is always capped at 256 MiB. |
@@ -34,7 +34,7 @@ Only `print(...)` leaves the sandbox. Return values of expressions do not.
 | Term | Meaning |
 | --- | --- |
 | **Entry** | One row in the dataset. |
-| **Field** | One column: source (imported, immutable) or analysis (session tags). |
+| **Field** | One source or analysis column. The CSV `id` column is `entry.id`, not `Field("id")`. |
 | **Expression** | Recipe that reads/transforms one field’s value per entry. |
 | **Predicate** | True/false recipe per entry (usually from comparing expressions). |
 | **Group** | Symbolic set of entries or fields — not a Python list until you retrieve. |
@@ -50,6 +50,9 @@ does not read the data. Quail evaluates when you `retrieve`, `count`,
 ---
 
 ## Start here
+
+The shipped `examples/data/notes.csv` columns are `id`, `title`, `body`. Inspect
+`G1` on other datasets. Empty cells are `None`, not `""`.
 
 ### 1. Look at fields
 
@@ -74,19 +77,20 @@ for entry in retrieve(group=G0, limit=10):
 ### 3. Filter with regex
 
 ```python
-content = Field("content")
-mentions = Expression(content, RegexSearch("hydrangea", flags=re.I)) != None
+body = Field("body")
+mentions = Expression(body, RegexSearch("hydrangea", flags=re.I)) != None
 matching = G0.where(mentions)
 
 print("matches", count(group=matching))
 for entry in retrieve(group=matching, limit=10):
-    print(entry.id, entry.value(content)[:500])
+    text = entry.value(body) or ""
+    print(entry.id, text[:500])
 ```
 
 ### 4. Rank with lexical search
 
 ```python
-score = Expression(Field("content"), Lexical("hydrangea care"))
+score = Expression(Field("body"), Lexical('"hydrangea care"'))
 matching = G0.where(score > 0)
 rank = Ranking(expression=score)
 
@@ -101,7 +105,7 @@ for i in range(len(ranked_entries)):
 
 ```python
 selected = G0.where(
-    Expression(Field("content"), RegexSearch("climate", flags=re.I)) != None
+    Expression(Field("body"), RegexSearch("climate", flags=re.I)) != None
 )
 topic = create_field("topic")
 tag(selected, topic, "climate")
@@ -221,7 +225,7 @@ are rejected — RE2 word classes are ASCII. No lookaround, no backreferences.
 ### Predicates and groups
 
 ```python
-pred = Expression(Field("content"), Length()) >= 500
+pred = Expression(Field("body"), Length()) >= 500
 group = G0.where(pred)
 both = pred_a & pred_b
 either = pred_a | pred_b
@@ -312,8 +316,10 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
   On a bare source field (no `Slice` / `AsText` / … in front), scoring uses the
   process-warmed FTS index and does not load source cells.
 - **Semantic:** exact cosine similarity under the dataset embedding profile
-  (configured outside this API; scored in Turso, not approximate ANN). The same
-  four query shapes work; entry targets read the expression root field. If search
+  (configured outside this API; scored in Turso, not approximate ANN). Cosine
+  is not a match bit — do not copy Lexical’s `score > 0` as “matched.” Empty
+  cells score `None`. The same four query shapes work; entry targets read the
+  expression root field. If search
   isn’t available, you get a repairable runtime diagnostic — fix config and
   rerun the whole exec.
   On a bare source field (no `Slice` / `AsText` / … in front) that was included
@@ -326,11 +332,14 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
   `--clear` and a new id rebuild. Analysis tags stay session-only and do not
   use the warmed path.
 
-`quail_export_csv(session_id, dataset_id)` writes source columns plus this
+`quail_export_csv` is a **host MCP tool**, not a name inside `quail_exec`. Call
+it with `session_id` and `dataset_id`. It writes source columns plus this
 session's tags to a CSV on the serve host (a filesystem `path`, not the
-file body). That is the route to warm-path speed for session tags: after
-`quail process` those columns are **source**, so `Lexical` / `Semantic` skip
-cell load. Export itself does not reprocess.
+file body). That is the route to warm-path speed for session tags: stop
+`quail run`, point the same dataset `id` `source` at that path in the TOML
+(the CLI never writes it), then `quail process` so those columns are **source**
+and `Lexical` / `Semantic` skip cell load. Export itself does not reprocess.
+Do not overlap it with `quail_exec` on the same `session_id` (`session_busy`).
 
 ---
 

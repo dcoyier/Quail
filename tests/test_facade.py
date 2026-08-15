@@ -31,7 +31,7 @@ from quail.analysis import (
 
 
 def test_filter_recipe_with_regex() -> None:
-    content = Field("content")
+    content = Field("body")
     mentions = Expression(content, RegexSearch("hydrangea", flags=0)) != None  # noqa: E711
     matching = G0.where(mentions)
     assert isinstance(mentions, Predicate)
@@ -41,7 +41,7 @@ def test_filter_recipe_with_regex() -> None:
 
 
 def test_rank_recipe_with_lexical() -> None:
-    score = Expression(Field("content"), Lexical("hydrangea care"))
+    score = Expression(Field("body"), Lexical('"hydrangea care"'))
     matching = G0.where(score > 0)
     rank = Ranking(expression=score)
     assert rank.expression is score

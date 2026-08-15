@@ -43,4 +43,4 @@ name = "Notes"
 # dimensions = 768
 # revision = "embeddinggemma-local-v1"
 # Optional: only embed these CSV columns (Lexical still uses all fields):
-# fields = ["content"]
+# fields = ["body"]
