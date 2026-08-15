@@ -34,6 +34,8 @@ Hand-edit `quail.toml`, import CSVs with `quail process`, then serve with
 - Change routing: [`docs/development.md`](docs/development.md)
 - Connector SDK: [`docs/connector-sdk.md`](docs/connector-sdk.md) ·
   [`examples/notes-connector/`](examples/notes-connector/)
+  (pin the wheel + `[[connectors]]`; connectors load at `quail run`, not
+  `quail process`).
 
 ```sh
 uv sync

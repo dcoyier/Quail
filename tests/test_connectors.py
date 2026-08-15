@@ -922,6 +922,133 @@ def test_optional_connector_args_omit_none() -> None:
     asyncio.run(run())
 
 
+def test_connector_live_call_enforces_published_schema() -> None:
+    from mcp.server.fastmcp import FastMCP
+
+    from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
+
+    class _OptionalProvider:
+        def call_tool(self, context, name, arguments):
+            del context, name
+            return ToolResult(structured_content={"ok": True, "keys": sorted(arguments)})
+
+        def dataset_document(self, context, dataset_id):
+            del context, dataset_id
+            return None
+
+        def handle_route(self, context, route_id, path_params):
+            del context, route_id, path_params
+            return None
+
+    manifest = ConnectorManifest(
+        id="opt",
+        version="1.0.0",
+        tools=(
+            ToolSpec(
+                name="opt_describe",
+                title="Describe",
+                description="Optional include_version.",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "dataset_id": {"type": "string"},
+                        "include_version": {"type": "boolean"},
+                    },
+                    "required": ["dataset_id"],
+                    "additionalProperties": False,
+                },
+            ),
+        ),
+    )
+    connected = ConnectedProvider(
+        extension_id="opt",
+        version="1.0.0",
+        manifest=manifest,
+        connector=_FakeConnector(
+            ConnectorEnvironment(
+                host=_Host({}),
+                public_base_url="http://127.0.0.1:8765",
+                base_path=Path("/tmp"),
+            ),
+            extension_id="opt",
+            version="1.0.0",
+        ),
+        provider=_OptionalProvider(),
+        dataset_ids=frozenset({"notes"}),
+        provides_docs=False,
+    )
+    catalog = ConnectorCatalog(
+        by_workspace={
+            "local": WorkspaceConnectorBundle(
+                workspace_id="local",
+                providers=(connected,),
+                docs_by_dataset={},
+            )
+        }
+    )
+    server = FastMCP("t")
+    register_connectors(
+        server,
+        catalog,
+        resolve_workspace=lambda _ctx: ("local", None),
+    )
+
+    async def run() -> None:
+        extra = await server.call_tool(
+            "opt_describe",
+            {"dataset_id": "notes", "surprise": True},
+        )
+        assert extra.isError
+        extra_diag = extra.structuredContent["diagnostic"]
+        assert extra_diag["error_class"] == "ConnectorError"
+        assert extra_diag["stable_error_code"] == "invalid_arguments"
+        assert "surprise" in extra_diag["message"]
+        assert "_boundArguments" not in extra_diag["message"]
+
+        wrong = await server.call_tool(
+            "opt_describe",
+            {"dataset_id": "notes", "include_version": "yes"},
+        )
+        assert wrong.isError
+        wrong_diag = wrong.structuredContent["diagnostic"]
+        assert wrong_diag["stable_error_code"] == "invalid_arguments"
+        assert "include_version" in wrong_diag["message"]
+        assert "_boundArguments" not in wrong_diag["message"]
+
+        omitted = await server.call_tool("opt_describe", {})
+        assert omitted.isError
+        omit_diag = omitted.structuredContent["diagnostic"]
+        assert omit_diag["stable_error_code"] == "invalid_arguments"
+        assert "dataset_id" in omit_diag["message"]
+        assert "_boundArguments" not in omit_diag["message"]
+
+        nullish = await server.call_tool("opt_describe", {"dataset_id": None})
+        assert nullish.isError
+        null_diag = nullish.structuredContent["diagnostic"]
+        assert null_diag["stable_error_code"] == "invalid_arguments"
+        assert "dataset_id" in null_diag["message"]
+        assert "_boundArguments" not in null_diag["message"]
+
+    asyncio.run(run())
+
+
+def test_require_dataset_is_connector_error_not_internal() -> None:
+    context = ConnectorContext(
+        workspace_id="local",
+        user_id=None,
+        extension_id="opt",
+        extension_version="1.0.0",
+        dataset_ids=frozenset(),
+    )
+    with pytest.raises(ConnectorError, match="not bound") as raised:
+        context.require_dataset("notes")
+    assert raised.value.stable_code == "UNKNOWN_DATASET"
+    assert "quail run" in raised.value.repair_hint
+    class_name, code = classify_exception(raised.value)
+    assert class_name == "ConnectorError"
+    assert code == "unknown_dataset"
+
+
 def _catalog_with_probe_in(workspace_id: str) -> ConnectorCatalog:
     from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
 

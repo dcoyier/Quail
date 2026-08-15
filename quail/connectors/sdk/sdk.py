@@ -186,7 +186,12 @@ class ConnectorContext:
 
     def require_dataset(self, dataset_id: str) -> None:
         if dataset_id not in self.dataset_ids:
-            raise PermissionError("The requested connector dataset is not available")
+            raise ConnectorError(
+                "UNKNOWN_DATASET",
+                f"Dataset {dataset_id!r} is not bound to this connector.",
+                "Add [[connectors.datasets]] for that id in quail.toml. "
+                "Connectors load at quail run, not quail process.",
+            )
 
 
 @dataclass(frozen=True, slots=True)

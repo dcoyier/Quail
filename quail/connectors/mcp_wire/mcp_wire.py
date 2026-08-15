@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import unquote
 
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp.tools import Tool as FastMcpTool
 from mcp.types import CallToolResult, Tool, ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import FileResponse as StarletteFileResponse
@@ -339,6 +340,89 @@ def _register_tool(
             "Retry server startup; if it persists, report a Quail wire bug.",
         )
     registered.parameters = _published_input_schema(spec)
+    _install_schema_enforcing_run(registered, spec)
+
+
+def _install_schema_enforcing_run(registered: FastMcpTool, spec: ToolSpec) -> None:
+    """Validate raw MCP arguments against ToolSpec.input_schema before FastMCP."""
+
+    async def run_validated(
+        arguments: dict[str, Any],
+        context: Any = None,
+        convert_result: bool = False,
+    ) -> Any:
+        raw = arguments if isinstance(arguments, Mapping) else {}
+        schema_error = _arguments_schema_error(spec, raw)
+        if schema_error is not None:
+            return error_result(error=schema_error)
+        return await FastMcpTool.run(
+            registered,
+            arguments,
+            context=context,
+            convert_result=convert_result,
+        )
+
+    object.__setattr__(registered, "run", run_validated)
+
+
+_JSON_SCHEMA_TYPES: dict[str, type | tuple[type, ...]] = {
+    "string": str,
+    "boolean": bool,
+    "integer": int,
+    "number": (int, float),
+    "object": dict,
+    "array": list,
+}
+
+
+def _arguments_schema_error(spec: ToolSpec, arguments: Mapping[str, Any]) -> ConnectorError | None:
+    """Fail extra keys, missing required (including null), and wrong JSON types."""
+
+    schema = spec.input_schema
+    properties = schema.get("properties", {})
+    if not isinstance(properties, Mapping):
+        properties = {}
+    required = [
+        name for name in schema.get("required", []) if isinstance(name, str)
+    ]
+    additional = schema.get("additionalProperties", True)
+    extra = [name for name in arguments if name not in properties]
+    if extra and additional is False:
+        return ConnectorError(
+            "INVALID_ARGUMENTS",
+            f"Unexpected arguments: {', '.join(extra)}",
+            f"Call {spec.name} with its published input schema.",
+        )
+    missing = [name for name in required if name not in arguments or arguments[name] is None]
+    if missing:
+        return ConnectorError(
+            "INVALID_ARGUMENTS",
+            f"Missing required arguments: {', '.join(missing)}",
+            f"Call {spec.name} with its published input schema.",
+        )
+    for name, value in arguments.items():
+        if name not in properties or value is None:
+            continue
+        declared = properties[name]
+        if not isinstance(declared, Mapping):
+            continue
+        expected = declared.get("type")
+        if not isinstance(expected, str) or expected not in _JSON_SCHEMA_TYPES:
+            continue
+        if expected in ("integer", "number") and isinstance(value, bool):
+            return ConnectorError(
+                "INVALID_ARGUMENTS",
+                f"{name} must be {expected}",
+                f"Call {spec.name} with its published input schema.",
+            )
+        py_type = _JSON_SCHEMA_TYPES[expected]
+        if not isinstance(value, py_type):
+            return ConnectorError(
+                "INVALID_ARGUMENTS",
+                f"{name} must be {expected}",
+                f"Call {spec.name} with its published input schema.",
+            )
+    return None
 
 
 def _published_input_schema(spec: ToolSpec) -> dict[str, Any]:

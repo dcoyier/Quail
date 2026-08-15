@@ -23,7 +23,9 @@ config_keys.
 DatasetRef remembers id, name, active_version_id.
 
 ConnectorContext remembers workspace_id, optional user_id, extension id/version,
-and bound dataset_ids. require_dataset raises PermissionError when unbound.
+and bound dataset_ids. require_dataset raises ConnectorError UNKNOWN_DATASET
+when unbound, with a repair_hint to add [[connectors.datasets]] (connectors
+load at quail run, not process).
 
 There is _MAX_TOOL_TEXT_BYTES = 2097152.
 There is _MAX_TOOL_IMAGE_BYTES = 524288.

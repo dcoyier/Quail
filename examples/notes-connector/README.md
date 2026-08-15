@@ -51,7 +51,8 @@ heading = "Notes"
 id = "notes"
 ```
 
-Then `quail process` / `quail run` as usual. The CLI never writes this TOML.
+Then `quail run` (connectors attach at run, not process). CSV import still
+uses `quail process`. The CLI never writes this TOML.
 
 ## What agents see
 

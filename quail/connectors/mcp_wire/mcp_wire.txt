@@ -21,6 +21,10 @@ register_connectors(server, catalog, resolve_workspace, authenticate_route defau
   None still fail as missing.
   After add_tool, publish ToolSpec.input_schema onto the FastMCP tool parameters
   so tools/list shows the real JSON Schema (not the Any signature).
+  Wrap Tool.run so live calls validate raw arguments against that schema before
+  FastMCP strips extras: extra keys, missing required (including null), and
+  wrong types become ConnectorError INVALID_ARGUMENTS (no Pydantic leak).
+  Omit-None for optional keys still happens inside the handler after validation.
   When any connector tools were registered, wrap FastMCP list_tools (and the
   low-level MCP handler) so tools/list uses the same resolve_workspace as calls.
   Core tools stay listed. A connector tool is listed only when

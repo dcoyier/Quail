@@ -14,6 +14,7 @@ from quail.connectors.sdk import (
     Connector,
     ConnectorContext,
     ConnectorEnvironment,
+    ConnectorError,
     ConnectorFactory,
     ConnectorManifest,
     DatasetRef,
@@ -91,7 +92,12 @@ class _CoreHost:
         with open_core_db(self.db_path) as db:
             ref = get_dataset(db, context.workspace_id, dataset_id)
         if ref is None:
-            raise PermissionError("The requested connector dataset is not available")
+            raise ConnectorError(
+                "UNKNOWN_DATASET",
+                f"Dataset {dataset_id!r} is not bound to this connector.",
+                "Add [[connectors.datasets]] for that id in quail.toml. "
+                "Connectors load at quail run, not quail process.",
+            )
         return DatasetRef(
             id=ref.dataset_id,
             name=ref.name,
