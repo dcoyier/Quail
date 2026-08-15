@@ -22,7 +22,7 @@ from quail.auth import (
 )
 from quail.auth.clerk import TokenVerifier
 from quail.config.models import QuailConfig, UserSpec
-from quail.datasets import get_dataset, list_datasets, open_core_db
+from quail.datasets import get_dataset, list_datasets, open_core_db, source_fields
 from quail.mcp.api_docs import load_api_docs
 from quail.mcp.bearer import get_bearer_override
 from quail.mcp.context import DEFAULT_WORKSPACE_ID, McpContext
@@ -47,6 +47,7 @@ from quail.mcp.results import (
 )
 from quail.mcp.sticky import StickyWorkspaceStore
 from quail.search.runtime import SearchRuntime, search_runtime_from_config
+from quail.search.warm import get_warm_receipt
 from quail.session import create_session, get_session
 from quail.session.export import export_session_csv
 from quail.session.sessions import (
@@ -62,7 +63,8 @@ _API_DOCS_REPAIR = (
 _DATASET_INFO_FALLBACK = (
     "No connector documentation is installed for this dataset. "
     "Use quail_exec inspection and quail_get_api_docs for the analysis language. "
-    "Imported source data is immutable; analysis tags and bindings stay on the session."
+    "Imported source data is immutable; analysis tags and bindings stay on the session. "
+    "The CSV id column is entry.id, not Field(\"id\")."
 )
 
 _DEFAULT_EXEC_REPAIR = (
@@ -433,10 +435,12 @@ def _register_unrestricted_tools(
 
     @server.tool(title="Get Quail dataset info")
     async def quail_get_dataset_info(dataset_id: str) -> CallToolResult:
-        """Return dataset identity plus short corpus/guidance documentation.
+        """Return dataset identity, source field catalog, and short corpus docs.
 
-        Call this for dataset-specific notes before analyzing. Do not invent
-        field meanings beyond what this tool and quail_exec inspection return.
+        Includes field names and kinds, entry_count, lexical_ready /
+        embedding_ready. The CSV id column is entry.id, not a Field.
+        Call this before analyzing. Do not invent field meanings beyond what
+        this tool and quail_exec inspection return.
         """
 
         def work() -> CallToolResult:
@@ -452,6 +456,12 @@ def _register_unrestricted_tools(
                         dataset_id=ref.dataset_id,
                         display_name=ref.name or ref.dataset_id,
                     )
+                    catalog = _dataset_catalog_payload(
+                        db,
+                        workspace_id=context.workspace_id,
+                        ref=ref,
+                        search_runtime=context.search_runtime,
+                    )
             except Exception as error:
                 return error_result(error=error)
             return success_result(
@@ -460,6 +470,7 @@ def _register_unrestricted_tools(
                     "name": ref.name,
                     "active_version_id": ref.active_version_id,
                     "documentation": documentation,
+                    **catalog,
                 }
             )
 
@@ -804,7 +815,11 @@ def _register_clerk_tools(
         dataset_id: str,
         ctx: Context | None = None,
     ) -> CallToolResult:
-        """Return dataset identity plus short guidance for the active workspace."""
+        """Return dataset identity, source field catalog, and short guidance.
+
+        Includes field names and kinds, entry_count, lexical_ready /
+        embedding_ready. The CSV id column is entry.id, not a Field.
+        """
 
         def work() -> CallToolResult:
             principal = _auth(ctx)
@@ -825,6 +840,12 @@ def _register_clerk_tools(
                         dataset_id=ref.dataset_id,
                         display_name=ref.name or ref.dataset_id,
                     )
+                    catalog = _dataset_catalog_payload(
+                        db,
+                        workspace_id=workspace_id,
+                        ref=ref,
+                        search_runtime=runtime.search_runtime,
+                    )
             except Exception as error:
                 return error_result(error=error)
             return success_result(
@@ -833,6 +854,7 @@ def _register_clerk_tools(
                     "name": ref.name,
                     "active_version_id": ref.active_version_id,
                     "documentation": documentation,
+                    **catalog,
                 }
             )
 
@@ -1037,6 +1059,80 @@ def _exec_repair_hint(error: BaseException) -> str | None:
     return _DEFAULT_EXEC_REPAIR
 
 
+def _version_entry_count(db: Any, workspace_id: str, dataset_id: str, version_id: str) -> int:
+    row = db.connection.execute(
+        """
+        SELECT row_count FROM quail_dataset_versions
+        WHERE workspace_id = ? AND dataset_id = ? AND id = ?
+        """,
+        (workspace_id, dataset_id, version_id),
+    ).fetchone()
+    return int(row[0]) if row is not None else 0
+
+
+def _search_ready_flags(
+    search_runtime: SearchRuntime | None,
+    *,
+    workspace_id: str,
+    dataset_id: str,
+    version_id: str | None,
+) -> tuple[bool, bool]:
+    if search_runtime is None or not version_id:
+        return False, False
+    search = search_runtime.pool.checkout()
+    try:
+        receipt = get_warm_receipt(
+            search,
+            workspace_id=workspace_id,
+            dataset_id=dataset_id,
+            version_id=version_id,
+        )
+    finally:
+        search_runtime.pool.release(search)
+    if receipt is None:
+        return False, False
+    return receipt.lexical_ready, receipt.embedding_ready
+
+
+def _dataset_catalog_payload(
+    db: Any,
+    *,
+    workspace_id: str,
+    ref: Any,
+    search_runtime: SearchRuntime | None,
+    compact: bool = False,
+) -> dict[str, Any]:
+    """Source field catalog for dataset_info (full) or setup (compact)."""
+
+    version_id = ref.active_version_id or ref.version_id
+    fields: list[dict[str, str]] = []
+    entry_count = 0
+    if version_id:
+        fields = [
+            {"name": field.name, "kind": "source"}
+            for field in source_fields(db, workspace_id, ref.dataset_id, version_id)
+        ]
+        entry_count = _version_entry_count(db, workspace_id, ref.dataset_id, version_id)
+    if compact:
+        return {
+            "field_names": [field["name"] for field in fields],
+            "entry_count": entry_count,
+        }
+    lexical_ready, embedding_ready = _search_ready_flags(
+        search_runtime,
+        workspace_id=workspace_id,
+        dataset_id=ref.dataset_id,
+        version_id=version_id,
+    )
+    return {
+        "fields": fields,
+        "entry_count": entry_count,
+        "lexical_ready": lexical_ready,
+        "embedding_ready": embedding_ready,
+        "id_note": "CSV id is entry.id, not a Field",
+    }
+
+
 def _build_setup_payload(
     *,
     db_path: Path,
@@ -1053,10 +1149,18 @@ def _build_setup_payload(
         session = create_session(db, workspace_id, owner_user_id=user_id)
         datasets: list[dict[str, Any]] = []
         for ref in list_datasets(db, workspace_id):
+            compact = _dataset_catalog_payload(
+                db,
+                workspace_id=workspace_id,
+                ref=ref,
+                search_runtime=None,
+                compact=True,
+            )
             row: dict[str, Any] = {
                 "dataset_id": ref.dataset_id,
                 "name": ref.name,
                 "active_version_id": ref.active_version_id,
+                **compact,
             }
             if include_dataset_docs:
                 row["documentation"] = _dataset_documentation(

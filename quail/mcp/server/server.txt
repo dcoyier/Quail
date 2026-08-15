@@ -51,6 +51,9 @@ quail_export_csv: session lock, write source plus this session's analysis
   path is on the serve host.
 quail_setup returns documentation, datasets, session_id, workspace_id, and
 state_revision (optionally per-dataset documentation when configured).
+Each catalog row includes field_names and entry_count (compact; no warm flags).
+quail_get_dataset_info adds source fields (name+kind), entry_count,
+lexical_ready, embedding_ready, and id_note that CSV id is entry.id.
 Unrestricted quail_setup docstring says call once after connect (no
 quail_switch_workspace).
 quail_exec passes context.search_runtime into exec_script (pool checkout per exec).

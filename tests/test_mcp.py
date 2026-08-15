@@ -96,6 +96,8 @@ def test_quail_setup_returns_docs_catalog_and_session(tmp_path: Path) -> None:
         assert "Quail Analysis API" in setup["documentation"]
         assert setup["datasets"][0]["dataset_id"] == "notes"
         assert setup["datasets"][0]["active_version_id"]
+        assert setup["datasets"][0]["field_names"] == ["title", "body"]
+        assert setup["datasets"][0]["entry_count"] == 2
         assert "documentation" not in setup["datasets"][0]
         outcome = _as_dict(
             await _call(
@@ -232,6 +234,15 @@ def test_list_and_dataset_info(tmp_path: Path) -> None:
         info = _as_dict(await _call(server, "quail_get_dataset_info", {"dataset_id": "notes"}))
         assert info["dataset_id"] == "notes"
         assert "quail_exec" in info["documentation"]
+        assert info["fields"] == [
+            {"name": "title", "kind": "source"},
+            {"name": "body", "kind": "source"},
+        ]
+        assert info["entry_count"] == 2
+        assert info["lexical_ready"] is False
+        assert info["embedding_ready"] is False
+        assert "entry.id" in info["id_note"]
+        assert "entry.id" in info["documentation"]
 
     asyncio.run(run())
 
