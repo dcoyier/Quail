@@ -1,11 +1,12 @@
 serve(stdin, stdout):
   Read one NDJSON execute message with a code string, bindings map, and
-  optional limits.cpu_seconds.
+  optional limits.cpu_seconds and limits.max_memory_bytes. Check both; do
+  not apply a memory rlimit (the host watches worker RSS).
   Decode initial bindings into the namespace.
   Build a HostEndpoint that writes api_call lines and waits for api_result.
   Validate the code (including assigned/deleted names), build the injected
-  namespace, restore bindings, apply best-effort RLIMIT_AS and RLIMIT_CPU, and
-  exec it.
+  namespace, restore bindings, apply RLIMIT_CPU, and exec it.
+  Memory is not limited here; the host watches worker RSS.
   On success encode assigned survivors as changed_bindings and deleted names
   as deleted_bindings, then write result ok with printed_output.
   On BindingEncodingError or other failure write result not ok with exception_type,

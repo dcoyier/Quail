@@ -68,7 +68,7 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
         )
         return
     try:
-        cpu_seconds, max_memory_bytes = _parse_limits(message.get("limits"))
+        cpu_seconds, _max_memory_bytes = _parse_limits(message.get("limits"))
     except QuailRuntimeError as error:
         _write(
             output_stream,
@@ -100,7 +100,6 @@ def serve(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
         namespace = build_namespace(endpoint, prints)
         namespace.update(decode_namespace(initial_bindings))
         compiled = compile(program.tree, "<quail_exec>", "exec")
-        _apply_memory_ceiling(max_memory_bytes)
         with _cpu_timeout_guard(cpu_seconds):
             exec(compiled, namespace, namespace)  # noqa: S102 - intentional worker sandbox
 
@@ -175,17 +174,6 @@ def _parse_limits(raw: object) -> tuple[int, int]:
     ):
         raise QuailRuntimeError("execute.limits.max_memory_bytes must be a positive integer")
     return cpu_seconds, max_memory_bytes
-
-
-def _apply_memory_ceiling(max_memory_bytes: int) -> None:
-    """Best-effort address-space ceiling (enforced on Linux; host also watches RSS)."""
-
-    if not hasattr(resource, "RLIMIT_AS"):
-        return
-    try:
-        resource.setrlimit(resource.RLIMIT_AS, (max_memory_bytes, max_memory_bytes))
-    except (ValueError, OSError):
-        return
 
 
 @contextmanager
