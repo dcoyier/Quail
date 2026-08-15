@@ -16,8 +16,8 @@ does not reprocess; do not overlap with quail_exec).
 unrestricted_instructions(workspace_id):
   Give back fixed-workspace connect-time instructions (unrestricted; no sign-in)
   preferring quail_setup → dataset info → exec, including unrestricted session
-  rules (no workspace-switch tools), the
-  skip-get_dataset_info-when-docs-already-in-setup note, and the export rules.
+  rules (no workspace-switch tools), the skip-get_dataset_info-when-docs-already-in-setup
+  note, and the export rules.
 
 clerk_instructions(locked default false):
   Give back Clerk identity-mode bind-then-quail_setup instructions: token proves
