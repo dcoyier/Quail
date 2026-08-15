@@ -492,7 +492,8 @@ def _register_unrestricted_tools(
         id is a different dataset. Do not overlap with quail_exec on the same
         session_id. Do not use for one-off filters, Slice/regex pipelines, or
         to persist bindings. Source fields are already fast after process.
-        Local unrestricted only.
+        Unrestricted MCP only (not Clerk). The file is on the machine running
+        quail run; a remote client gets that host path, not a download.
         """
 
         def work() -> CallToolResult:

@@ -42,9 +42,11 @@ create_clerk_mcp_server(config, verifier, api_docs_path default None,
 
 All tools are async and offload blocking work with run_blocking.
 Unrestricted tools open CoreDb per call from context.db_path.
-quail_export_csv is unrestricted only: session lock, write source plus this
+quail_export_csv is unrestricted only (not Clerk; includes a public
+  unrestricted bind): session lock, write source plus this
   session's analysis fields to <core-db-parent>/exports/<dataset_id>.<session_id>.csv,
   and give back path, columns, and row_count. It does not process or write TOML.
+  The path is on the serve host.
 quail_setup returns documentation, datasets, session_id, workspace_id, and
 state_revision (optionally per-dataset documentation when configured).
 quail_exec passes context.search_runtime into exec_script (pool checkout per exec).
