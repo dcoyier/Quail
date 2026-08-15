@@ -5,6 +5,7 @@ There is a private tool read timeout of 300 seconds for call_tool (same budget).
 
 main(optional argv):
   Parse list or call.
+  Resolve --url with _mcp_url.
   If argparse raises SystemExit, give back that integer code, or 2 if the code is not an int.
   For list, call list_tools with the URL, print JSON, give back 0.
   For call, load_arguments, call_tool, print the CallToolResult JSON payload.
@@ -12,7 +13,16 @@ main(optional argv):
   Give back 2 for bad usage, bad JSON arguments, or an unreadable @path file.
   Give back 1 for other connection or runtime failures.
   Catch ValueError only from load_arguments (usage); other failures use the generic handler.
+  For connection failures, unwrap ExceptionGroup/TaskGroup and print the inner
+  error, not "unhandled errors in a TaskGroup".
   Write diagnostics to stderr; write only JSON to stdout.
+
+_mcp_url(args):
+  Prefer --url after the subcommand, then --url before it, then DEFAULT_URL.
+
+_client_error_message(error):
+  Walk ExceptionGroup to the first leaf. If the text is empty or a TaskGroup
+  wrapper, use __cause__ / __context__. Give back that string.
 
 load_arguments(spec):
   If spec is "-", read stdin.
@@ -36,8 +46,9 @@ call_tool(url, name, optional arguments):
 
 _build_parser:
   Build argparse for "python -m quail.mcp_client".
-  Subcommand list takes optional --url.
-  Subcommand call takes tool_name, arguments, and optional --url.
+  Optional --url on the parent parser (before the subcommand) and again on
+  list/call (after the subcommand).
+  Subcommand call takes tool_name and arguments.
 
 _session(url):
   Create an httpx AsyncClient with the private timeouts and follow_redirects false.
