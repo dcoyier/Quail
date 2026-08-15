@@ -11,9 +11,9 @@ load_csv_dataset(path):
     Require a nonempty unique id within the entry-id byte limit.
     Build an entry that always remembers id and only present non-id fields.
     Charge estimated durable bytes for each present source value.
-  If there are no data rows, raise.
   If DictReader raises csv.Error because a cell exceeds csv.field_size_limit,
   say the parser field size limit. Other csv.Error is malformed quoting.
+  If there are no data rows, raise.
   content_hash comes from dataset_content_hash over entries and field_names.
   version_id is csv_ plus that hash.
   Give back a CsvDataset with path, ids, sizes, field_names, and entries.
