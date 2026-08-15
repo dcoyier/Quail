@@ -319,9 +319,10 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
   (configured outside this API; scored in Turso, not approximate ANN). Cosine
   is not a match bit — do not copy Lexical’s `score > 0` as “matched.” Empty
   cells score `None`. The same four query shapes work; entry targets read the
-  expression root field. If search
-  isn’t available, you get a repairable runtime diagnostic — fix config and
-  rerun the whole exec.
+  expression root field. If search isn’t available, the diagnostic names the
+  gap: pin-missing (`core.search_database`, or `[datasets.embedding]` plus
+  `[providers.*]`), search-down (re-run `quail process` / restart `quail run`),
+  or provider-down. Fix that, then rerun the whole exec.
   On a bare source field (no `Slice` / `AsText` / … in front) that was included
   in the dataset embedding field set at `quail process`, scoring uses the
   process-warmed segment map and does not load source cells. Prefix ops,

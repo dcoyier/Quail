@@ -19,7 +19,21 @@ resolve_field(field):
   and mention del name then assign again if the Field is a stale binding.
   Unknown names raise QuailFieldError. If the name is id, say CSV id is
   entry.id. Otherwise say inspect retrieve(unit=fields, group=G1) or use
-  entry.id.
+  entry.id. If that name is an analysis field on another version of this
+  dataset in this session, append that tags are per dataset version and to
+  retag on the active version.
+
+_unknown_field_error(name, requested_kind):
+  Build Unknown field / Unknown <kind> field.
+  If the name is id, say CSV id is entry.id.
+  Otherwise say inspect retrieve(unit=fields, group=G1) or use entry.id.
+  If that name is an analysis field on another version of this dataset in this
+  session, append that tags are per dataset version and to retag on the active
+  version.
+
+_analysis_name_on_other_version(name):
+  Give back true when this session has that analysis field name on another
+  version of this dataset.
 
 check_bound_field_kind(field):
   When field.kind is set and the name exists in the catalog with a different

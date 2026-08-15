@@ -266,3 +266,51 @@ def test_stale_kind_field_binding_survives_dataset_switch(tmp_path: Path) -> Non
         )
         assert recovered.printed_output == "1\n"
         assert "f" not in load_bindings(db, session.id)
+
+
+def test_unknown_analysis_field_after_version_evolve_hints_retag(tmp_path: Path) -> None:
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text("id,title,body\ne1,Hello,hydrangea\n", encoding="utf-8")
+    db = open_core_db(tmp_path / "core.turso")
+    import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+    session = create_session(db, "ws")
+    with db:
+        first = exec_script(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            code=(
+                "topic = create_field('topic')\n"
+                "tag(retrieve(limit=1), topic, 'plants')\n"
+                "print('tagged')\n"
+            ),
+        )
+        assert first.printed_output == "tagged\n"
+
+        csv_path.write_text(
+            "id,title,body\ne1,Hello,hydrangea\ne2,Other,climate\n",
+            encoding="utf-8",
+        )
+        import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+
+        with pytest.raises(QuailFieldError, match="Retag on the active version") as retag:
+            exec_script(
+                db,
+                session_id=session.id,
+                dataset_id="notes",
+                expected_revision=first.state_revision,
+                code="print(retrieve(unit=Unit('values', Field('topic')), limit=5))\n",
+            )
+        assert "retrieve(unit=fields, group=G1)" in str(retag.value)
+
+        with pytest.raises(QuailFieldError, match="Unknown field: content") as unknown:
+            exec_script(
+                db,
+                session_id=session.id,
+                dataset_id="notes",
+                expected_revision=first.state_revision,
+                code="print(retrieve(unit=Unit('values', Field('content')), limit=5))\n",
+            )
+        assert "retrieve(unit=fields, group=G1)" in str(unknown.value)
+        assert "Retag" not in str(unknown.value)

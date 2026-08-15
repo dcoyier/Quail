@@ -289,7 +289,30 @@ class QueryEngine:
             message += '; the CSV id column is entry.id, not Field("id")'
         else:
             message += "; inspect retrieve(unit=fields, group=G1) or use entry.id"
+        if self._analysis_name_on_other_version(name):
+            message += (
+                "; analysis tags are per dataset version. "
+                "Retag on the active version."
+            )
         return QuailFieldError(message)
+
+    def _analysis_name_on_other_version(self, name: str) -> bool:
+        row = self._db.connection.execute(
+            """
+            SELECT 1 FROM quail_analysis_fields
+            WHERE session_id = ? AND workspace_id = ? AND dataset_id = ?
+              AND name = ? AND dataset_version_id != ?
+            LIMIT 1
+            """,
+            (
+                self._scope.session_id,
+                self._scope.workspace_id,
+                self._scope.dataset_id,
+                name,
+                self._scope.dataset_version_id,
+            ),
+        ).fetchone()
+        return row is not None
 
     def check_bound_field_kind(self, field: Field) -> None:
         """At bind restore/commit: enforce explicit kind vs catalog; skip unknown names."""
