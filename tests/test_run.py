@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 import pytest
@@ -126,8 +127,10 @@ def test_apply_fails_when_lease_held(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path)
     config = load_config(manifest)
     with acquire_deployment_lease(config):
-        with pytest.raises(QuailRuntimeError, match="deployment lease"):
+        with pytest.raises(QuailRuntimeError, match=rf"PID {os.getpid()}") as raised:
             apply_config(config)
+        assert raised.value.repair_hint is not None
+        assert str(os.getpid()) in raised.value.repair_hint
 
 
 def test_apply_then_mcp_list_datasets(tmp_path: Path) -> None:
@@ -160,6 +163,7 @@ def test_cli_run_help_matches_serve_contract(
     parent = capsys.readouterr().out
     assert "Apply slim quail.toml then serve unrestricted loopback MCP" not in parent
     assert "Serve MCP if already processed (never activates)" in parent
+    assert "deployment lease" in parent.lower()
 
     with pytest.raises(SystemExit) as exited:
         cli_main(["run", "--help"])

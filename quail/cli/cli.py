@@ -20,7 +20,13 @@ def _print_cli_error(error: BaseException) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="quail", description="Quail operator CLI")
+    parser = argparse.ArgumentParser(
+        prog="quail",
+        description=(
+            "Quail operator CLI. process and run cannot hold the same "
+            "deployment lease at once; stop one before starting the other."
+        ),
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     run_parser = sub.add_parser(

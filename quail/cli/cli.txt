@@ -1,4 +1,5 @@
 Operator CLI. It reads quail.toml only. It never writes the TOML.
+Parent --help says process and run cannot hold the same deployment lease.
 
 _print_cli_error(error):
   Print `quail: <message>` to stderr.
