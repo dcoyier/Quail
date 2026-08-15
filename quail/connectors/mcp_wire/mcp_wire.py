@@ -266,7 +266,11 @@ def _register_tool(
                     user_id=user_id,
                     connected=connected,
                 )
-                result = connected.provider.call_tool(context, spec.name, kwargs)
+                forwarded = {
+                    name: value for name, value in kwargs.items() if value is not None
+                }
+                result = connected.provider.call_tool(context, spec.name, forwarded)
+
                 if isinstance(result, ToolResult):
                     payload = dict(result.structured_content)
                     return success_result(

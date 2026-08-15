@@ -824,6 +824,104 @@ def test_connector_tools_list_publishes_input_schema_and_hides_context() -> None
     asyncio.run(run())
 
 
+def test_optional_connector_args_omit_none() -> None:
+    from mcp.server.fastmcp import FastMCP
+
+    from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
+
+    seen: list[Mapping[str, Any]] = []
+
+    class _OptionalProvider:
+        def call_tool(self, context, name, arguments):
+            del context, name
+            seen.append(dict(arguments))
+            include_version = arguments.get("include_version", True)
+            if not isinstance(include_version, bool):
+                raise ConnectorError(
+                    "INVALID_ARGUMENTS",
+                    "include_version must be a boolean",
+                    "Pass a boolean include_version or omit it.",
+                )
+            return ToolResult(structured_content={"include_version": include_version})
+
+        def dataset_document(self, context, dataset_id):
+            del context, dataset_id
+            return None
+
+        def handle_route(self, context, route_id, path_params):
+            del context, route_id, path_params
+            return None
+
+    manifest = ConnectorManifest(
+        id="opt",
+        version="1.0.0",
+        tools=(
+            ToolSpec(
+                name="opt_describe",
+                title="Describe",
+                description="Optional include_version.",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "dataset_id": {"type": "string"},
+                        "include_version": {"type": "boolean"},
+                    },
+                    "required": ["dataset_id"],
+                    "additionalProperties": False,
+                },
+            ),
+        ),
+    )
+    provider = _OptionalProvider()
+    connected = ConnectedProvider(
+        extension_id="opt",
+        version="1.0.0",
+        manifest=manifest,
+        connector=_FakeConnector(
+            ConnectorEnvironment(
+                host=_Host({}),
+                public_base_url="http://127.0.0.1:8765",
+                base_path=Path("/tmp"),
+            ),
+            extension_id="opt",
+            version="1.0.0",
+        ),
+        provider=provider,
+        dataset_ids=frozenset({"notes"}),
+        provides_docs=False,
+    )
+    catalog = ConnectorCatalog(
+        by_workspace={
+            "local": WorkspaceConnectorBundle(
+                workspace_id="local",
+                providers=(connected,),
+                docs_by_dataset={},
+            )
+        }
+    )
+    server = FastMCP("t")
+    register_connectors(
+        server,
+        catalog,
+        resolve_workspace=lambda _ctx: ("local", None),
+    )
+
+    async def run() -> None:
+        omitted = await server.call_tool("opt_describe", {"dataset_id": "notes"})
+        assert isinstance(omitted, CallToolResult)
+        assert not omitted.isError
+        assert omitted.structuredContent == {"include_version": True}
+        assert "include_version" not in seen[0]
+        explicit = await server.call_tool(
+            "opt_describe", {"dataset_id": "notes", "include_version": False}
+        )
+        assert isinstance(explicit, CallToolResult)
+        assert not explicit.isError
+        assert explicit.structuredContent == {"include_version": False}
+
+    asyncio.run(run())
+
+
 def _catalog_with_probe_in(workspace_id: str) -> ConnectorCatalog:
     from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
 
