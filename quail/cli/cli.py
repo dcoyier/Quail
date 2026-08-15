@@ -10,6 +10,15 @@ from quail.run import serve
 from quail.run.process import process_config
 
 
+def _print_cli_error(error: BaseException) -> None:
+    """Print the error, then repair_hint when the exception carries one."""
+
+    print(f"quail: {error}", file=sys.stderr)
+    hint = getattr(error, "repair_hint", None)
+    if isinstance(hint, str) and hint.strip():
+        print(f"quail: {hint}", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="quail", description="Quail operator CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -59,7 +68,7 @@ def main(argv: list[str] | None = None) -> None:
             print(f"quail: {error}", file=sys.stderr)
             raise SystemExit(2) from error
         except Exception as error:
-            print(f"quail: {error}", file=sys.stderr)
+            _print_cli_error(error)
             raise SystemExit(1) from error
     elif args.command == "process":
         try:
@@ -83,7 +92,7 @@ def main(argv: list[str] | None = None) -> None:
             print(f"quail: {error}", file=sys.stderr)
             raise SystemExit(2) from error
         except Exception as error:
-            print(f"quail: {error}", file=sys.stderr)
+            _print_cli_error(error)
             raise SystemExit(1) from error
     else:
         parser.error(f"Unknown command: {args.command}")
