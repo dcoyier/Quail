@@ -377,7 +377,7 @@ def test_unknown_analysis_field_after_version_evolve_hints_retag(tmp_path: Path)
         )
         import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
 
-        with pytest.raises(QuailFieldError, match="Retag on the active version"):
+        with pytest.raises(QuailFieldError, match="Retag on the active version") as retag:
             exec_script(
                 db,
                 session_id=session.id,
@@ -385,8 +385,9 @@ def test_unknown_analysis_field_after_version_evolve_hints_retag(tmp_path: Path)
                 expected_revision=first.state_revision,
                 code="print(retrieve(unit=Unit('values', Field('topic')), limit=5))\n",
             )
+        assert "retrieve(unit=fields, group=G1)" in str(retag.value)
 
-        with pytest.raises(QuailFieldError, match="Unknown field: content$"):
+        with pytest.raises(QuailFieldError, match="Unknown field: content") as unknown:
             exec_script(
                 db,
                 session_id=session.id,
@@ -394,3 +395,5 @@ def test_unknown_analysis_field_after_version_evolve_hints_retag(tmp_path: Path)
                 expected_revision=first.state_revision,
                 code="print(retrieve(unit=Unit('values', Field('content')), limit=5))\n",
             )
+        assert "retrieve(unit=fields, group=G1)" in str(unknown.value)
+        assert "Retag" not in str(unknown.value)

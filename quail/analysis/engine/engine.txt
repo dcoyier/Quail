@@ -77,6 +77,8 @@ _reject_foreign_dataset(value):
 
 _unknown_field_error(name, requested_kind):
   Build Unknown field / Unknown <kind> field.
+  If the name is id, say CSV id is entry.id.
+  Otherwise say inspect retrieve(unit=fields, group=G1) or use entry.id.
   If that name is an analysis field on another version of this dataset in this
   session, append that tags are per dataset version and to retag on the active
   version.

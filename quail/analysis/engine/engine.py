@@ -339,6 +339,10 @@ class QueryEngine:
             message = f"Unknown field: {name}"
         else:
             message = f"Unknown {requested_kind} field: {name}"
+        if name == "id":
+            message += '; the CSV id column is entry.id, not Field("id")'
+        else:
+            message += "; inspect retrieve(unit=fields, group=G1) or use entry.id"
         if self._analysis_name_on_other_version(name):
             message += (
                 "; analysis tags are per dataset version. "
