@@ -16,7 +16,7 @@ Pass arguments by name.
 
 | Argument | Meaning |
 | --- | --- |
-| `session_id` | Durable analysis context in one workspace. Bindings and tags stick to this session. MCP binds the workspace; if the workspace changes, start a new session. Run one `quail_exec` at a time per `session_id` — overlap (including `quail_export_csv` on the same session) fails with `session_busy`. |
+| `session_id` | Durable analysis context in one workspace. Bindings and tags stick to this session. MCP binds the workspace; if the workspace changes, start a new session. Run one `quail_exec` at a time per `session_id` — overlap (including `quail_export_csv` on the same session) fails with `session_busy`. A full process-wide exec slot fails with `server_busy` (raise `hosting.max_concurrent_executions` and restart `quail run`). |
 | `dataset_id` | Exactly one dataset for this call (its active immutable version). |
 | `code` | Bounded Quail Python (no imports, no files, no network). |
 | `time_window` | `"standard"` (30s wall / 15s CPU) or `"extended"` (100s wall / 60s CPU). Both are finite; extended is just longer. Worker RSS is always capped at 256 MiB. |
@@ -383,7 +383,7 @@ Failures are atomic. Typical categories:
 | `QuailSyntaxError` | Bad API shape, illegal Python construct, bad symbolic combo |
 | `QuailScopeError` | Wrong group/unit/session/version pairing |
 | `QuailFieldError` | Unknown field, kind mismatch, source mutation |
-| `QuailRuntimeError` | Bad data for an op, search down, timeout, resource limit |
+| `QuailRuntimeError` | Bad data for an op, search down, timeout, resource limit. Overlap on one `session_id` is `session_busy`. A full process exec slot is `server_busy`. |
 
 Tool errors include `stable_error_code`, `message`, optional `repair_hint`, and
 optional source location. Prefer fixing from that over guessing.

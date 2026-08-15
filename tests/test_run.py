@@ -168,6 +168,9 @@ def test_cli_run_help_matches_serve_contract(
     assert "never activates" in run_help.lower() or "already processed" in run_help.lower()
     assert "unrestricted loopback" not in run_help.lower()
     assert "apply slim" not in run_help.lower()
+    assert "max_concurrent_executions" in run_help
+    assert "server_busy" in run_help
+    assert "restart" in run_help.lower()
 
 
 def test_cli_process_help_matches_process_contract(

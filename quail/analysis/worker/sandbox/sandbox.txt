@@ -11,6 +11,8 @@ validate_quail_code(code):
   Walk the AST and reject imports, defs, classes, lambdas, try/raise,
   f-strings, comprehensions, is/is not, dangerous names, private attrs,
   Entry construction, and item/attr assignment.
+  Rejected-node messages use English (f-strings, list comprehensions) instead
+  of AST type names.
   Track top-level Name Store as assigned_names and Name Del as deleted_names.
   Reject reserved binding names on assign/del.
   Limit attribute loads and method calls to the approved lists.

@@ -11,6 +11,7 @@ from quail.analysis.admission import acquire_execution_slot
 from quail.analysis.bindings import validate_encoded_bindings
 from quail.analysis.cancel import interrupt_connections_on_cancel, raise_if_cancelled
 from quail.analysis.engine import QueryEngine
+from quail.analysis.errors import QuailSyntaxError
 from quail.analysis.limits import ExecLimits
 from quail.analysis.planner import (
     plan_count,
@@ -59,6 +60,14 @@ def dispatch_call(
     if method == "retrieve":
         return engine.retrieve(plan_retrieve(*args, **kwargs))
     if method == "count":
+        unexpected = [key for key in kwargs if key not in {"unit", "group"}]
+        if unexpected:
+            name = unexpected[0]
+            if name == "limit":
+                raise QuailSyntaxError(
+                    "count does not take limit=; use retrieve(...) when you need a bounded list"
+                )
+            raise QuailSyntaxError(f"count does not take {name}=")
         return engine.count(plan_count(*args, **kwargs))
     if method == "create_field":
         return engine.create_field(plan_create_field(*args, **kwargs))

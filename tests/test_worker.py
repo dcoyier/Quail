@@ -9,6 +9,7 @@ import pytest
 from quail.analysis.errors import (
     QuailRuntimeError,
     QuailServerBusyError,
+    QuailSyntaxError,
     rehydrate_quail_error,
 )
 from quail.analysis.exec_host import exec_script
@@ -109,6 +110,20 @@ print(count(group=G0.where(Expression(topic, Value()) == "climate")))
             (field.name, field.kind) for field in catalog_fields(db, scope)
         ]
         assert analysis_values(db, scope, "topic") == [None, "climate", None]
+
+
+def test_count_rejects_limit_without_leaking_plan_count(tmp_path: Path) -> None:
+    db, session = _seed(tmp_path)
+    with db:
+        with pytest.raises(QuailSyntaxError, match="count does not take limit=") as raised:
+            exec_script(
+                db,
+                session_id=session.id,
+                dataset_id="notes",
+                expected_revision=0,
+                code="print(count(limit=10))\n",
+            )
+        assert "plan_count" not in str(raised.value)
 
 
 def test_worker_failure_does_not_commit(tmp_path: Path) -> None:

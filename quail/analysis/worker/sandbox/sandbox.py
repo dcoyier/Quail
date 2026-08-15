@@ -39,6 +39,37 @@ _REJECTED_NODES: tuple[type, ...] = (
 if hasattr(ast, "TryStar"):
     _REJECTED_NODES = (*_REJECTED_NODES, ast.TryStar)
 
+_REJECTED_NODE_ENGLISH: dict[type, str] = {
+    ast.Import: "import",
+    ast.ImportFrom: "import",
+    ast.FunctionDef: "def",
+    ast.AsyncFunctionDef: "async def",
+    ast.ClassDef: "class",
+    ast.Lambda: "lambda",
+    ast.With: "with",
+    ast.AsyncWith: "async with",
+    ast.Try: "try/except",
+    ast.Raise: "raise",
+    ast.Assert: "assert",
+    ast.Match: "match",
+    ast.Await: "await",
+    ast.Yield: "yield",
+    ast.YieldFrom: "yield from",
+    ast.Global: "global",
+    ast.Nonlocal: "nonlocal",
+    ast.JoinedStr: "f-strings",
+    ast.ListComp: "list comprehensions",
+    ast.SetComp: "set comprehensions",
+    ast.DictComp: "dict comprehensions",
+    ast.GeneratorExp: "generator expressions",
+    ast.NamedExpr: "walrus :=",
+    ast.AnnAssign: "annotated assignment",
+    ast.AugAssign: "augmented assignment",
+    ast.AsyncFor: "async for",
+}
+if hasattr(ast, "TryStar"):
+    _REJECTED_NODE_ENGLISH[ast.TryStar] = "try/except*"
+
 _DANGEROUS_NAMES = frozenset(
     {
         "open",
@@ -169,7 +200,8 @@ def validate_quail_code(code: str) -> ValidatedQuailProgram:
 
     for node in ast.walk(tree):
         if isinstance(node, _REJECTED_NODES):
-            raise QuailSyntaxError(f"Unsupported construct in quail_exec: {type(node).__name__}")
+            label = _REJECTED_NODE_ENGLISH.get(type(node), type(node).__name__)
+            raise QuailSyntaxError(f"Unsupported construct in quail_exec: {label}")
         if isinstance(node, ast.Compare) and any(
             isinstance(op, ast.Is | ast.IsNot) for op in node.ops
         ):

@@ -33,3 +33,13 @@ def test_sandbox_tracks_assign_and_del() -> None:
     program = validate_quail_code("x = 1\ndel x\ny = 2\n")
     assert program.assigned_names == frozenset({"x", "y"})
     assert program.deleted_names == frozenset({"x"})
+
+
+def test_sandbox_rejects_fstring_and_listcomp_in_english() -> None:
+    with pytest.raises(QuailSyntaxError, match="f-strings"):
+        validate_quail_code('x = f"{1}"\n')
+    with pytest.raises(QuailSyntaxError, match="list comprehensions"):
+        validate_quail_code("xs = [n for n in range(3)]\n")
+    with pytest.raises(QuailSyntaxError, match="Unsupported construct") as raised:
+        validate_quail_code('x = f"{1}"\n')
+    assert "JoinedStr" not in str(raised.value)

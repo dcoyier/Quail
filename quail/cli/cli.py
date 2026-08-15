@@ -29,7 +29,10 @@ def main(argv: list[str] | None = None) -> None:
         description=(
             "Take a deployment lease, import without activating, fail closed unless "
             "each imported version is already active and warm, then serve MCP. "
-            "Never activates. Unrestricted and Clerk both use this command."
+            "Never activates. Unrestricted and Clerk both use this command. "
+            "hosting.max_concurrent_executions (default 2) caps simultaneous "
+            "quail_exec work; a full slot fails server_busy. Restart quail run "
+            "after changing the cap."
         ),
     )
     run_parser.add_argument(

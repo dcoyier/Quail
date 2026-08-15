@@ -8,6 +8,8 @@ ExecOutcome remembers printed_output and state_revision after a successful run.
 dispatch_call(engine, method, args, kwargs):
   Plan the named facade method then evaluate it on the engine.
   Supports retrieve, count, create_field, tag, untag, entry_value, entry_fields.
+  For count, reject limit= (and other unexpected kwargs) with QuailSyntaxError
+  so plan_count() does not leak.
   This shape is what the worker RPC calls.
 
 run_analysis(db, session_id, dataset_id, expected_revision, driver,
