@@ -16,6 +16,9 @@ register_connectors(server, catalog, resolve_workspace, authenticate_route defau
   Tool handlers fail when the tool is not active in that workspace. Required tool
   parameters are bound before optional ones and Context (annotated so FastMCP
   injects it and does not advertise ctx on tools/list).
+  Omit optional arguments whose bound value is None so connectors that use
+  dict.get(name, default) still see the default. Required arguments that are
+  None still fail as missing.
   After add_tool, publish ToolSpec.input_schema onto the FastMCP tool parameters
   so tools/list shows the real JSON Schema (not the Any signature).
   When any connector tools were registered, wrap FastMCP list_tools (and the
