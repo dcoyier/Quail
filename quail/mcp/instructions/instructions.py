@@ -25,6 +25,15 @@ _SESSION_RULES = (
     "parallel execs on the same session fail with session_busy)."
 )
 
+_EXPORT_RULES = (
+    "quail_export_csv(session_id, dataset_id) writes source columns plus this "
+    "session's tags to a CSV on the serve host (path in the result, not a "
+    "download). That is the route to warm-path speed for session tags: after "
+    "process those columns are source, so Lexical/Semantic skip cell load. "
+    "Export itself does not reprocess. Do not overlap quail_export_csv with "
+    "quail_exec on the same session_id (session_busy)."
+)
+
 _CLERK_SESSION_RULES = (
     "Sessions are workspace-scoped and owned by the user who created them: after "
     "quail_switch_workspace, call quail_setup again (or quail_start_session) and "
@@ -59,7 +68,9 @@ def unrestricted_instructions(workspace_id: str) -> str:
         '"extended" (100s wall / 60s CPU); worker RSS is capped at 256 MiB.\n'
         "\n"
         "provide_feedback for friction or improvements (low bar for entry) — not for "
-        "analysis results. Optional category, session_id, dataset_id."
+        "analysis results. Optional category, session_id, dataset_id.\n"
+        "\n"
+        f"{_EXPORT_RULES}"
     )
 
 
@@ -83,7 +94,9 @@ def clerk_instructions(*, locked: bool = False) -> str:
         "Dataset-specific guidance comes from quail_get_dataset_info, unless "
         "quail_setup already included documentation for that dataset_id — then "
         "do not call quail_get_dataset_info again for those docs. "
-        "Use provide_feedback for friction or improvements."
+        "Use provide_feedback for friction or improvements.\n"
+        "\n"
+        f"{_EXPORT_RULES}"
     )
     if locked:
         return f"{base}\n\n{_LOCKED_ADDENDUM}"

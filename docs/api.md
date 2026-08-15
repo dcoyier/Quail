@@ -324,6 +324,12 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
   `--clear` and a new id rebuild. Analysis tags stay session-only and do not
   use the warmed path.
 
+`quail_export_csv(session_id, dataset_id)` writes source columns plus this
+session's tags to a CSV on the serve host (a filesystem `path`, not the
+file body). That is the route to warm-path speed for session tags: after
+`quail process` those columns are **source**, so `Lexical` / `Semantic` skip
+cell load. Export itself does not reprocess.
+
 ---
 
 ## Bindings and print

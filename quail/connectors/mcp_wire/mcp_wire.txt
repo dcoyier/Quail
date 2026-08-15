@@ -8,8 +8,9 @@ register_connectors(server, catalog, resolve_workspace, authenticate_route defau
   Context (or None) and returns workspace_id and optional user_id.
   authenticate_route, when set, authenticates connector file GETs.
   Reject when two different connectors claim the same tool name or resource URI.
-  Reject when a connector tool name matches a core Quail MCP tool (quail_exec and
-  the rest of the frozen host surface) or is already registered on the server.
+  Reject when a connector tool name matches a core Quail MCP tool (quail_exec,
+  quail_export_csv, and the rest of the frozen host surface) or is already
+  registered on the server.
   FastMCP overwrites duplicate add_tool names with a warning, so this fails closed.
   The same connector may expose the same tool/URI across workspaces.
   Tool handlers fail when the tool is not active in that workspace. Required tool
