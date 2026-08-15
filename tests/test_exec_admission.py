@@ -162,4 +162,5 @@ def test_instructions_state_session_rules() -> None:
     assert "quail_export_csv" in unrestricted
     assert "not a download" in unrestricted
     assert "warmed scoring" in unrestricted or "warmed" in unrestricted
-    assert "quail_export_csv" not in clerk
+    assert "quail_export_csv" in clerk
+    assert "not a download" in clerk

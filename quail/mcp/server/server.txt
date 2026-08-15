@@ -35,19 +35,23 @@ create_clerk_mcp_server(config, verifier, api_docs_path default None,
   (Clerk issuer + public /mcp resource), and ClerkAccessTokenVerifier
   (token verify plus TOML [[users]] allowlist).
   Register /.well-known/oauth-authorization-server proxy for older clients.
-  Register list/switch plus gated analysis tools (including quail_setup) and give
-  back the server.
+  Register list/switch plus gated analysis tools (including quail_setup and
+  quail_export_csv) and give back the server.
   Connector HTTP file routes authenticate Bearer and require workspace membership.
-  Clerk session create stamps owner_user_id; exec and feedback-with-session
+  Clerk session create stamps owner_user_id; exec, export, and feedback-with-session
   require that owner.
 
 All tools are async and offload blocking work with run_blocking.
 Unrestricted tools open CoreDb per call from context.db_path.
-quail_export_csv is unrestricted only (registered on loopback and public
-  unrestricted; omitted only in Clerk): session lock, write source plus this
-  session's analysis fields to <core-db-parent>/exports/<dataset_id>.<session_id>.csv,
-  and give back path, columns, and row_count. It does not process or write TOML.
-  The path is on the serve host.
+_export_csv_payload(db, session_id, dataset_id, db_path):
+  Lock the session, write the CSV under <db-parent>/exports, and give back
+  path, session_id, dataset_id, dataset_version_id, columns, and row_count.
+quail_export_csv is a core tool on unrestricted and Clerk: session lock, write
+  source plus this session's analysis fields to
+  <core-db-parent>/exports/<dataset_id>.<session_id>.csv, and give back path,
+  columns, and row_count. It does not process or write TOML. The path is on
+  the serve host. Clerk also requires the caller own the session and that it
+  belong to the sticky workspace.
 quail_setup returns documentation, datasets, session_id, workspace_id, and
 state_revision (optionally per-dataset documentation when configured).
 quail_exec passes context.search_runtime into exec_script (pool checkout per exec).
@@ -60,5 +64,6 @@ Clerk tools:
   Core tools re-check that the sticky workspace is still a membership.
   quail_list_workspaces returns memberships (or only default when locked) and active_workspace_id.
   quail_switch_workspace binds an allowlisted workspace or errors when locked.
-  Dataset/session/setup/exec/feedback require an active workspace; unbound gets UNBOUND_REPAIR_HINT.
+  Dataset/session/setup/exec/export/feedback require an active workspace; unbound gets UNBOUND_REPAIR_HINT.
+  quail_export_csv uses require_owned_active_session then _export_csv_payload.
   quail_exec passes runtime.search_runtime into exec_script.

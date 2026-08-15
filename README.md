@@ -80,21 +80,19 @@ being warmed and rebuilds them; core CSV data is untouched.
 ## Modes
 
 - **Unrestricted** — fixed workspace, no sign-in (loopback by default)
-  ([`examples/quail.toml`](examples/quail.toml)). Registers
-  `quail_export_csv`.
+  ([`examples/quail.toml`](examples/quail.toml)).
 - **Clerk** — JWT/OAuth identity + TOML `[[users]]` allowlist on one URL
-  ([`examples/quail.clerk.toml`](examples/quail.clerk.toml)). Does not
-  register `quail_export_csv`.
+  ([`examples/quail.clerk.toml`](examples/quail.clerk.toml)).
 
 Public unrestricted tunnel: set `hosting.allow_public_unrestricted = true`
 (fail-closed without it). Clerk public origins should be `https://` unless you
 set `hosting.allow_insecure_http = true`.
 
-`quail_export_csv` writes source columns plus this session's tags to a CSV on
-the machine running `quail run` (a host `path`, not a download). It does not
-reprocess. Warmed `Lexical` / `Semantic` apply to **source** after
-`quail process`. Remote clients can call the tool; the path and process stay
-on the host.
+`quail_export_csv` is on every deployment. It writes source columns plus this
+session's tags to a CSV on the machine running `quail run` (a host `path`, not
+a download). It does not reprocess. Warmed `Lexical` / `Semantic` apply to
+**source** after `quail process`. Remote clients can call the tool; the path
+and process stay on the host.
 
 **Privacy:** if a dataset pins `provider = "openrouter"`, warm and query
 embedding exports send full field text off-host. Prefer Ollama when text must

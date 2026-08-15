@@ -77,8 +77,6 @@ def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
         assert "session_id" in tools["quail_export_csv"].inputSchema["properties"]
         assert "dataset_id" in tools["quail_export_csv"].inputSchema["properties"]
         export_desc = (tools["quail_export_csv"].description or "").lower()
-        assert "unrestricted mcp" in export_desc
-        assert "not clerk" in export_desc
         assert "not a download" in export_desc
         assert "does not reprocess" in export_desc or "not a reprocess" in export_desc
         assert "message" in tools["provide_feedback"].inputSchema["properties"]

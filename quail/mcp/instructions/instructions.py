@@ -25,6 +25,15 @@ _SESSION_RULES = (
     "parallel execs on the same session fail with session_busy)."
 )
 
+_EXPORT_RULES = (
+    "quail_export_csv(session_id, dataset_id) writes source columns plus this "
+    "session's tags to a CSV on the serve host (path in the result, not a "
+    "download). Lexical/Semantic on analysis tags load cells; warmed scoring "
+    "is for bare source. Export does not reprocess or make scoring fast. Do "
+    "not overlap quail_export_csv with quail_exec on the same session_id "
+    "(session_busy)."
+)
+
 _CLERK_SESSION_RULES = (
     "Sessions are workspace-scoped and owned by the user who created them: after "
     "quail_switch_workspace, call quail_setup again (or quail_start_session) and "
@@ -61,12 +70,7 @@ def unrestricted_instructions(workspace_id: str) -> str:
         "provide_feedback for friction or improvements (low bar for entry) — not for "
         "analysis results. Optional category, session_id, dataset_id.\n"
         "\n"
-        "quail_export_csv(session_id, dataset_id) writes source columns plus this "
-        "session's tags to a CSV on the serve host (path in the result, not a "
-        "download). Lexical/Semantic on analysis tags load cells; warmed scoring "
-        "is for bare source. Export does not reprocess or make scoring fast. Do "
-        "not overlap quail_export_csv with quail_exec on the same session_id "
-        "(session_busy)."
+        f"{_EXPORT_RULES}"
     )
 
 
@@ -77,8 +81,8 @@ def clerk_instructions(*, locked: bool = False) -> str:
         "may call tools. Tokens must be for this Clerk application "
         "(authorized parties). Advertised OAuth scopes are for client compatibility; "
         "Quail does not enforce per-scope grants from the token.\n"
-        "Workspaces contain datasets. Bind a workspace before dataset, session, or exec "
-        "tools: call quail_list_workspaces, then quail_switch_workspace (or rely on a "
+        "Workspaces contain datasets. Bind a workspace before dataset, session, exec, "
+        "or export tools: call quail_list_workspaces, then quail_switch_workspace (or rely on a "
         "bound default when the connection is already bound). After binding, call "
         "quail_setup once, then quail_get_dataset_info when needed, then quail_exec. "
         "Prefer quail_setup over separately calling quail_get_api_docs, "
@@ -90,7 +94,9 @@ def clerk_instructions(*, locked: bool = False) -> str:
         "Dataset-specific guidance comes from quail_get_dataset_info, unless "
         "quail_setup already included documentation for that dataset_id — then "
         "do not call quail_get_dataset_info again for those docs. "
-        "Use provide_feedback for friction or improvements."
+        "Use provide_feedback for friction or improvements.\n"
+        "\n"
+        f"{_EXPORT_RULES}"
     )
     if locked:
         return f"{base}\n\n{_LOCKED_ADDENDUM}"

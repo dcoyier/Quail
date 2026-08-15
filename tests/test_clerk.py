@@ -394,6 +394,56 @@ default_workspace = "acme"
                 },
             )
             assert _is_error(stolen)
+            stolen_export = await server.call_tool(
+                "quail_export_csv",
+                {"session_id": session_id, "dataset_id": "notes"},
+            )
+            assert _is_error(stolen_export)
+
+    asyncio.run(run())
+
+
+def test_clerk_export_csv_writes_host_file(tmp_path: Path) -> None:
+    manifest = _write_clerk_manifest(tmp_path)
+    config = load_config(manifest)
+    apply_config(config).close()
+    server = create_mcp_server_from_config(
+        config, verifier=StaticTokenVerifier({"alice-token": "user_alice"})
+    ).server
+
+    async def run() -> None:
+        with bearer_token("alice-token"):
+            setup = _as_dict(await server.call_tool("quail_setup", {}))
+            session_id = setup["session_id"]
+            tagged = _as_dict(
+                await server.call_tool(
+                    "quail_exec",
+                    {
+                        "session_id": session_id,
+                        "dataset_id": "notes",
+                        "code": (
+                            'topic = create_field("topic")\n'
+                            'tag(G0, topic, "climate")\n'
+                            'print("ok")\n'
+                        ),
+                    },
+                )
+            )
+            assert "ok" in tagged["printed_output"]
+            exported = _as_dict(
+                await server.call_tool(
+                    "quail_export_csv",
+                    {"session_id": session_id, "dataset_id": "notes"},
+                )
+            )
+            path = Path(exported["path"])
+            assert path.is_file()
+            assert path.parent == config.database.resolve().parent / "exports"
+            assert exported["columns"] == ["id", "title", "topic"]
+            assert exported["row_count"] == 1
+            lines = path.read_text(encoding="utf-8").splitlines()
+            assert lines[0] == "id,title,topic"
+            assert all(line.endswith(",climate") for line in lines[1:])
 
     asyncio.run(run())
 
@@ -622,7 +672,7 @@ def test_clerk_tools_list_follows_sticky_workspace(tmp_path: Path) -> None:
             names = {tool.name for tool in await server.list_tools()}
             assert "garden_ping" in names
             assert "quail_exec" in names
-            assert "quail_export_csv" not in names
+            assert "quail_export_csv" in names
             assert "quail_switch_workspace" in names
             ping = _as_dict(await server.call_tool("garden_ping", {}))
             assert ping["ok"] is True
@@ -633,7 +683,7 @@ def test_clerk_tools_list_follows_sticky_workspace(tmp_path: Path) -> None:
             names = {tool.name for tool in await server.list_tools()}
             assert "garden_ping" not in names
             assert "quail_exec" in names
-            assert "quail_export_csv" not in names
+            assert "quail_export_csv" in names
             assert "quail_switch_workspace" in names
             failed = await server.call_tool("garden_ping", {})
             assert _is_error(failed)
@@ -660,6 +710,7 @@ def test_clerk_tools_list_omits_connectors_when_unbound(tmp_path: Path) -> None:
             names = {tool.name for tool in await server.list_tools()}
             assert "garden_ping" not in names
             assert "quail_switch_workspace" in names
+            assert "quail_export_csv" in names
             switched = _as_dict(
                 await server.call_tool("quail_switch_workspace", {"workspace_id": "acme"})
             )
