@@ -53,6 +53,7 @@ quail_setup returns documentation, datasets, session_id, workspace_id, and
 state_revision (optionally per-dataset documentation when configured).
 Unrestricted quail_setup docstring says call once after connect (no
 quail_switch_workspace).
+quail_exec docstring: omitted retrieve limit is 5.
 quail_exec passes context.search_runtime into exec_script (pool checkout per exec).
 
 Clerk tools:

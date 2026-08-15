@@ -477,7 +477,8 @@ def _register_unrestricted_tools(
         code must follow quail_get_api_docs. Success: printed_output only.
         Failure: diagnostic with execution_id null; no tags/bindings/prints
         are kept. Reuse one session_id serially; do not overlap quail_exec
-        calls on the same session_id. time_window is "standard" (30s wall /
+        calls on the same session_id. Omitted retrieve limit is 5.
+        time_window is "standard" (30s wall /
         15s CPU) or "extended" (100s wall / 60s CPU); worker RSS is capped
         at 256 MiB.
         """
@@ -849,7 +850,8 @@ def _register_clerk_tools(
         """Run bounded Quail Python for one session and dataset in the active workspace.
 
         Reuse one session_id serially; do not overlap quail_exec calls on the
-        same session_id. After switching workspace, start a new session first.
+        same session_id. Omitted retrieve limit is 5. After switching
+        workspace, start a new session first.
         """
 
         def work() -> CallToolResult:

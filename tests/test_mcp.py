@@ -74,6 +74,8 @@ def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
         assert "cold-start" in (tools["quail_setup"].description or "").lower()
         assert "analysis-language" in (tools["quail_get_api_docs"].description or "").lower()
         assert "dataset_id" in tools["quail_exec"].inputSchema["properties"]
+        exec_desc = (tools["quail_exec"].description or "").lower()
+        assert "omitted retrieve limit is 5" in exec_desc
         assert "session_id" in tools["quail_export_csv"].inputSchema["properties"]
         assert "dataset_id" in tools["quail_export_csv"].inputSchema["properties"]
         export_desc = (tools["quail_export_csv"].description or "").lower()
