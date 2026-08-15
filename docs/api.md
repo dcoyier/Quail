@@ -86,7 +86,7 @@ for entry in retrieve(group=matching, limit=10):
 ### 4. Rank with lexical search
 
 ```python
-score = Expression(Field("content"), Lexical('"hydrangea care"'))
+score = Expression(Field("content"), Lexical("hydrangea care"))
 matching = G0.where(score > 0)
 rank = Ranking(expression=score)
 
