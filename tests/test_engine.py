@@ -208,7 +208,7 @@ def test_field_kind_mismatch_raises(tmp_path: Path) -> None:
     with db:
 
         def driver(engine: QueryEngine, _prints) -> None:
-            with pytest.raises(QuailFieldError, match="registered as source, not analysis"):
+            with pytest.raises(QuailFieldError, match="registered as source, not analysis") as mismatch:
                 dispatch_call(
                     engine,
                     "count",
@@ -219,6 +219,7 @@ def test_field_kind_mismatch_raises(tmp_path: Path) -> None:
                         )
                     },
                 )
+            assert "del body" in str(mismatch.value)
             assert (
                 dispatch_call(
                     engine,
