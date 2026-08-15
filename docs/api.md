@@ -320,11 +320,10 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
   analysis fields, and source fields omitted from that set still materialize
   cells.
 
-Unrestricted MCP includes `quail_export_csv(session_id, dataset_id)`. It writes
-source columns plus this session's tags to a CSV on the serve host (a
-filesystem `path`, not the file body). Export does not reprocess and does not
-make scoring fast: warmed `Lexical` / `Semantic` apply to bare **source**,
-not to analysis tags.
+`quail_export_csv(session_id, dataset_id)` writes source columns plus this
+session's tags to a CSV on the serve host (a filesystem `path`, not the
+file body). Export does not reprocess and does not make scoring fast:
+warmed `Lexical` / `Semantic` apply to bare **source**, not to analysis tags.
 
 ---
 
