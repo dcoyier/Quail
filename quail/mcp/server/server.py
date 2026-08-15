@@ -63,7 +63,8 @@ _API_DOCS_REPAIR = (
 _DATASET_INFO_FALLBACK = (
     "No connector documentation is installed for this dataset. "
     "Use quail_exec inspection and quail_get_api_docs for the analysis language. "
-    "Imported source data is immutable; analysis tags and bindings stay on the session. "
+    "Imported source data is immutable; analysis tags are per dataset version; "
+    "bindings stay on the session. "
     "The CSV id column is entry.id, not Field(\"id\")."
 )
 
@@ -1116,7 +1117,9 @@ def _dataset_catalog_payload(
     if compact:
         return {
             "field_names": [field["name"] for field in fields],
+            "fields": fields,
             "entry_count": entry_count,
+            "id_note": "CSV id is entry.id, not a Field",
         }
     lexical_ready, embedding_ready = _search_ready_flags(
         search_runtime,
