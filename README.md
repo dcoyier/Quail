@@ -88,12 +88,12 @@ Public unrestricted tunnel: set `hosting.allow_public_unrestricted = true`
 (fail-closed without it). Clerk public origins should be `https://` unless you
 set `hosting.allow_insecure_http = true`.
 
-`quail_export_csv` is on every deployment. It writes source columns plus this
-session's tags to a CSV on the machine running `quail run` (a host `path`, not
-a download) so those tag columns can be processed as **source**. That
-`quail process` step is the warm-path speedup (`Lexical` / `Semantic` skip
-cell load). Export itself does not reprocess. Remote clients can call the
-tool; the path and process stay on the host.
+`quail_export_csv` writes source columns plus this session's tags to a CSV on
+the machine running `quail run` (a host `path`, not a download) so those tag
+columns can be processed as **source**. That `quail process` step is the
+warm-path speedup (`Lexical` / `Semantic` skip cell load). Export itself does
+not reprocess. Remote clients can call the tool; the path and process stay on
+the host.
 
 **Privacy:** if a dataset pins `provider = "openrouter"`, warm and query
 embedding exports send full field text off-host. Prefer Ollama when text must

@@ -10,9 +10,8 @@ create_mcp_server(db_path, feedback_path, workspace_id default local, api_docs_p
   api_docs_path override (None uses packaged docs via load_api_docs), and optional
   SearchRuntime.
   Build FastMCP with unrestricted instructions.
-  Register the core unrestricted async tools (including quail_setup and
-  quail_export_csv; bodies via run_blocking) and give back the server.
-  The same tool set is used for loopback and public unrestricted binds.
+  Register the core unrestricted async tools (including quail_setup;
+  bodies via run_blocking) and give back the server.
 
 create_mcp_server_from_config(config, api_docs_path default None, verifier default None):
   Configure process-wide exec slots from config.max_concurrent_executions.
@@ -35,8 +34,8 @@ create_clerk_mcp_server(config, verifier, api_docs_path default None,
   (Clerk issuer + public /mcp resource), and ClerkAccessTokenVerifier
   (token verify plus TOML [[users]] allowlist).
   Register /.well-known/oauth-authorization-server proxy for older clients.
-  Register list/switch plus gated analysis tools (including quail_setup and
-  quail_export_csv) and give back the server.
+  Register list/switch plus gated analysis tools (including quail_setup) and give
+  back the server.
   Connector HTTP file routes authenticate Bearer and require workspace membership.
   Clerk session create stamps owner_user_id; exec, export, and feedback-with-session
   require that owner.
@@ -46,12 +45,10 @@ Unrestricted tools open CoreDb per call from context.db_path.
 _export_csv_payload(db, session_id, dataset_id, db_path):
   Lock the session, write the CSV under <db-parent>/exports, and give back
   path, session_id, dataset_id, dataset_version_id, columns, and row_count.
-quail_export_csv is a core tool on unrestricted and Clerk: session lock, write
-  source plus this session's analysis fields to
-  <core-db-parent>/exports/<dataset_id>.<session_id>.csv, and give back path,
-  columns, and row_count. It does not process or write TOML. The path is on
-  the serve host. Clerk also requires the caller own the session and that it
-  belong to the sticky workspace.
+quail_export_csv: session lock, write source plus this session's analysis
+  fields to <core-db-parent>/exports/<dataset_id>.<session_id>.csv, and give
+  back path, columns, and row_count. It does not process or write TOML. The
+  path is on the serve host.
 quail_setup returns documentation, datasets, session_id, workspace_id, and
 state_revision (optionally per-dataset documentation when configured).
 quail_exec passes context.search_runtime into exec_script (pool checkout per exec).

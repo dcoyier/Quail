@@ -331,7 +331,6 @@ def _register_unrestricted_tools(
     *,
     connector_catalog: Any | None = None,
 ) -> None:
-    """Register core tools for auth.mode unrestricted (loopback or public bind)."""
     @server.tool(title="Set up Quail workspace")
     async def quail_setup() -> CallToolResult:
         """Cold-start this workspace for analysis: return the analysis-language docs,

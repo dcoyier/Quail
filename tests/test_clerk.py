@@ -720,7 +720,6 @@ def test_clerk_tools_list_omits_connectors_when_unbound(tmp_path: Path) -> None:
             names = {tool.name for tool in await server.list_tools()}
             assert "garden_ping" not in names
             assert "quail_switch_workspace" in names
-            assert "quail_export_csv" in names
             switched = _as_dict(
                 await server.call_tool("quail_switch_workspace", {"workspace_id": "acme"})
             )
