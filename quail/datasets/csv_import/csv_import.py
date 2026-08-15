@@ -35,10 +35,10 @@ def load_csv_dataset(path: str | Path) -> CsvDataset:
         descriptor = os.open(source, flags)
         with os.fdopen(descriptor, "rb") as raw_handle:
             if not stat.S_ISREG(os.fstat(raw_handle.fileno()).st_mode):
-                raise DatasetSyntaxError(f"CSV file does not exist: {source}")
+                raise DatasetSyntaxError(_missing_csv_message(source))
             payload = _read_bounded(raw_handle)
     except (FileNotFoundError, IsADirectoryError, NotADirectoryError) as error:
-        raise DatasetSyntaxError(f"CSV file does not exist: {source}") from error
+        raise DatasetSyntaxError(_missing_csv_message(source)) from error
 
     try:
         text = payload.decode("utf-8-sig")
@@ -59,7 +59,9 @@ def load_csv_dataset(path: str | Path) -> CsvDataset:
         if len(normalized_headers) != len(set(normalized_headers)):
             raise DatasetSyntaxError("CSV headers must be unique")
         if "id" not in normalized_headers:
-            raise DatasetSyntaxError("CSV file requires an id column")
+            raise DatasetSyntaxError(
+                "CSV file requires an id column. Add a nonempty unique id column."
+            )
         field_names = tuple(name for name in normalized_headers if name != "id")
         if len(field_names) > MAX_DATASET_FIELDS:
             raise DatasetSyntaxError(
@@ -141,6 +143,13 @@ def load_csv_dataset(path: str | Path) -> CsvDataset:
         estimated_durable_bytes=estimated_durable_bytes,
         field_names=field_names,
         entries=tuple(entries),
+    )
+
+
+def _missing_csv_message(source: Path) -> str:
+    return (
+        f"CSV file does not exist: {source}. "
+        "Paths in quail.toml are relative to that file's directory."
     )
 
 

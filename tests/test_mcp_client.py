@@ -43,6 +43,14 @@ def test_main_rejects_bad_usage() -> None:
     assert main(["call"]) == 2
 
 
+def test_parser_url_metavar() -> None:
+    from quail.mcp_client.mcp_client import _build_parser
+
+    help_text = _build_parser().format_help()
+    assert "URL" in help_text
+    assert "--url URL" in help_text or "-url URL" in help_text
+
+
 def test_main_call_bad_json_exits_2(capsys: pytest.CaptureFixture[str]) -> None:
     code = main(["call", "quail_setup", "not-json"])
     assert code == 2
@@ -133,6 +141,8 @@ def test_list_and_call_against_live_server(mcp_url: str) -> None:
     names = {tool["name"] for tool in listed["tools"]}
     assert "quail_setup" in names
     assert "quail_exec" in names
+    assert "instructions" in listed
+    assert "quail_setup" in listed["instructions"]
 
     setup = asyncio.run(call_tool(mcp_url, "quail_setup", {}))
     assert setup.isError is False

@@ -114,8 +114,9 @@ def test_apply_missing_source_fails(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path)
     (tmp_path / "data" / "notes.csv").unlink()
     config = load_config(manifest)
-    with pytest.raises(ConfigError, match="source not found"):
+    with pytest.raises(ConfigError, match="source not found") as raised:
         apply_config(config)
+    assert "relative to the quail.toml directory" in str(raised.value)
     assert not (tmp_path / "data" / "quail.turso").exists()
 
 

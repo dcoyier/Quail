@@ -18,7 +18,10 @@ def apply_config(config: QuailConfig) -> CoreDb:
 
     for spec in config.datasets:
         if not spec.source.is_file():
-            raise ConfigError(f"Dataset source not found: {spec.source}")
+            raise ConfigError(
+                f"Dataset source not found: {spec.source}. "
+                "Paths are relative to the quail.toml directory."
+            )
 
     with acquire_deployment_lease(config):
         db = open_core_db(config.database)
@@ -44,7 +47,10 @@ def import_declared_datasets(
 
     for spec in config.datasets:
         if not spec.source.is_file():
-            raise ConfigError(f"Dataset source not found: {spec.source}")
+            raise ConfigError(
+                f"Dataset source not found: {spec.source}. "
+                "Paths are relative to the quail.toml directory."
+            )
 
     for workspace in config.workspaces:
         ensure_workspace(db, workspace.workspace_id)

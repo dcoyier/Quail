@@ -7,6 +7,7 @@ import asyncio
 import json
 import sys
 from contextlib import AsyncExitStack, asynccontextmanager
+from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -79,18 +80,21 @@ def load_arguments(spec: str) -> dict[str, Any]:
 async def list_tools(url: str) -> dict[str, Any]:
     """Connect, initialize, list tools. Give back a JSON-ready mapping."""
 
-    async with _session(url) as session:
-        result = await session.list_tools()
-    return {
-        "tools": [
-            {
-                "name": tool.name,
-                "description": tool.description,
-                "inputSchema": tool.inputSchema,
-            }
-            for tool in result.tools
-        ]
-    }
+    async with _session(url) as live:
+        result = await live.session.list_tools()
+        payload: dict[str, Any] = {
+            "tools": [
+                {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "inputSchema": tool.inputSchema,
+                }
+                for tool in result.tools
+            ]
+        }
+        if live.instructions:
+            payload["instructions"] = live.instructions
+        return payload
 
 
 async def call_tool(
@@ -100,8 +104,8 @@ async def call_tool(
 ) -> CallToolResult:
     """Connect, initialize, call one tool. Give back the MCP CallToolResult."""
 
-    async with _session(url) as session:
-        return await session.call_tool(
+    async with _session(url) as live:
+        return await live.session.call_tool(
             name,
             arguments or {},
             read_timeout_seconds=_TOOL_READ_TIMEOUT,
@@ -120,6 +124,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--url",
         dest="url_before",
         default=None,
+        metavar="URL",
         help=f"MCP endpoint URL (default: {DEFAULT_URL})",
     )
     sub = parser.add_subparsers(dest="command", required=True)
@@ -129,6 +134,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--url",
         dest="url_after",
         default=None,
+        metavar="URL",
         help=f"MCP endpoint URL (default: {DEFAULT_URL})",
     )
 
@@ -142,6 +148,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--url",
         dest="url_after",
         default=None,
+        metavar="URL",
         help=f"MCP endpoint URL (default: {DEFAULT_URL})",
     )
     return parser
@@ -171,8 +178,14 @@ def _client_error_message(error: BaseException) -> str:
     return text or type(current).__name__
 
 
+@dataclass(frozen=True, slots=True)
+class _LiveSession:
+    session: ClientSession
+    instructions: str | None
+
+
 @asynccontextmanager
-async def _session(url: str) -> AsyncIterator[ClientSession]:
+async def _session(url: str) -> AsyncIterator[_LiveSession]:
     """Open Streamable HTTP, initialize a ClientSession, then close cleanly."""
 
     async with AsyncExitStack() as stack:
@@ -189,8 +202,8 @@ async def _session(url: str) -> AsyncIterator[ClientSession]:
         read_write = await stack.enter_async_context(transport)
         read_stream, write_stream = read_write[0], read_write[1]
         session = await stack.enter_async_context(ClientSession(read_stream, write_stream))
-        await session.initialize()
-        yield session
+        init = await session.initialize()
+        yield _LiveSession(session=session, instructions=init.instructions)
 
 
 def _call_result_payload(result: CallToolResult) -> dict[str, Any]:

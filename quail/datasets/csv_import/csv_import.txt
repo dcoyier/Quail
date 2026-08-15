@@ -1,9 +1,12 @@
 load_csv_dataset(path):
   Resolve path to an absolute regular file and read its bytes with a size bound.
-  If the file is missing or not a regular file, raise that the CSV does not exist.
+  If the file is missing or not a regular file, raise that the CSV does not exist
+  and that paths in quail.toml are relative to that file's directory.
   Decode as UTF-8 with optional BOM.
   Parse with DictReader.
   Require a header row with unique nonempty stripped headers and an id column.
+  If id is missing, raise that the CSV requires an id column and to add a
+  nonempty unique id column.
   field_names are the headers except id, and must stay within the field limit.
   For each data row:
     Reject too many rows, extra columns, short/ragged rows, and cell-budget overflow.
@@ -18,6 +21,10 @@ load_csv_dataset(path):
   version_id is csv_ plus that hash.
   Give back a CsvDataset with path, ids, sizes, field_names, and entries.
   This does not write the database.
+
+_missing_csv_message(source):
+  Give back that the CSV does not exist at source, and that paths in quail.toml
+  are relative to that file's directory.
 
 _read_bounded(handle):
   Read the file in chunks until EOF.

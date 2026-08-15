@@ -33,10 +33,13 @@ load_arguments(spec):
   Require a JSON object (or null treated as {}).
   If JSON is invalid or not an object, raise ValueError.
 
+_LiveSession is the initialized ClientSession plus optional server instructions.
+
 list_tools(url):
   Open an initialized MCP session to url.
   List tools.
   Give back a mapping with tools: name, description, inputSchema for each tool.
+  Include instructions when the server sent them.
 
 call_tool(url, name, optional arguments):
   Open an initialized MCP session to url.
@@ -47,7 +50,7 @@ call_tool(url, name, optional arguments):
 _build_parser:
   Build argparse for "python -m quail.mcp_client".
   Optional --url on the parent parser (before the subcommand) and again on
-  list/call (after the subcommand).
+  list/call (after the subcommand). The metavar is URL.
   Subcommand call takes tool_name and arguments.
 
 _session(url):
@@ -55,7 +58,8 @@ _session(url):
   Enter streamable_http_client with that client.
   Enter ClientSession on the read/write streams.
   Initialize the session.
-  Yield the session, then close everything.
+  Yield a _LiveSession with the session and initialize instructions, then close
+  everything.
 
 _call_result_payload(result):
   Give back isError, structuredContent, and content (JSON dumps of content blocks).

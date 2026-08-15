@@ -59,9 +59,10 @@ uv run python -m quail.mcp_client call quail_setup '{}'
 uv run python -m quail.mcp_client call quail_exec @exec.json
 ```
 
-   Default URL is `http://127.0.0.1:8000/mcp`. `--url` may sit before or after
-   the subcommand (`list --url …` still works). Arguments are a JSON object,
-   `@path.json`, or `-` (stdin). stdout is JSON only.
+   Default URL is `http://127.0.0.1:8000/mcp` (no trailing slash; `/mcp/` can
+   307). `--url` may sit before or after the subcommand (`list --url …` still
+   works). Arguments are a JSON object, `@path.json`, or `-` (stdin). stdout is
+   JSON only. `list` includes server `instructions` when the server sent them.
 
 ### process vs run
 

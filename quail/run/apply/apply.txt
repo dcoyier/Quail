@@ -1,5 +1,6 @@
 apply_config(config):
-  Require each dataset source file exists.
+  Require each dataset source file exists. If a source is missing, raise that
+  paths are relative to the quail.toml directory.
   Acquire the deployment lease (same flocks as process and serve).
   Open the core database.
   Import declared datasets with activate=True (no embedding pins).
@@ -7,7 +8,8 @@ apply_config(config):
   Give back the open CoreDb after the lease is released.
 
 import_declared_datasets(config, db, activate default True):
-  Require each dataset source file exists.
+  Require each dataset source file exists. If a source is missing, raise that
+  paths are relative to the quail.toml directory.
   Ensure each workspace exists.
   Import each declared CSV with the given activate flag.
   Give back the DatasetRef tuple in declaration order.

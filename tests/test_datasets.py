@@ -99,8 +99,12 @@ def test_bad_csv_shapes_raise(tmp_path: Path) -> None:
     short_row = _write_csv(tmp_path / "short.csv", "id,title,body\ne1,Hello\n")
     extra_row = _write_csv(tmp_path / "extra.csv", "id,title\ne1,Hello,world\n")
 
-    with pytest.raises(DatasetSyntaxError, match="id column"):
+    with pytest.raises(DatasetSyntaxError, match="relative to that file's directory"):
+        load_csv_dataset(tmp_path / "missing.csv")
+
+    with pytest.raises(DatasetSyntaxError, match="id column") as raised:
         load_csv_dataset(missing_id)
+    assert "Add a nonempty unique id column" in str(raised.value)
     with pytest.raises(DatasetSyntaxError, match="unique"):
         load_csv_dataset(duplicate_header)
     with pytest.raises(DatasetSyntaxError, match="duplicates id"):
