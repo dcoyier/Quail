@@ -16,7 +16,7 @@ Pass arguments by name.
 
 | Argument | Meaning |
 | --- | --- |
-| `session_id` | Durable analysis context in one workspace. Bindings stick to this session. Tags are per dataset version. MCP binds the workspace; if the workspace changes, start a new session. Run one `quail_exec` at a time per `session_id` — overlap (including `quail_export_csv` on the same session) fails with `session_busy`. |
+| `session_id` | Durable analysis context in one workspace. Bindings stick to this session. Tags stick to this session **and** dataset version. MCP binds the workspace; if the workspace changes, start a new session. Run one `quail_exec` at a time per `session_id` — overlap (including `quail_export_csv` on the same session) fails with `session_busy`. |
 | `dataset_id` | Exactly one dataset for this call (its active immutable version). |
 | `code` | Bounded Quail Python (no imports, no files, no network). |
 | `time_window` | `"standard"` (30s wall / 15s CPU) or `"extended"` (100s wall / 60s CPU). Both are finite; extended is just longer. Worker RSS is always capped at 256 MiB. |
@@ -140,7 +140,7 @@ print(retrieve(group=filtered, rank=Ranking(expression=score), limit=10))
 
 ### 8. Histogram and match counts
 
-`Unit("values")` is a distinct-value histogram. Character `Length()` swamps
+`Unit("values", field)` is a distinct-value histogram. Character `Length()` swamps
 BM25; count regex hits instead.
 
 ```python
