@@ -11,8 +11,6 @@ from pathlib import Path
 from quail.analysis.errors import QuailServerBusyError
 from quail.search.db import SearchDb, open_search_db
 
-_BUSY_REPAIR = "Retry after another quail_exec call finishes."
-
 
 @dataclass(slots=True)
 class SearchDbPool:
@@ -36,8 +34,13 @@ class SearchDbPool:
                 return self._idle.pop()
             if self._checked_out >= self.max_size:
                 raise QuailServerBusyError(
-                    "Quail is at its concurrent execution limit.",
-                    repair_hint=_BUSY_REPAIR,
+                    f"Quail is at its concurrent execution limit ({self.max_size}).",
+                    repair_hint=(
+                        f"Quail is at hosting.max_concurrent_executions={self.max_size}. "
+                        "Wait for other sessions' quail_exec calls to finish, or raise "
+                        "hosting.max_concurrent_executions in quail.toml and restart "
+                        "quail run."
+                    ),
                 )
             self._checked_out += 1
         try:

@@ -13,7 +13,14 @@ _slots: threading.BoundedSemaphore | None = None
 _configured_n: int | None = None
 _lock = threading.Lock()
 
-_BUSY_REPAIR = "Retry after another quail_exec call finishes."
+
+def _server_busy_hint() -> str:
+    n = configured_execution_slots()
+    return (
+        f"Quail is at hosting.max_concurrent_executions={n}. "
+        "Wait for other sessions' quail_exec calls to finish, or raise "
+        "hosting.max_concurrent_executions in quail.toml and restart quail run."
+    )
 
 
 def configure_execution_slots(max_concurrent_executions: int) -> None:
@@ -55,9 +62,10 @@ def acquire_execution_slot() -> Iterator[None]:
             _configured_n = _DEFAULT_SLOTS
         pool = _slots
     if not pool.acquire(blocking=False):
+        n = configured_execution_slots()
         raise QuailServerBusyError(
-            "Quail is at its concurrent execution limit.",
-            repair_hint=_BUSY_REPAIR,
+            f"Quail is at its concurrent execution limit ({n}).",
+            repair_hint=_server_busy_hint(),
         )
     try:
         yield

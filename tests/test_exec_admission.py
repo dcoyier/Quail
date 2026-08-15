@@ -99,7 +99,9 @@ def test_second_exec_fails_busy_when_slots_full(tmp_path: Path) -> None:
                     code="print(count())",
                 )
         assert raised.value.repair_hint is not None
-        assert "Retry after another quail_exec" in raised.value.repair_hint
+        assert "hosting.max_concurrent_executions=1" in raised.value.repair_hint
+        assert "restart quail run" in raised.value.repair_hint
+        assert "other sessions" in raised.value.repair_hint
         diagnostic = diagnostic_from_exception(raised.value)
         assert diagnostic["stable_error_code"] == "server_busy"
         assert diagnostic["error_class"] == "QuailRuntimeError"

@@ -8,7 +8,12 @@ reset_execution_slots_for_tests:
 configured_execution_slots:
   Give back the configured ceiling (2 until configure is called).
 
+_server_busy_hint:
+  Give back a repair hint naming N, hosting.max_concurrent_executions, other
+  sessions, and restart quail run.
+
 acquire_execution_slot:
   Non-blocking acquire.
-  On failure raise QuailServerBusyError with a retry repair_hint.
+  On failure raise QuailServerBusyError naming the configured N, the TOML key
+  hosting.max_concurrent_executions, other sessions, and restart quail run.
   Always release in finally.

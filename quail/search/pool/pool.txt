@@ -1,7 +1,8 @@
 SearchDbPool(path, max_size):
   Bounded idle list of SearchDb handles for one search database file.
   checkout(): reuse an idle handle or open a new one while under max_size;
-    raise QuailServerBusyError when every slot is checked out.
+    raise QuailServerBusyError when every slot is checked out, naming N,
+    hosting.max_concurrent_executions, other sessions, and restart quail run.
   release(search): return a handle to the idle list (or close if pool closed).
   close(): close idle handles and refuse new checkouts.
   connection(): context manager that checkout/release.
