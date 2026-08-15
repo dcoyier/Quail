@@ -120,6 +120,12 @@ def load_csv_dataset(path: str | Path) -> CsvDataset:
     except UnicodeDecodeError as error:
         raise DatasetSyntaxError("CSV files must use UTF-8 encoding") from error
     except csv.Error as error:
+        detail = str(error).lower()
+        if "field larger than field limit" in detail:
+            limit = csv.field_size_limit()
+            raise DatasetSyntaxError(
+                f"CSV cell exceeds the {limit}-byte parser field size limit"
+            ) from error
         raise DatasetSyntaxError("CSV file contains malformed quoting") from error
 
     if not entries:
