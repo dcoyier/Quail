@@ -87,6 +87,14 @@ def test_paths_resolve_from_manifest_dir(tmp_path: Path) -> None:
     assert config.port == 8765
 
 
+def test_example_quail_toml_pins_distinct_search_database() -> None:
+    manifest = Path(__file__).resolve().parents[1] / "examples" / "quail.toml"
+    config = load_config(manifest)
+    assert config.search_database is not None
+    assert config.search_database != config.database
+    assert config.search_database.name == "quail-search.turso"
+
+
 def test_apply_imports_idempotent(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path)
     config = load_config(manifest)

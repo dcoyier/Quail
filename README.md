@@ -66,7 +66,10 @@ uv run python -m quail.mcp_client call quail_exec @exec.json
 ### process vs run
 
 - **`process`** — imports declared CSVs, warms Lexical FTS and any corpus
-  embeddings, then activates those versions and embedding pins.
+  embeddings, then activates those versions and embedding pins. The example
+  [`examples/quail.toml`](examples/quail.toml) pins `core.search_database`
+  (a path distinct from `core.database`); without that pin, Lexical cannot
+  warm.
 - **`run`** — takes a deployment lease, imports without activating, fail-closes
   unless each imported version is already active and warm receipts match the
   TOML, then serves MCP. Never activates.

@@ -995,3 +995,47 @@ def test_slice_derived_corpus_does_not_reuse_warm_field(tmp_path: Path) -> None:
     finally:
         search.close()
         db.close()
+
+
+def test_example_notes_csv_unquoted_or_vs_quoted_phrase(tmp_path: Path) -> None:
+    """Shipped notes.csv: unquoted spaces are OR; quotes are a phrase."""
+
+    source = Path(__file__).resolve().parents[1] / "examples" / "data" / "notes.csv"
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    db = open_core_db(tmp_path / "core.turso")
+    import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+    session = create_session(db, "ws")
+    search = open_search_db(tmp_path / "search.turso")
+    lexical = LexicalService(search=search)
+    try:
+        any_term = Expression(Field("body"), Lexical("hydrangea care"))
+        phrase = Expression(Field("body"), Lexical('"hydrangea care"'))
+
+        def driver(engine: QueryEngine, _prints: object) -> None:
+            or_ids = {
+                entry.id
+                for entry in dispatch_call(
+                    engine, "retrieve", (), {"group": G0.where(any_term > 0), "limit": 50}
+                )
+            }
+            phrase_ids = {
+                entry.id
+                for entry in dispatch_call(
+                    engine, "retrieve", (), {"group": G0.where(phrase > 0), "limit": 50}
+                )
+            }
+            assert or_ids == {"e1", "e4", "e5", "e6"}
+            assert phrase_ids == {"e1"}
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            lexical=lexical,
+        )
+    finally:
+        search.close()
+        db.close()

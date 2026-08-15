@@ -1,8 +1,8 @@
 [core]
 database = "data/quail.turso"
 feedback = "data/feedback.jsonl"
-# Optional search DB for Lexical FTS + Semantic vectors (must differ from database):
-# search_database = "data/quail-search.turso"
+# Distinct from database. Required for Lexical FTS + Semantic vectors:
+search_database = "data/quail-search.turso"
 
 [auth]
 mode = "unrestricted"

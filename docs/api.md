@@ -89,8 +89,15 @@ for entry in retrieve(group=matching, limit=10):
 
 ### 4. Rank with lexical search
 
+Unquoted spaces are OR. Quoted text is a phrase.
+
 ```python
-score = Expression(Field("body"), Lexical('"hydrangea care"'))
+# OR: notes that mention hydrangea or care (e1, e4, e5, e6 on notes.csv)
+any_term = Expression(Field("body"), Lexical("hydrangea care"))
+# Phrase: adjacent tokens only (e1 on notes.csv)
+phrase = Expression(Field("body"), Lexical('"hydrangea care"'))
+
+score = phrase
 matching = G0.where(score > 0)
 rank = Ranking(expression=score)
 
