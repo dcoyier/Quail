@@ -74,8 +74,8 @@ _apply_regex(operation, value):
     the first match or None.
   RegexFindAll: None stays []; non-text raises to use AsText first; otherwise
     the list of matches.
-  RegexSub: None stays None; require text or list[text]; replace matches with
-    the literal replacement.
+  RegexSub: None stays None; non-text raises to use AsText first; otherwise
+    require text or list[text] and replace matches with the literal replacement.
 Field-scoped member groups resolve each member through resolve_field against the
 catalog (kind stamped; unknown or kind-mismatched names raise).
 Field reads bulk-load each referenced field once into an entry_id map; overlay

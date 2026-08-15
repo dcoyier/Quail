@@ -12,7 +12,7 @@ from quail.analysis.exec_host import dispatch_call, run_analysis
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
 from quail.analysis.group import G0, G1, GroupExpr
-from quail.analysis.operations import AsText, Lexical, RegexSearch, Value
+from quail.analysis.operations import AsText, Lexical, RegexSearch, RegexSub, Value
 from quail.analysis.planner import plan_create_field
 from quail.analysis.unit import Unit, fields
 from quail.datasets import import_csv_dataset, open_core_db
@@ -236,6 +236,43 @@ def test_field_kind_mismatch_raises(tmp_path: Path) -> None:
                 dispatch_call(engine, "tag", (G0, Field("topic", "source"), "x"))
             sample = dispatch_call(engine, "retrieve", (), {"limit": 1})[0]
             dispatch_call(engine, "tag", ([sample], topic, "x"))
+
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+        )
+
+
+def test_regexsub_non_text_names_astext(tmp_path: Path) -> None:
+    db, session = _seed(tmp_path)
+    with db:
+
+        def driver(engine: QueryEngine, _prints) -> None:
+            score = dispatch_call(engine, "create_field", ("score",))
+            dispatch_call(engine, "tag", (G0, score, 12))
+            with pytest.raises(QuailRuntimeError, match="use AsText"):
+                dispatch_call(
+                    engine,
+                    "retrieve",
+                    (),
+                    {
+                        "unit": Expression(score, RegexSub("1", "X")),
+                        "limit": 1,
+                    },
+                )
+            values = dispatch_call(
+                engine,
+                "retrieve",
+                (),
+                {
+                    "unit": Expression(score, AsText(), RegexSub("1", "X")),
+                    "limit": 1,
+                },
+            )
+            assert values == ["X2"]
 
         run_analysis(
             db,
