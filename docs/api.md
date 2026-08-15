@@ -86,7 +86,7 @@ for entry in retrieve(group=matching, limit=10):
 ### 4. Rank with lexical search
 
 ```python
-score = Expression(Field("content"), Lexical("hydrangea care"))
+score = Expression(Field("content"), Lexical('"hydrangea care"'))
 matching = G0.where(score > 0)
 rank = Ranking(expression=score)
 
@@ -299,14 +299,16 @@ Semantic(query, input_aggregation=None, target_aggregation=None)
 `query`: non-empty `str`, `list[str]`, entry `GroupExpr`, or `list[Entry]`.  
 Aggregations: `"total"`, `"avg"`, or `None` (= total).
 
-- **Lexical:** `score > 0` means “matched”; string queries support simple
-  query syntax (phrases, `AND` / `NOT`, `term*`). Hyphens and other
-  punctuation inside an unquoted atom split the same way indexing does
-  (match any resulting term); `term*` still requires a single clean term.
-  Scores are corpus-relative
-  (Turso native FTS). `str`, `list[str]`, entry `GroupExpr`, and `list[Entry]`
-  queries all work. Entry-derived targets read the expression root field and are
-  quoted as FTS terms (field prose is not parsed as query syntax).
+- **Lexical:** `score > 0` means “matched”. String queries use Turso FTS
+  syntax: unquoted spaces are OR (not a phrase); uppercase `AND` / `NOT` are
+  operators (lowercase `and` / `not` / `or` are ordinary terms); `"quoted
+  text"` is adjacent tokens; `term*` prefixes one clean term. There is no
+  `OR` keyword. Hyphens and other punctuation split the same way indexing
+  does (an unquoted atom matches any resulting term). `list[str]` parses each
+  string as its own query and ORs them. Entry-derived targets
+  (`GroupExpr` / `list[Entry]`) read the expression root field, tokenize it,
+  and quote those terms (OR). Cell prose is not query syntax — `AND` in the
+  field is a word. Scores are corpus-relative.
   On a bare source field (no `Slice` / `AsText` / … in front), scoring uses the
   process-warmed FTS index and does not load source cells.
 - **Semantic:** exact cosine similarity under the dataset embedding profile
