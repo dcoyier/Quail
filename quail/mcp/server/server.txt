@@ -44,10 +44,12 @@ All tools are async and offload blocking work with run_blocking.
 Unrestricted tools open CoreDb per call from context.db_path.
 _export_csv_payload(db, session_id, dataset_id, db_path):
   Lock the session, write the CSV under <db-parent>/exports, and give back
-  path, session_id, dataset_id, dataset_version_id, columns, and row_count.
+  path, session_id, dataset_id, dataset_version_id, columns, row_count, and
+  next_steps (stop run, point TOML source at the path, then process; CLI
+  never writes TOML).
 quail_export_csv: session lock, write source plus this session's analysis
   fields to <core-db-parent>/exports/<dataset_id>.<session_id>.csv, and give
-  back path, columns, and row_count. It does not process or write TOML. The
+  back path, columns, row_count, and next_steps. It does not process or write TOML. The
   path is on the serve host. The docstring says stop run, point TOML source
   at that path, then process (warm-path); overlap is session_busy.
 quail_setup returns documentation, datasets, session_id, workspace_id, and
@@ -56,7 +58,7 @@ Unrestricted quail_setup docstring says call once after connect (no
 quail_switch_workspace).
 quail_exec docstring: bindings persist, one dataset_id, session_busy vs
 server_busy (raise hosting.max_concurrent_executions and restart run),
-omitted retrieve limit follows api.md.
+omitted retrieve limit is 5.
 quail_exec passes context.search_runtime into exec_script (pool checkout per exec).
 
 Clerk tools:

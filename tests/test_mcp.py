@@ -79,6 +79,7 @@ def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
         assert "server_busy" in exec_desc
         assert "bindings persist" in exec_desc
         assert "one dataset_id" in exec_desc
+        assert "omitted retrieve limit is 5" in exec_desc
         assert "session_id" in tools["quail_export_csv"].inputSchema["properties"]
         assert "dataset_id" in tools["quail_export_csv"].inputSchema["properties"]
         export_desc = (tools["quail_export_csv"].description or "").lower()
@@ -159,6 +160,8 @@ def test_quail_export_csv_writes_host_file(tmp_path: Path) -> None:
         assert exported["session_id"] == session_id
         assert exported["columns"] == ["id", "title", "body", "topic"]
         assert exported["row_count"] == 2
+        assert "quail process" in exported["next_steps"]
+        assert "never writes TOML" in exported["next_steps"]
         lines = path.read_text(encoding="utf-8").splitlines()
         assert lines[0] == "id,title,body,topic"
         assert all(line.endswith(",climate") for line in lines[1:])
