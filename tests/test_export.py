@@ -111,7 +111,7 @@ def test_export_rejects_analysis_field_named_id(tmp_path: Path) -> None:
             expected_revision=session.state_revision,
             mutations=[FieldCreate("id")],
         )
-        with pytest.raises(SessionSyntaxError, match="named id"):
+        with pytest.raises(SessionSyntaxError, match="analysis field 'id'"):
             export_session_csv(
                 db,
                 session_id=session.id,

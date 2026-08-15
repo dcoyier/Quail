@@ -6,7 +6,8 @@ columns, and row_count.
 export_session_csv(db, session_id, dataset_id, dest_dir):
   Resolve the active session onto the dataset's ready active version.
   Collect source fields then this session's analysis fields.
-  If an analysis field is named id, raise.
+  If an analysis field is named id, raise SessionSyntaxError that names
+  analysis field 'id' and says CSV id is reserved for entry.id.
   If source plus analysis field count exceeds MAX_DATASET_FIELDS, raise.
   If a field name exceeds MAX_SOURCE_FIELD_NAME_BYTES, raise.
   columns are id then those field names.

@@ -289,7 +289,9 @@ untag(group_or_entries, field)           # clear all selected
 untag(group_or_entries, field, value)    # clear exact matches only
 ```
 
-Source fields cannot be created or overwritten. Empty selections are no-ops.
+Source fields cannot be created or overwritten. `create_field("id")` is
+invalid — the CSV `id` column is `entry.id`, not a Field. Empty selections
+are no-ops.
 
 ---
 

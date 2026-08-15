@@ -38,6 +38,7 @@ count(plan):
   Values-unit counts use len(_distinct_present_values(...)).
 
 create_field(plan):
+  Reject the name id — the CSV id column is entry.id, not a Field.
   Reject source-name collision.
   Stage FieldCreate when new and remember the analysis Field.
   Clear catalog and field-snapshot caches for that name.

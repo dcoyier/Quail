@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from quail.analysis.entry import Entry
-from quail.analysis.errors import QuailScopeError, QuailSyntaxError
+from quail.analysis.errors import QuailFieldError, QuailScopeError, QuailSyntaxError
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
 from quail.analysis.group import GroupExpr
@@ -146,6 +146,10 @@ def plan_create_field(field: str | Field) -> CreateFieldPlan:
         resolved = Field(name, kind="analysis")
     else:
         raise QuailSyntaxError("create_field requires a string name or Field")
+    if resolved.name == "id":
+        raise QuailFieldError(
+            'create_field("id") is invalid; the CSV id column is entry.id, not a Field'
+        )
     return CreateFieldPlan(field=resolved)
 
 

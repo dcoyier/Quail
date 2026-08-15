@@ -60,7 +60,9 @@ def export_session_csv(
     analysis = analysis_fields(db, scope)
     analysis_names = [field.name for field in analysis]
     if "id" in analysis_names:
-        raise SessionSyntaxError("Cannot export an analysis field named id")
+        raise SessionSyntaxError(
+            "Cannot export analysis field 'id'; CSV id is reserved for entry.id"
+        )
     field_names = [field.name for field in source] + analysis_names
     if len(field_names) > MAX_DATASET_FIELDS:
         raise QuailRuntimeError(

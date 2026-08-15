@@ -151,6 +151,10 @@ class QueryEngine:
 
     def create_field(self, plan: CreateFieldPlan) -> Field:
         name = plan.field.name
+        if name == "id":
+            raise QuailFieldError(
+                'create_field("id") is invalid; the CSV id column is entry.id, not a Field'
+            )
         if any(field.name == name and field.kind == "source" for field in self._catalog()):
             raise QuailFieldError(f"Cannot create analysis field over source name: {name}")
         if name in self._created_fields or any(

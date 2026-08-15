@@ -379,6 +379,10 @@ def test_plan_create_field_strips_field_name() -> None:
     assert plan.field.kind == "analysis"
     with pytest.raises(QuailSyntaxError, match="non-empty"):
         plan_create_field(Field("   "))
+    with pytest.raises(QuailFieldError, match="entry.id"):
+        plan_create_field("id")
+    with pytest.raises(QuailFieldError, match="entry.id"):
+        plan_create_field(Field("id"))
 
 
 def test_distinct_values_normalize_dict_key_order(tmp_path: Path) -> None:
@@ -471,6 +475,8 @@ def test_field_group_members_resolve_against_catalog(tmp_path: Path) -> None:
                 dispatch_call(
                     engine, "retrieve", (), {"unit": fields, "group": unknown, "limit": 50}
                 )
+            with pytest.raises(QuailFieldError, match="entry.id"):
+                dispatch_call(engine, "create_field", ("id",))
 
         run_analysis(
             db,
