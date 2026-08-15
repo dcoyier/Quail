@@ -164,6 +164,7 @@ def test_cli_run_help_matches_serve_contract(
     assert "Apply slim quail.toml then serve unrestricted loopback MCP" not in parent
     assert "Serve MCP if already processed (never activates)" in parent
     assert "deployment lease" in parent.lower()
+    assert "process" in parent.lower() and "run" in parent.lower()
 
     with pytest.raises(SystemExit) as exited:
         cli_main(["run", "--help"])

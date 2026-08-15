@@ -7,11 +7,11 @@ acquire_deployment_lease(config):
   lock file recorded one, and tell the operator that process and run must not
   share the same core/search databases.
   After a successful flock, write this process PID into the lock file.
+  Used by process_config, serve, and apply_config.
+  Yield the lock paths for the with-block lifetime, then unlock and close.
 
 _read_holder_pid(lock_path):
   Give back the integer PID recorded in the lock file, or None.
 
 _write_holder_pid(handle):
   Replace the lock file contents with this process PID.
-  Used by process_config, serve, and apply_config.
-  Yield the lock paths for the with-block lifetime, then unlock and close.
