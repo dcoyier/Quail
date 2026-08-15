@@ -94,9 +94,9 @@ class _CoreHost:
         if ref is None:
             raise ConnectorError(
                 "UNKNOWN_DATASET",
-                f"Dataset {dataset_id!r} is not bound to this connector.",
-                "Add [[connectors.datasets]] for that id in quail.toml. "
-                "Connectors load at quail run, not quail process.",
+                f"Dataset {dataset_id!r} is not in this workspace catalog.",
+                "Import that dataset in quail.toml, run quail process, then "
+                "restart quail run.",
             )
         return DatasetRef(
             id=ref.dataset_id,

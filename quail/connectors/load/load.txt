@@ -12,6 +12,14 @@ close(): call disconnect() once per distinct connector instance when present.
 
 ConnectorLoadError is a ConfigError for fail-closed quail run failures.
 
+_CoreHost:
+  dataset(context, dataset_id): require_dataset first (unbound is ConnectorError
+  UNKNOWN_DATASET with a [[connectors.datasets]] repair). Then read the core
+  catalog. If the id is bound but missing from the catalog, raise ConnectorError
+  UNKNOWN_DATASET that the dataset is not in this workspace catalog (import,
+  process, restart run). Give back DatasetRef.
+  require_dataset(context, dataset_id): delegate to context.require_dataset.
+
 load_connector_catalog(config, db):
   Discover pinned entry points, construct connectors with a CoreHost that reopens
   CoreDb by path per dataset read, connect each workspace binding, and fail closed

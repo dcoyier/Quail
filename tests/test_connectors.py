@@ -1053,6 +1053,36 @@ def test_require_dataset_is_connector_error_not_internal() -> None:
     assert code == "unknown_dataset"
 
 
+def test_core_host_catalog_miss_is_not_unbound(tmp_path: Path) -> None:
+    db_path = tmp_path / "core.turso"
+    with open_core_db(db_path):
+        pass
+    host = load_module._CoreHost(db_path=db_path)
+    unbound = ConnectorContext(
+        workspace_id="local",
+        user_id=None,
+        extension_id="opt",
+        extension_version="1.0.0",
+        dataset_ids=frozenset(),
+    )
+    with pytest.raises(ConnectorError, match="not bound") as raised:
+        host.dataset(unbound, "notes")
+    assert "[[connectors.datasets]]" in raised.value.repair_hint
+
+    bound = ConnectorContext(
+        workspace_id="local",
+        user_id=None,
+        extension_id="opt",
+        extension_version="1.0.0",
+        dataset_ids=frozenset({"notes"}),
+    )
+    with pytest.raises(ConnectorError, match="workspace catalog") as missing:
+        host.dataset(bound, "notes")
+    assert missing.value.stable_code == "UNKNOWN_DATASET"
+    assert "quail process" in missing.value.repair_hint
+    assert "[[connectors.datasets]]" not in missing.value.repair_hint
+
+
 def _catalog_with_probe_in(workspace_id: str) -> ConnectorCatalog:
     from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
 
