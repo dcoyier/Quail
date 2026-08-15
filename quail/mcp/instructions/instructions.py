@@ -62,16 +62,11 @@ def unrestricted_instructions(workspace_id: str) -> str:
         "analysis results. Optional category, session_id, dataset_id.\n"
         "\n"
         "quail_export_csv(session_id, dataset_id) writes source columns plus this "
-        "session's tags to a new CSV on the machine running quail run (path in "
-        "the result, not a download). That is true for loopback and for a public "
-        "unrestricted bind. Lexical/Semantic on analysis tags materializes cells; "
-        "after those columns are source, scoring uses the process-warmed path. "
-        "This tool does not reprocess or edit quail.toml. Keep the same dataset "
-        "id, point source at the export, stop quail run, quail process, quail "
-        "run, then quail_start_session. A new id is a different dataset. Do not "
-        "overlap quail_export_csv with quail_exec on the same session_id "
-        "(session_busy). Do not export to copy source fields, for one-off "
-        "filters, or to persist bindings."
+        "session's tags to a CSV on the serve host (path in the result, not a "
+        "download). Lexical/Semantic on analysis tags load cells; warmed scoring "
+        "is for bare source. Export does not reprocess or make scoring fast. Do "
+        "not overlap quail_export_csv with quail_exec on the same session_id "
+        "(session_busy)."
     )
 
 

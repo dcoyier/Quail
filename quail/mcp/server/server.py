@@ -484,18 +484,12 @@ def _register_unrestricted_tools(
 
     @server.tool(title="Export session CSV")
     async def quail_export_csv(session_id: str, dataset_id: str) -> CallToolResult:
-        """Write source columns plus this session's analysis tags to a CSV on this machine.
+        """Write source columns plus this session's analysis tags to a CSV on the serve host.
 
-        Lexical/Semantic on tags is slow until those columns are source. This
-        writes a new file (path in the result); it does not reprocess or edit
-        quail.toml. Keep the same dataset id, point source at that path, stop
-        quail run, quail process, quail run, then quail_start_session. A new
-        id is a different dataset. Do not overlap with quail_exec on the same
-        session_id. Do not use for one-off filters, Slice/regex pipelines, or
-        to persist bindings. Source fields are already fast after process.
-        Registered on unrestricted MCP (loopback or public bind), not Clerk.
-        A remote client can still call this; they get a path on the machine
-        running quail run, not a download.
+        Lexical/Semantic on tags load cells; warmed scoring is for bare source.
+        The result is a filesystem path, not a download. It does not reprocess
+        or make scoring fast. Do not overlap with quail_exec on the same
+        session_id. Unrestricted MCP only (not Clerk).
         """
 
         def work() -> CallToolResult:

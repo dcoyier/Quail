@@ -318,32 +318,13 @@ Aggregations: `"total"`, `"avg"`, or `None` (= total).
   in the dataset embedding field set at `quail process`, scoring uses the
   process-warmed segment map and does not load source cells. Prefix ops,
   analysis fields, and source fields omitted from that set still materialize
-  cells. Re-run `quail process` after this layout change.
-  If that cell-load path hits exec time/RSS on tags you will keep scoring,
-  see **Promote tags to source**.
+  cells.
 
----
-
-## Promote tags to source
-
-Analysis tags are session-only. `Lexical` / `Semantic` on them still loads
-cells. After `quail process`, **source** fields use the warmed indexes.
-
-If you are hitting those limits on an **analysis field**, tag the values you
-will reuse, then on unrestricted MCP (`auth.mode = "unrestricted"`) call
-`quail_export_csv(session_id, dataset_id)`. Prefix ops (`Slice` / `AsText`)
-on source also load cells — export does not freeze those expressions; `tag`
-the computed text first if it should become a source column.
-The tool writes source columns plus this session's tags to a new CSV on the
-machine running `quail run` (you get a filesystem `path`, not the file body).
-It does not reprocess or edit `quail.toml`. Point the **same** dataset `id`
-at that file, stop `quail run`, `quail process`, start `run`, then
-`quail_start_session`. A new id is a different dataset. Bindings are not
-exported. Skip this for one-off filters or to copy source fields that are
-already fast. The tool is registered on every unrestricted server (loopback
-or a public bind) and omitted only in Clerk. A remote client can still call
-it; they get that host path, not a download, so reprocess only works if
-someone can use the path as `source`.
+Unrestricted MCP includes `quail_export_csv(session_id, dataset_id)`. It writes
+source columns plus this session's tags to a CSV on the serve host (a
+filesystem `path`, not the file body). Export does not reprocess and does not
+make scoring fast: warmed `Lexical` / `Semantic` apply to bare **source**,
+not to analysis tags.
 
 ---
 
