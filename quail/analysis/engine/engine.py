@@ -703,7 +703,7 @@ class QueryEngine:
                 compiled.sub_literal(item, replacement) if isinstance(item, str) else item
                 for item in value
             ]
-        raise QuailRuntimeError("RegexSub requires text or list[text]")
+        raise QuailRuntimeError("RegexSub requires text or list[text]; use AsText() first")
 
     def _read_field_value(self, field: Field | str, entry_id: str) -> Any:
         resolved = self.resolve_field(field)
