@@ -111,6 +111,17 @@ def test_bad_csv_shapes_raise(tmp_path: Path) -> None:
         load_csv_dataset(extra_row)
 
 
+def test_csv_cell_over_parser_field_limit(tmp_path: Path) -> None:
+    import csv
+
+    huge = "x" * (csv.field_size_limit() + 1)
+    path = _write_csv(tmp_path / "huge.csv", f"id,body\ne1,{huge}\n")
+    with pytest.raises(DatasetSyntaxError, match="parser field size limit"):
+        load_csv_dataset(path)
+    with pytest.raises(DatasetSyntaxError, match="malformed quoting"):
+        load_csv_dataset(_write_csv(tmp_path / "bad_quote.csv", 'id,body\ne1,"unclosed\n'))
+
+
 def test_version_identity_conflict(tmp_path: Path) -> None:
     csv_path = _write_csv(
         tmp_path / "notes.csv",
