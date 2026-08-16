@@ -2,7 +2,6 @@ OllamaEmbedder POSTs to {base_url}/api/embed with model, input texts, and dimens
 
 embed_texts(texts):
   Give back one float vector per input text.
-  Raise ProviderError on HTTP/JSON/shape/dimension mismatches.
-  Dimension mismatch repair_hint says to align datasets.embedding.dimensions
-  and re-run quail process.
-  Raise ProviderError when any embedding component is non-numeric or non-finite.
+  HTTP, JSON, vector-shape, and dimension checks come from the shared
+  providers wire helpers (post_json, require_vector); all raise ProviderError.
+  Raise ProviderError when the response size does not match the request.
