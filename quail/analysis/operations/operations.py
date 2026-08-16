@@ -1,7 +1,8 @@
-"""Expression operations and factories."""
+"""Expression operations, their declared signatures, and factories."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
@@ -39,48 +40,109 @@ class Operation:
             raise AttributeError(f"{self.kind} operation has no attribute {name!r}") from error
 
 
+# Pipeline kinds and op signatures. See docs/core.md: a pipeline is legal iff
+# each op accepts the kind the previous op produced; "score" is terminal.
+# "any" is an unread field value; "text_or_list" is text or list[text] proven
+# at runtime by a preceding op.
+_KIND_LABELS: Mapping[str, str] = MappingProxyType(
+    {
+        "any": "the raw field value",
+        "text": "text",
+        "number": "a number",
+        "list_text": "list[text]",
+        "text_or_list": "text or list[text]",
+        "score": "a score",
+    }
+)
+
+_TEXT = frozenset({"any", "text", "text_or_list"})
+_TEXT_OR_LIST = frozenset({"any", "text", "list_text", "text_or_list"})
+_ANY_VALUE = frozenset({"any", "text", "number", "list_text", "text_or_list"})
+
+
+@dataclass(frozen=True, slots=True)
+class OpSpec:
+    """Declared signature of one op: what it accepts and what it produces.
+
+    ``produces`` is a kind, ``"same"`` (pass the incoming kind through), or
+    ``"narrow"`` (pass it through, but "any" becomes "text_or_list" because
+    the op proves textuality at runtime).
+    """
+
+    accepts: frozenset[str]
+    produces: str
+    needs: str
+    terminal: bool = False
+    first_only: bool = False
+
+
+OP_SPECS: Mapping[str, OpSpec] = MappingProxyType(
+    {
+        "Value": OpSpec(
+            accepts=frozenset({"any"}),
+            produces="same",
+            needs="the raw field value",
+            first_only=True,
+        ),
+        "AsText": OpSpec(accepts=_ANY_VALUE, produces="text", needs="any value"),
+        "AsNumber": OpSpec(
+            accepts=frozenset({"any", "text", "number", "text_or_list"}),
+            produces="number",
+            needs="a number or numeric text",
+        ),
+        "RegexSearch": OpSpec(accepts=_TEXT, produces="text", needs="text"),
+        "RegexFindAll": OpSpec(accepts=_TEXT, produces="list_text", needs="text"),
+        "RegexSub": OpSpec(accepts=_TEXT_OR_LIST, produces="narrow", needs="text or list[text]"),
+        "Slice": OpSpec(accepts=_TEXT_OR_LIST, produces="narrow", needs="text or list[text]"),
+        "Length": OpSpec(accepts=_TEXT_OR_LIST, produces="number", needs="text or list[text]"),
+        "Lexical": OpSpec(
+            accepts=_TEXT_OR_LIST,
+            produces="score",
+            needs="text or list[text]",
+            terminal=True,
+        ),
+        "Semantic": OpSpec(
+            accepts=_TEXT_OR_LIST,
+            produces="score",
+            needs="text or list[text]",
+            terminal=True,
+        ),
+    }
+)
+
+
 def validate_operation_pipeline(operations: tuple[Operation, ...]) -> None:
+    final_pipeline_kind(operations)
+
+
+def final_pipeline_kind(operations: tuple[Operation, ...]) -> str:
+    """Walk the pipeline through OP_SPECS; give back the kind it produces."""
+
     if not operations:
         raise QuailSyntaxError("Expression requires at least one operation")
-    current_type = "any"
+    current = "any"
+    last_index = len(operations) - 1
     for index, operation in enumerate(operations):
         kind = operation.kind
-        if kind == "Value":
-            if index != 0:
-                raise QuailSyntaxError("Value() is valid only as the first operation")
-            continue
-        if kind == "AsText":
-            current_type = "text"
-            continue
-        if kind == "AsNumber":
-            current_type = "number"
-            continue
-        if kind in ("RegexSearch", "RegexFindAll"):
-            if current_type not in ("any", "text", "text_or_list"):
-                raise QuailSyntaxError(f"{kind} requires a text expression")
-            current_type = "list_text" if kind == "RegexFindAll" else "text"
-            continue
-        if kind in ("RegexSub", "Slice"):
-            if current_type not in ("any", "text", "list_text", "text_or_list"):
-                raise QuailSyntaxError(f"{kind} requires a text or list[text] expression")
-            if current_type == "any":
-                current_type = "text_or_list"
-            continue
-        if kind == "Length":
-            if current_type not in ("any", "text", "list_text", "text_or_list"):
-                raise QuailSyntaxError("Length cannot consume a numeric expression")
-            current_type = "number"
-            continue
-        if kind in ("Lexical", "Semantic"):
-            if current_type not in ("any", "text", "list_text", "text_or_list"):
-                raise QuailSyntaxError(f"{kind} cannot consume a numeric expression")
-            if index != len(operations) - 1:
-                raise QuailSyntaxError(
-                    "Lexical(...) and Semantic(...) must end the expression pipeline"
-                )
-            current_type = "score"
-            continue
-        raise QuailSyntaxError(f"Unsupported operation: {kind}")
+        spec = OP_SPECS.get(kind)
+        if spec is None:
+            raise QuailSyntaxError(f"Unsupported operation: {kind}")
+        if spec.first_only and index != 0:
+            raise QuailSyntaxError(f"{kind}() is valid only as the first operation")
+        if current not in spec.accepts:
+            raise QuailSyntaxError(
+                f"{kind}(...) needs {spec.needs}; the pipeline here produces "
+                f"{_KIND_LABELS[current]}"
+            )
+        if spec.terminal and index != last_index:
+            raise QuailSyntaxError(
+                "Lexical(...) and Semantic(...) must end the expression pipeline"
+            )
+        if spec.produces == "narrow":
+            current = "text_or_list" if current == "any" else current
+        elif spec.produces != "same":
+            current = spec.produces
+    return current
 
 
 def Value() -> Operation:

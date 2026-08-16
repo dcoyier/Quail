@@ -1,7 +1,10 @@
 """Public exports for ``quail.analysis.operations``."""
 
 from .operations import (
+    OP_SPECS,
     Operation,
+    OpSpec,
+    final_pipeline_kind,
     validate_operation_pipeline,
     Value,
     AsText,
@@ -16,7 +19,10 @@ from .operations import (
 )
 
 __all__ = [
+    "OP_SPECS",
     "Operation",
+    "OpSpec",
+    "final_pipeline_kind",
     "validate_operation_pipeline",
     "Value",
     "AsText",
