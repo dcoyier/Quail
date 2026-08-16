@@ -145,13 +145,13 @@ def export_session_csv(
                             field.name,
                             canonical_json(cell),
                         )
-                for field in analysis:
-                    cell = _csv_cell(analysis_cells.get(field.name))
+                for analysis_field in analysis:
+                    cell = _csv_cell(analysis_cells.get(analysis_field.name))
                     row.append(cell)
                     if cell:
                         estimated_durable_bytes += estimated_source_value_row_bytes(
                             entry.id,
-                            field.name,
+                            analysis_field.name,
                             canonical_json(cell),
                         )
                 if estimated_durable_bytes > MAX_DATASET_DURABLE_BYTES:

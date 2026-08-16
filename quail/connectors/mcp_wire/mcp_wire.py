@@ -158,8 +158,8 @@ def register_connectors(
     if providers_by_tool:
         _install_workspace_scoped_list_tools(server, providers_by_tool, resolve_workspace)
 
-    for (_extension_id, _route_id), owners in route_owners.items():
-        _register_route(server, owners, authenticate_route=authenticate_route)
+    for route_providers in route_owners.values():
+        _register_route(server, route_providers, authenticate_route=authenticate_route)
 
 
 def _install_workspace_scoped_list_tools(

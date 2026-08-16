@@ -809,13 +809,13 @@ class QueryEngine:
                 operation_kind=operation.kind,
                 search_scores=search_scores,
             )
+            scored: dict[str, float | None] | None = None
             if operation.kind == "Semantic":
                 if self._similarity is None:
                     raise QuailRuntimeError(
                         "Semantic search is not configured",
                         repair_hint=_SEMANTIC_NOT_CONFIGURED_HINT,
                     )
-                scored = None
                 if source_field is not None:
                     scored = self._similarity.semantic_scores_for_source_entries(
                         workspace_id=self._scope.workspace_id,
@@ -849,9 +849,8 @@ class QueryEngine:
                         "Lexical search is not configured",
                         repair_hint=_LEXICAL_NOT_CONFIGURED_HINT,
                     )
-                scored = None
                 if source_field is not None:
-                    scored = self._lexical.lexical_scores_for_source_entries(
+                    source_scored = self._lexical.lexical_scores_for_source_entries(
                         workspace_id=self._scope.workspace_id,
                         dataset_id=self._scope.dataset_id,
                         version_id=self._scope.dataset_version_id,
@@ -862,6 +861,8 @@ class QueryEngine:
                         input_aggregation=operation.params.get("input_aggregation"),
                         target_aggregation=operation.params.get("target_aggregation"),
                     )
+                    if source_scored is not None:
+                        scored = dict(source_scored)
                 if scored is None:
                     scored = dict(
                         self._lexical.lexical_scores_for_entries(
