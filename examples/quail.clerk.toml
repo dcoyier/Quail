@@ -1,46 +1,124 @@
-# Example Clerk deployment (TOML-only allowlist). Replace clerk_domain and
-# clerk_user_id with values from your Clerk instance. Restart after edits.
+# Clerk deployment catalog. Hand-edit only — the CLI never writes this file.
+# Pass an absolute --config. Paths are relative to this file. Restart run
+# after edits. Unknown keys fail closed. Sessions belong to the creating user.
 #
 #   uv run quail process --config /absolute/path/to/examples/quail.clerk.toml
 #   uv run quail run --config /absolute/path/to/examples/quail.clerk.toml
-
+#
+# process: import CSVs, warm Lexical/Semantic, activate those versions.
+# run: take the lease, import without activating, fail-closed unless each
+# imported version is already active — and, when search_database is set, warm
+# receipts match this TOML — then serve MCP. Stop run before process (they
+# cannot share the lease).
+#
+# Clerk proves identity (sub). clerk_authorized_parties binds tokens to your
+# app (azp / aud / client_id). [[users]] gates MCP access. Advertised OAuth
+# scopes (openid, profile, email) are client UX — Quail does not enforce them
+# from the token. Enable Dynamic client registration on the Clerk app.
+#
+# Do not add auth.workspace, root [[datasets]], or root [[connectors]] here.
+# hosting.allow_public_unrestricted = true is rejected; false is allowed
+# (default). Dataset and connector rows nest under [[workspaces]]. Dataset ids
+# are unique across all workspaces. Clerk mode requires non-empty
+# [[workspaces]] and non-empty [[users]]. Workspace id and user id values
+# must each be unique.
 
 [core]
 database = "data/clerk-quail.turso"
 feedback = "data/clerk-feedback.jsonl"
+# Search Turso for Lexical FTS + Semantic vectors. Must differ from database.
+# Required when any dataset sets embedding or lexical, and for process --clear.
+# Omit = import/activate only (no FTS/vectors).
+# search_database = "data/clerk-quail-search.turso"
 
 [auth]
 mode = "clerk"
 clerk_domain = "your-instance.clerk.accounts.dev"
-# Clerk application party id(s) allowed to present JWTs (azp and/or aud).
-# Find the application id in the Clerk dashboard (OAuth / application settings).
+# Non-empty, no duplicates. Clerk dashboard application id (OAuth settings).
 clerk_authorized_parties = ["your_clerk_application_id"]
 
 [hosting]
 bind = "127.0.0.1"
 port = 8000
-# Public origin clients use to reach this MCP (ngrok/HTTPS URL in production).
-# Defaults to http://{bind}:{port}. Resource metadata uses {public_base_url}/mcp.
+# Origin clients use. Defaults to http://{bind}:{port}. MCP is {public_base_url}/mcp
+# — origin only, no path/query/fragment (do not put /mcp in this value).
+# Required when bind is 0.0.0.0, ::, or [::]. Loopback means 127.0.0.1,
+# localhost, or ::1. Non-loopback origins must be https unless
+# allow_insecure_http. Loopback http does not need that flag.
 # public_base_url = "https://your-tunnel.example"
+# Process-wide quail_exec slot ceiling (default 2, range 1–100). Also sizes
+# the search connection pool. Restart run after changing it.
 # max_concurrent_executions = 2
+# Dangerous: allow a non-loopback http:// public_base_url.
+# allow_insecure_http = true
+# Embed connector dataset docs in quail_setup catalog rows (default false).
+# When false, agents call quail_get_dataset_info after picking a dataset_id.
+# include_dataset_docs_in_setup = false
 
-# Clerk operator notes (identity mode):
-# 1. Create a Clerk application and enable Dynamic client registration
-#    (Dashboard → OAuth applications).
-# 2. Put this app's party id in auth.clerk_authorized_parties (JWT azp/aud).
-# 3. Set default OAuth scopes to include openid, profile, email (client UX;
-#    Quail does not enforce token scopes — allowlist + party binding do).
-# 4. Invite users in Clerk; copy each user_… id into [[users]] below.
-# 5. Point MCP clients at {public_base_url}/mcp (or http://127.0.0.1:8000/mcp locally).
-# 6. Restart quail run after TOML edits. Sessions are owned by the creating user.
+# Embedding warm knobs for quail process (defaults: batch 32 / 1–512,
+# concurrency 2 / 1–32). Re-run process after changing these.
+# [search.warm]
+# embed_batch_size = 32
+# max_concurrent_embed_requests = 2
+
+# Required when any dataset sets embedding.provider to that name.
+# [providers.ollama]
+# base_url = "http://127.0.0.1:11434"
+#
+# Privacy: OpenRouter warm and query send full field text off-host.
+# api_key must be env:NAME (not a raw secret). Export NAME and restart Quail.
+# [providers.openrouter]
+# base_url = "https://openrouter.ai/api/v1"
+# api_key = "env:QUAIL_OPENROUTER_API_KEY"
+
+# Deployment-wide connector pins. Discovered via entry points (quail.connectors),
+# not filesystem paths. Install first, e.g.
+# `uv pip install -e ./examples/notes-connector`.
+# id + version must match the installed distribution. Pinning without
+# activating is legal.
+# [[extensions]]
+# id = "notes"
+# version = "1.0.0"
 
 [[workspaces]]
 id = "acme"
 
+# CSV must be UTF-8 with a unique id column. A missing source fails
+# `quail process`. Keep the same dataset id when the CSV changes so unchanged
+# embedding strings copy forward; a new id rebuilds from scratch. name is optional.
 [[workspaces.datasets]]
 id = "notes"
 source = "data/notes.csv"
 name = "Notes"
+
+# Nested on the dataset row above. Requires search_database and [providers.*].
+# provider is "ollama" or "openrouter". Changing provider, model, dimensions,
+# revision, or fields rebuilds embeddings. Omit fields = every non-empty
+# source column. Unknown column names fail at process, not parse.
+# [workspaces.datasets.embedding]
+# provider = "ollama"
+# model = "embeddinggemma:latest"
+# dimensions = 768
+# revision = "clerk-embeddinggemma-v1"
+# fields = ["body"]
+
+# Restrict Lexical warm columns. Requires search_database. Omit this table
+# (not empty fields) = all source fields, once a search DB is warmed.
+# Independent of embedding.fields.
+# [workspaces.datasets.lexical]
+# fields = ["title", "body"]
+
+# Activate a pinned extension in this workspace. Uncomment [[extensions]] too.
+# config keys must be listed on that package's ConnectorManifest.config_keys
+# (empty allowlist = none). Dataset tables allow only id, and that id must
+# belong to this workspace. Two connectors documenting the same dataset_id,
+# or a tool name colliding with a core tool, fail at run.
+# [[workspaces.connectors]]
+# id = "notes"
+# [workspaces.connectors.config]
+# heading = "Notes"
+# [[workspaces.connectors.datasets]]
+# id = "notes"
 
 [[workspaces]]
 id = "labs"
@@ -50,6 +128,12 @@ id = "other"
 source = "data/notes.csv"
 name = "Other copy"
 
+# At least one user is required. User id and clerk_user_id must each be unique.
+# workspaces must be declared ids above, non-empty, no duplicates.
+# Paste the Clerk user_… id into clerk_user_id; id is a local label.
+# Omit default_workspace to stay unbound until quail_switch_workspace.
+# If set, default_workspace must be one of that user's workspaces.
+# Setting lock_workspace true requires default_workspace and pins the user there.
 [[users]]
 id = "alice"
 clerk_user_id = "user_replace_me"

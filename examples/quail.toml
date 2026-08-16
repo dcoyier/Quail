@@ -1,7 +1,26 @@
+# Unrestricted deployment catalog. Hand-edit only — the CLI never writes this
+# file. Pass an absolute --config. Paths are relative to this file.
+#
+#   uv run quail process --config /absolute/path/to/quail.toml
+#   uv run quail run --config /absolute/path/to/quail.toml
+#
+# process: import CSVs, warm Lexical/Semantic, activate those versions.
+# run: take the lease, import without activating, fail-closed unless each
+# imported version is already active — and, when search_database is set, warm
+# receipts match this TOML — then serve MCP. Stop run before process (they
+# cannot share the lease). Restart run after edits. Unknown keys fail closed.
+#
+# This file is the unrestricted catalog. Clerk identity is
+# examples/quail.clerk.toml. Do not add [[workspaces]], [[users]],
+# auth.clerk_domain, or auth.clerk_authorized_parties here.
+# hosting.allow_insecure_http = true is rejected; false is allowed (default).
+
 [core]
 database = "data/quail.turso"
 feedback = "data/feedback.jsonl"
-# Optional search DB for Lexical FTS + Semantic vectors (must differ from database):
+# Search Turso for Lexical FTS + Semantic vectors. Must differ from database.
+# Required when any dataset sets [datasets.embedding] or [datasets.lexical],
+# and for `quail process --clear`. Omit = import/activate only (no FTS/vectors).
 # search_database = "data/quail-search.turso"
 
 [auth]
@@ -11,36 +30,83 @@ workspace = "local"
 [hosting]
 bind = "127.0.0.1"
 port = 8000
-# Optional process-wide quail_exec slot ceiling (default 2, range 1–100):
+# Origin clients use. Defaults to http://{bind}:{port}. MCP is {public_base_url}/mcp
+# — origin only, no path/query/fragment (do not put /mcp in this value).
+# Required when bind is 0.0.0.0, ::, or [::]. Loopback means 127.0.0.1,
+# localhost, or ::1. Unless allow_public_unrestricted, bind and this host must
+# both be loopback. A wildcard bind in this mode also needs
+# allow_public_unrestricted = true.
+# public_base_url = "http://127.0.0.1:8000"
+# Process-wide quail_exec slot ceiling (default 2, range 1–100). Also sizes
+# the search connection pool. Restart run after changing it.
 # max_concurrent_executions = 2
-# Dangerous: allow unrestricted MCP on a non-loopback bind / public_base_url:
+# Dangerous: unauthenticated MCP on a non-loopback bind or public_base_url.
 # allow_public_unrestricted = true
-# Embed connector dataset docs inside quail_setup (default false):
+# Embed connector dataset docs in quail_setup catalog rows (default false).
+# When false, agents call quail_get_dataset_info after picking a dataset_id.
 # include_dataset_docs_in_setup = false
+# Clerk-only as true; false is allowed here and is the default.
+# allow_insecure_http = false
 
-# Optional warm knobs for `quail process` (defaults: batch 32, concurrency 2):
+# Embedding warm knobs for quail process (defaults: batch 32 / 1–512,
+# concurrency 2 / 1–32). Re-run process after changing these.
 # [search.warm]
 # embed_batch_size = 32
 # max_concurrent_embed_requests = 2
 
-# Optional embedding providers when any dataset declares [datasets.embedding]:
+# Required when any dataset sets embedding.provider to that name.
 # [providers.ollama]
 # base_url = "http://127.0.0.1:11434"
 #
+# Privacy: OpenRouter warm and query send full field text off-host.
+# api_key must be env:NAME (not a raw secret). Export NAME and restart Quail.
 # [providers.openrouter]
 # base_url = "https://openrouter.ai/api/v1"
 # api_key = "env:QUAIL_OPENROUTER_API_KEY"
 
+# Demo dataset so this manifest runs in place. When copying this file for
+# your own data, replace this row — a missing source fails `quail process`.
+# CSV must be UTF-8 with a unique id column. Dataset ids must be unique.
+# Keep the same dataset id when the CSV changes so unchanged embedding strings
+# copy forward; a new id rebuilds from scratch. name is optional.
 [[datasets]]
 id = "notes"
 source = "data/notes.csv"
 name = "Notes"
 
-# Optional per-dataset embedding profile (pinned and warmed by quail process):
+# Semantic pin, warmed by process. Requires search_database and [providers.*].
+# provider is "ollama" or "openrouter". Changing provider, model, dimensions,
+# revision, or fields rebuilds embeddings. Omit fields = every non-empty
+# source column. Unknown column names fail at process, not parse.
 # [datasets.embedding]
 # provider = "ollama"
 # model = "embeddinggemma:latest"
 # dimensions = 768
 # revision = "embeddinggemma-local-v1"
-# Optional: only embed these CSV columns (Lexical still uses all fields):
 # fields = ["body"]
+
+# Restrict Lexical warm columns. Requires search_database. Omit this table
+# (not empty fields) = all source fields, once a search DB is warmed.
+# Independent of embedding.fields.
+# [datasets.lexical]
+# fields = ["title", "body"]
+
+# Trusted connector packages, discovered via entry points (quail.connectors),
+# not filesystem paths. id + version must match the installed distribution.
+# Pinning without activating is legal. Install first, e.g.
+# `uv pip install -e ./examples/notes-connector`.
+# [[extensions]]
+# id = "notes"
+# version = "1.0.0"
+
+# Activate a pinned extension in this workspace. Uncomment [[extensions]] too.
+# config keys must be listed on that package's ConnectorManifest.config_keys
+# (empty allowlist = none). Dataset tables allow only id, and that id must be
+# a dataset in this workspace. Two connectors documenting the same dataset_id,
+# or a tool name colliding with a core tool, fail at run.
+# [[connectors]]
+# id = "notes"
+# [connectors.config]
+# heading = "Notes"
+# [[connectors.datasets]]
+# id = "notes"
