@@ -6,6 +6,7 @@ import fcntl
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import TextIO
 
 from quail.analysis.errors import QuailRuntimeError
 from quail.config.models import QuailConfig
@@ -36,7 +37,7 @@ def acquire_deployment_lease(config: QuailConfig) -> Iterator[tuple[Path, ...]]:
     if config.search_database is not None:
         paths.append(Path(config.search_database).expanduser().resolve())
     lock_paths = tuple(sorted({_lock_path_for(path) for path in paths}))
-    handles: list[object] = []
+    handles: list[TextIO] = []
     try:
         for lock_path in lock_paths:
             lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -53,8 +54,8 @@ def acquire_deployment_lease(config: QuailConfig) -> Iterator[tuple[Path, ...]]:
             handles.append(handle)
         yield lock_paths
     finally:
-        for handle in reversed(handles):
+        for held in reversed(handles):
             try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)  # type: ignore[union-attr]
+                fcntl.flock(held.fileno(), fcntl.LOCK_UN)
             finally:
-                handle.close()  # type: ignore[union-attr]
+                held.close()

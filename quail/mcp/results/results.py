@@ -8,7 +8,7 @@ import re
 from collections.abc import Sequence
 from typing import Any
 
-from mcp.types import CallToolResult, ImageContent, TextContent
+from mcp.types import CallToolResult, ContentBlock, ImageContent, TextContent
 
 from quail.analysis.errors import (
     QuailError,
@@ -53,7 +53,7 @@ def success_result(
     Optional ``images`` become MCP ``ImageContent`` blocks after any text block.
     """
 
-    content: list[TextContent | ImageContent] = []
+    content: list[ContentBlock] = []
     if text is not None:
         content.append(TextContent(type="text", text=text))
     elif not images:

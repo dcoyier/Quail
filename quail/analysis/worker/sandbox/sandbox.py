@@ -35,9 +35,8 @@ _REJECTED_NODES: tuple[type, ...] = (
     ast.AnnAssign,
     ast.AugAssign,
     ast.AsyncFor,
+    ast.TryStar,
 )
-if hasattr(ast, "TryStar"):
-    _REJECTED_NODES = (*_REJECTED_NODES, ast.TryStar)
 
 _DANGEROUS_NAMES = frozenset(
     {
