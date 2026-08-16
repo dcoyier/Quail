@@ -31,6 +31,8 @@ port = 8000
 # base_url = "https://openrouter.ai/api/v1"
 # api_key = "env:QUAIL_OPENROUTER_API_KEY"
 
+# Demo dataset so this manifest runs in place. When copying this file for
+# your own data, replace this row — a missing source fails `quail process`.
 [[datasets]]
 id = "notes"
 source = "data/notes.csv"
