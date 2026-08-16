@@ -22,16 +22,16 @@ port = 8000
 # URL clients use (default http://{bind}:{port}). Do not put /mcp in this value.
 # Required when bind is 0.0.0.0, ::, or [::].
 # public_base_url = "http://127.0.0.1:8000"
-# quail_exec slot ceiling (default 2, 1–100). Also sizes the search pool.
+# Max concurrent quail_exec (default 2, 1–100). Also sizes the search pool.
 # max_concurrent_executions = 2
-# Unauthenticated MCP off loopback. Also required for a wildcard bind.
+# Unauthenticated non-loopback MCP. Also required for a wildcard bind.
 # allow_public_unrestricted = true
 # Put connector dataset docs in quail_setup rows (default false).
 # include_dataset_docs_in_setup = false
-# Clerk-only as true; false is allowed (default).
+# True is clerk-only. Leave false (default).
 # allow_insecure_http = false
 
-# process embedding knobs (defaults: batch 32 / 1–512, concurrency 2 / 1–32).
+# Embedding batch and concurrency (defaults: 32 / 1–512, 2 / 1–32).
 # [search.warm]
 # embed_batch_size = 32
 # max_concurrent_embed_requests = 2

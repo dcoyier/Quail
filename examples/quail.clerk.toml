@@ -26,17 +26,18 @@ bind = "127.0.0.1"
 port = 8000
 # URL clients use (default http://{bind}:{port}). Do not put /mcp in this value.
 # Required when bind is 0.0.0.0, ::, or [::].
+# Non-loopback must be https unless allow_insecure_http.
 # public_base_url = "https://your-tunnel.example"
-# quail_exec slot ceiling (default 2, 1–100). Also sizes the search pool.
+# Max concurrent quail_exec (default 2, 1–100). Also sizes the search pool.
 # max_concurrent_executions = 2
 # Allow non-loopback http:// public_base_url.
 # allow_insecure_http = true
 # Put connector dataset docs in quail_setup rows (default false).
 # include_dataset_docs_in_setup = false
-# Unrestricted-only as true; false is allowed (default).
+# True is unrestricted-only. Leave false (default).
 # allow_public_unrestricted = false
 
-# process embedding knobs (defaults: batch 32 / 1–512, concurrency 2 / 1–32).
+# Embedding batch and concurrency (defaults: 32 / 1–512, 2 / 1–32).
 # [search.warm]
 # embed_batch_size = 32
 # max_concurrent_embed_requests = 2
@@ -101,7 +102,8 @@ name = "Other copy"
 
 # clerk_user_id is the Clerk user_… id; id is a local label. Both must be unique.
 # workspaces: declared ids, non-empty, no duplicates.
-# Omit default_workspace to stay unbound until quail_switch_workspace.
+# default_workspace must be in that user's workspaces; omit it to stay unbound
+# until quail_switch_workspace.
 # lock_workspace requires default_workspace and pins the user there.
 [[users]]
 id = "alice"
