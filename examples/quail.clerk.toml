@@ -40,8 +40,9 @@ clerk_authorized_parties = ["your_clerk_application_id"]
 [hosting]
 bind = "127.0.0.1"
 port = 8000
-# Origin clients use. Defaults to http://{bind}:{port}. MCP is {public_base_url}/mcp
-# — origin only, no path/query/fragment (do not put /mcp in this value).
+# URL clients use to reach this server (scheme + host + port only).
+# Defaults to http://{bind}:{port}. The MCP endpoint is {public_base_url}/mcp
+# — do not put /mcp, a path, query, or fragment in this value.
 # Required when bind is 0.0.0.0, ::, or [::]. Loopback means 127.0.0.1,
 # localhost, or ::1. Non-loopback origins must be https unless
 # allow_insecure_http. Loopback http does not need that flag.
