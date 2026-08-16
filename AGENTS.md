@@ -1,6 +1,8 @@
 # Quail v0.11
 
 - For **running** Quail (clone, dataset, process/run), see `README.md`.
+- Core semantics: `docs/core.md`. Prefer making a mistake unrepresentable over
+  naming it — a new bespoke rejection message or doc caveat is a last resort.
 - Model-facing analysis contract: `docs/api.md`.
 - Change routing: `docs/development.md`.
 - Connector author surface: `docs/connector-sdk.md`.

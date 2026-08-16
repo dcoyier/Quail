@@ -1,4 +1,5 @@
-Operation is an immutable step in an Expression pipeline.
+Operation is an immutable step in an Expression pipeline. Each op kind has a
+declared signature in OP_SPECS; pipeline legality derives from that table.
 It remembers kind and sealed params.
 
 To create an Operation from kind and optional params dict:
@@ -15,33 +16,45 @@ Attribute access on an Operation:
   Otherwise read the named param as plain.
   If missing, raise attribute error that that operation has no such attribute.
 
+There is a table of pipeline kinds with labels for error messages: any (the raw
+field value), text, number, list_text, text_or_list, and score.
+
+OpSpec is the declared signature of one op.
+OpSpec remembers:
+  accepts (the kinds the op can consume)
+  produces (a kind, "same" to pass the incoming kind through, or "narrow" to
+    pass it through with any becoming text_or_list)
+  needs (a short label for generated mismatch errors)
+  terminal (default False; the op must end the pipeline)
+  first_only (default False; the op is valid only first)
+
+There is a table OP_SPECS declaring every op's signature (see docs/core.md):
+  Value accepts only any, produces same, first_only.
+  AsText accepts any value, produces text.
+  AsNumber accepts any, text, number, or text_or_list, produces number.
+  RegexSearch accepts textual kinds, produces text.
+  RegexFindAll accepts textual kinds, produces list_text.
+  RegexSub and Slice accept text or list[text], produce narrow.
+  Length accepts text or list[text], produces number.
+  Lexical and Semantic accept text or list[text], produce score, terminal.
+
 validate_operation_pipeline(operations):
+  Walk the pipeline with final_pipeline_kind; discard the result.
+
+final_pipeline_kind(operations):
   If there are no operations, raise a syntax error that Expression requires at least one operation.
-  Track current_type starting as "any".
-  For each operation in order:
-    If kind is Value:
-      If it is not first, raise that Value is valid only as the first operation.
-      Continue.
-    If kind is AsText, set current_type to text and continue.
-    If kind is AsNumber, set current_type to number and continue.
-    If kind is RegexSearch or RegexFindAll:
-      Require current_type is any, text, or text_or_list.
-      Set current_type to list_text for RegexFindAll, otherwise text.
-      Continue.
-    If kind is RegexSub or Slice:
-      Require current_type is any, text, list_text, or text_or_list.
-      If current_type was any, set it to text_or_list.
-      Continue.
-    If kind is Length:
-      Require current_type is any, text, list_text, or text_or_list.
-      Set current_type to number.
-      Continue.
-    If kind is Lexical or Semantic:
-      Require current_type is any, text, list_text, or text_or_list.
-      Require this is the last operation.
-      Set current_type to score.
-      Continue.
-    Otherwise raise unsupported operation.
+  Track the current kind starting as any.
+  For each operation in order, look up its OpSpec:
+    If there is no spec, raise unsupported operation.
+    If the spec is first_only and this is not first, raise that it is valid
+      only as the first operation.
+    If the current kind is not accepted, raise a generated syntax error naming
+      what the op needs and what the pipeline here produces.
+    If the spec is terminal and this is not last, raise that Lexical(...) and
+      Semantic(...) must end the expression pipeline.
+    Update the current kind per produces (same keeps it; narrow keeps it with
+      any becoming text_or_list; otherwise take the produced kind).
+  Give back the final kind.
 
 Value:
   Give back Operation kind Value.

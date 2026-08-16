@@ -1,6 +1,6 @@
 _is_rankable(expression):
-  False if there are no operations.
-  True when the last operation kind is AsNumber, Length, Lexical, or Semantic.
+  True when final_pipeline_kind of the expression's operations is number or
+  score (the OP_SPECS table decides, not a local op list).
 
 Ranking is an immutable ordering rule over entry scores.
 

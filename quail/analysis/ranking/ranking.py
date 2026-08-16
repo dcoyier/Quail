@@ -8,12 +8,11 @@ from typing import Any, NoReturn
 
 from quail.analysis.errors import QuailSyntaxError
 from quail.analysis.expression import Expression
+from quail.analysis.operations import final_pipeline_kind
 
 
 def _is_rankable(expression: Expression) -> bool:
-    if not expression.operations:
-        return False
-    return expression.operations[-1].kind in ("AsNumber", "Length", "Lexical", "Semantic")
+    return final_pipeline_kind(expression.operations) in ("number", "score")
 
 
 @dataclass(frozen=True, slots=True)
