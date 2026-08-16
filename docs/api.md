@@ -63,9 +63,12 @@ if len(samples) > 0:
         print(field.name, repr(samples[0].value(field)))
 ```
 
-Empty cells are `None`, not `""`. From there the usual arc is: filter with
-`G0.where(...)`, rank with `Ranking`, tag session labels with
-`create_field` / `tag` — each is specified below.
+Empty cells are `None`, not `""`. Filter with `G0.where(...)`, rank with
+`Ranking`, tag session labels with `create_field` / `tag` — each is specified
+below. These compose in whatever order the question needs; the surface is
+meant to support any direction the analysis takes, not one workflow. Tagging
+is optional — for many questions, retrieving, counting, and printing is the
+whole analysis.
 
 ---
 
