@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from quail.analysis.entry import Entry, make_entry
@@ -49,6 +50,20 @@ _SEMANTIC_NOT_CONFIGURED_HINT = (
     "Set core.search_database, [providers.*], and [datasets.embedding], "
     "re-run quail process, then retry the whole exec."
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _SearchBackend:
+    """Search is not special: one scoring seam for Lexical and Semantic.
+
+    ``corpus_reuses_source_field`` marks the one interface asymmetry — the
+    lexical corpus/scalar paths take ``source_field`` to reuse a warmed corpus.
+    """
+
+    score_one: Callable[..., float | None]
+    score_source_entries: Callable[..., dict[str, float] | dict[str, float | None] | None]
+    score_corpus_entries: Callable[..., dict[str, float] | dict[str, float | None]]
+    corpus_reuses_source_field: bool
 
 
 class QueryEngine:
@@ -545,15 +560,14 @@ class QueryEngine:
             if isinstance(value, str | list):
                 return len(value)
             raise QuailRuntimeError("Length requires text, list, or None")
-        if kind == "Lexical":
-            if self._lexical is None:
-                raise QuailRuntimeError(
-                    "Lexical search is not configured",
-                    repair_hint=_LEXICAL_NOT_CONFIGURED_HINT,
-                )
+        if kind in ("Lexical", "Semantic"):
+            backend = self._search_backend(kind)
             if root is None:
-                raise QuailRuntimeError("Lexical requires an expression root field")
-            return self._lexical.lexical_score(
+                raise QuailRuntimeError(f"{kind} requires an expression root field")
+            scalar_kwargs: dict[str, Any] = {}
+            if backend.corpus_reuses_source_field:
+                scalar_kwargs["source_field"] = source_field
+            return backend.score_one(
                 workspace_id=self._scope.workspace_id,
                 dataset_id=self._scope.dataset_id,
                 version_id=self._scope.dataset_version_id,
@@ -561,36 +575,41 @@ class QueryEngine:
                 query_record=self._resolved_search_query(
                     dict(operation.params["query"]),
                     root=root,
-                    operation_kind="Lexical",
+                    operation_kind=kind,
                     search_scores=search_scores,
                 ),
                 input_aggregation=operation.params.get("input_aggregation"),
                 target_aggregation=operation.params.get("target_aggregation"),
-                source_field=source_field,
+                **scalar_kwargs,
             )
+        raise QuailSyntaxError(f"Unsupported operation: {kind}")
+
+    def _search_backend(self, kind: str) -> _SearchBackend:
+        """Resolve the configured scoring backend for a search op, or raise."""
+
         if kind == "Semantic":
             if self._similarity is None:
                 raise QuailRuntimeError(
                     "Semantic search is not configured",
                     repair_hint=_SEMANTIC_NOT_CONFIGURED_HINT,
                 )
-            if root is None:
-                raise QuailRuntimeError("Semantic requires an expression root field")
-            return self._similarity.semantic_score(
-                workspace_id=self._scope.workspace_id,
-                dataset_id=self._scope.dataset_id,
-                version_id=self._scope.dataset_version_id,
-                corpus=value,
-                query_record=self._resolved_search_query(
-                    dict(operation.params["query"]),
-                    root=root,
-                    operation_kind="Semantic",
-                    search_scores=search_scores,
-                ),
-                input_aggregation=operation.params.get("input_aggregation"),
-                target_aggregation=operation.params.get("target_aggregation"),
+            return _SearchBackend(
+                score_one=self._similarity.semantic_score,
+                score_source_entries=self._similarity.semantic_scores_for_source_entries,
+                score_corpus_entries=self._similarity.semantic_scores_for_entries,
+                corpus_reuses_source_field=False,
             )
-        raise QuailSyntaxError(f"Unsupported operation: {kind}")
+        if self._lexical is None:
+            raise QuailRuntimeError(
+                "Lexical search is not configured",
+                repair_hint=_LEXICAL_NOT_CONFIGURED_HINT,
+            )
+        return _SearchBackend(
+            score_one=self._lexical.lexical_score,
+            score_source_entries=self._lexical.lexical_scores_for_source_entries,
+            score_corpus_entries=self._lexical.lexical_scores_for_entries,
+            corpus_reuses_source_field=True,
+        )
 
     def _resolved_search_query(
         self,
@@ -809,27 +828,30 @@ class QueryEngine:
                 operation_kind=operation.kind,
                 search_scores=search_scores,
             )
+            backend = self._search_backend(operation.kind)
+            input_aggregation = operation.params.get("input_aggregation")
+            target_aggregation = operation.params.get("target_aggregation")
             scored: dict[str, float | None] | None = None
-            if operation.kind == "Semantic":
-                if self._similarity is None:
-                    raise QuailRuntimeError(
-                        "Semantic search is not configured",
-                        repair_hint=_SEMANTIC_NOT_CONFIGURED_HINT,
-                    )
-                if source_field is not None:
-                    scored = self._similarity.semantic_scores_for_source_entries(
-                        workspace_id=self._scope.workspace_id,
-                        dataset_id=self._scope.dataset_id,
-                        version_id=self._scope.dataset_version_id,
-                        entry_ids=missing_ids,
-                        source_field=source_field,
-                        all_entries=all_entries,
-                        query_record=query_record,
-                        input_aggregation=operation.params.get("input_aggregation"),
-                        target_aggregation=operation.params.get("target_aggregation"),
-                    )
-                if scored is None:
-                    scored = self._similarity.semantic_scores_for_entries(
+            if source_field is not None:
+                source_scored = backend.score_source_entries(
+                    workspace_id=self._scope.workspace_id,
+                    dataset_id=self._scope.dataset_id,
+                    version_id=self._scope.dataset_version_id,
+                    entry_ids=missing_ids,
+                    source_field=source_field,
+                    all_entries=all_entries,
+                    query_record=query_record,
+                    input_aggregation=input_aggregation,
+                    target_aggregation=target_aggregation,
+                )
+                if source_scored is not None:
+                    scored = dict(source_scored)
+            if scored is None:
+                corpus_kwargs: dict[str, Any] = {}
+                if backend.corpus_reuses_source_field:
+                    corpus_kwargs["source_field"] = source_field
+                scored = dict(
+                    backend.score_corpus_entries(
                         workspace_id=self._scope.workspace_id,
                         dataset_id=self._scope.dataset_id,
                         version_id=self._scope.dataset_version_id,
@@ -840,47 +862,11 @@ class QueryEngine:
                             search_scores,
                         ),
                         query_record=query_record,
-                        input_aggregation=operation.params.get("input_aggregation"),
-                        target_aggregation=operation.params.get("target_aggregation"),
+                        input_aggregation=input_aggregation,
+                        target_aggregation=target_aggregation,
+                        **corpus_kwargs,
                     )
-            else:
-                if self._lexical is None:
-                    raise QuailRuntimeError(
-                        "Lexical search is not configured",
-                        repair_hint=_LEXICAL_NOT_CONFIGURED_HINT,
-                    )
-                if source_field is not None:
-                    source_scored = self._lexical.lexical_scores_for_source_entries(
-                        workspace_id=self._scope.workspace_id,
-                        dataset_id=self._scope.dataset_id,
-                        version_id=self._scope.dataset_version_id,
-                        entry_ids=missing_ids,
-                        source_field=source_field,
-                        all_entries=all_entries,
-                        query_record=query_record,
-                        input_aggregation=operation.params.get("input_aggregation"),
-                        target_aggregation=operation.params.get("target_aggregation"),
-                    )
-                    if source_scored is not None:
-                        scored = dict(source_scored)
-                if scored is None:
-                    scored = dict(
-                        self._lexical.lexical_scores_for_entries(
-                            workspace_id=self._scope.workspace_id,
-                            dataset_id=self._scope.dataset_id,
-                            version_id=self._scope.dataset_version_id,
-                            corpus_by_entry=self._corpus_by_entry(
-                                expression,
-                                prefix_ops,
-                                missing_ids,
-                                search_scores,
-                            ),
-                            query_record=query_record,
-                            input_aggregation=operation.params.get("input_aggregation"),
-                            target_aggregation=operation.params.get("target_aggregation"),
-                            source_field=source_field,
-                        )
-                    )
+                )
             if cached is None:
                 search_scores[key] = dict(scored)
             else:
