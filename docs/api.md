@@ -146,14 +146,8 @@ Use `== None` / `!= None`, not `is None`.
 5. **Later lines see earlier tags** in the same successful run; failed runs roll back.
 6. **No outside world** — no imports, files, network, DB handles, or env.
 
-Deployments bound each `quail_exec` with fixed product ceilings (not TOML knobs):
-
-- `time_window="standard"`: 30s wall-clock, 15s worker CPU
-- `time_window="extended"`: 100s wall-clock, 60s worker CPU
-- Worker RSS memory: 256 MiB in both windows
-
-Extended only lengthens time. Hitting any ceiling fails the whole exec
-atomically (no tags, bindings, or printed output).
+The `time_window` ceilings are fixed product limits. Hitting any ceiling fails
+the whole exec atomically (no tags, bindings, or printed output).
 
 ---
 
@@ -161,16 +155,14 @@ atomically (no tags, bindings, or printed output).
 
 ### `Field(name, kind=None)`
 
-`kind` is `"source"`, `"analysis"`, or `None` (resolve by name at use).  
-Explicit kind must match the catalog when the Field is used, and when a
-binding that holds the Field (or a tree containing it) is committed.
-Restore does not fail the exec on a stale kind (bindings are session-global;
-kinds are dataset-specific) — using the Field still raises, and `del` recovers.
-Construction alone does not consult the catalog.
-Do not compare a Field to a value or order Fields — that raises
-`QuailSyntaxError`; use `Expression(field, Value())` (or a numeric op) for
-entry-value predicates. `Field == Field` is only identity of `(name, kind)`,
-not a value predicate.
+`kind` is `"source"`, `"analysis"`, or `None` (resolve by name at use).
+An explicit kind must match the catalog when the Field is used or committed
+in a binding; the error tells you the registered kind — use it or omit kind.
+A restored binding with a stale kind does not fail the exec; using the Field
+still raises, and `del name` recovers.
+Fields are names, not values: do not compare a Field to a value or order
+Fields — use `Expression(field, Value())` (or a numeric op) for entry-value
+predicates.
 
 ### `Unit(scope, field=None)`
 
@@ -211,16 +203,17 @@ Comparisons (`==`, `!=`, `<`, …) produce a **Predicate**.
 | `Lexical(query, ...)` | Lexical relevance score (ends the pipeline) |
 | `Semantic(query, ...)` | Embedding similarity score (ends the pipeline) |
 
-Use `AsText()` before regex when values might not already be text.  
-`Lexical` / `Semantic` must be the **last** op. Rankable scores end in
-`AsNumber`, `Length`, `Lexical`, or `Semantic`.
-`Lexical` / `Semantic` are ordinary score expressions — they are **not** tied to
-`Ranking`. Use them in predicates or as a `retrieve` unit with no ranking; wrap
-them in `Ranking(expression=...)` only when you want ordered retrieval.
+Pipelines are type-checked at construction: each op must accept what the
+previous op produces, and the error names both sides. Use `AsText()` first
+when values might not already be text. `Lexical` / `Semantic` end the
+pipeline; rankable expressions end in `AsNumber`, `Length`, `Lexical`, or
+`Semantic`. `Lexical` / `Semantic` are ordinary score expressions — use them
+in predicates or as a `retrieve` unit; wrap them in `Ranking(expression=...)`
+only for ordered retrieval.
 
 Regex uses a bounded RE2-style engine (not Python backtracking). Supported
-flags via `re`: `I`, `M`, `S` only. `re.A` and `re.U` exist on the helper but
-are rejected — RE2 word classes are ASCII. No lookaround, no backreferences.
+flags via `re`: `I`, `M`, `S` only (`re.A` / `re.U` are rejected — word
+classes are ASCII). No lookaround, no backreferences.
 
 ### Predicates and groups
 
@@ -248,8 +241,8 @@ rank = score_a + score_b * 0.5
 ranked = retrieve(group=matching, rank=rank, limit=10)
 ```
 
-Do **not** wrap an already-combined Ranking in `Ranking(expression=…)` — that
-constructor takes a single Expression, not a Ranking.
+`Ranking(expression=…)` takes a single Expression — combined Rankings are
+already Rankings and need no wrapping.
 
 Use the **same** group, rank, order, and limit when pulling aligned entries and
 scores.
@@ -300,46 +293,34 @@ Lexical(query, input_aggregation=None, target_aggregation=None)
 Semantic(query, input_aggregation=None, target_aggregation=None)
 ```
 
-`query`: non-empty `str`, `list[str]`, entry `GroupExpr`, or `list[Entry]`.  
-Aggregations: `"total"`, `"avg"`, or `None` (= total).
+A query is a **non-empty list of target texts**, spelled as a `str`,
+`list[str]`, an entry-scoped `GroupExpr`, or `list[Entry]` (entry shapes read
+each entry’s expression root field). Aggregations: `"total"`, `"avg"`, or
+`None` (= total).
 
-- **Lexical:** `score > 0` means “matched”. String queries use Turso FTS
-  syntax: unquoted spaces are OR (not a phrase); uppercase `AND` / `NOT` are
-  operators (lowercase `and` / `not` / `or` are ordinary terms); `"quoted
-  text"` is adjacent tokens; `term*` prefixes one clean term. There is no
-  `OR` keyword. Hyphens and other punctuation split the same way indexing
-  does (an unquoted atom matches any resulting term). `list[str]` parses each
-  string as its own query and ORs them. Entry-derived targets
-  (`GroupExpr` / `list[Entry]`) read the expression root field, tokenize it,
-  and quote those terms (OR). Cell prose is not query syntax — `AND` in the
-  field is a word. Scores are corpus-relative.
-  On a bare source field (no `Slice` / `AsText` / … in front), scoring uses the
-  process-warmed FTS index and does not load source cells.
+- **Lexical:** FTS relevance; `score > 0` means “matched”, and scores are
+  corpus-relative. String queries use FTS syntax: unquoted spaces are OR (not
+  a phrase); `"quoted text"` is adjacent tokens; `term*` prefixes one clean
+  term; uppercase `AND` / `NOT` are operators and there is no `OR` keyword
+  (lowercase `and` / `not` / `or` are ordinary terms). Punctuation splits into
+  terms the same way indexing does. `list[str]` ORs each string as its own
+  query; entry-derived targets tokenize and quote their terms (OR).
 - **Semantic:** exact cosine similarity under the dataset embedding profile
-  (configured outside this API; scored in Turso, not approximate ANN). Cosine
-  is not a match bit — do not copy Lexical’s `score > 0` as “matched.” Empty
-  cells score `None`. The same four query shapes work; entry targets read the
-  expression root field. If search
-  isn’t available, you get a repairable runtime diagnostic — fix config and
-  rerun the whole exec.
-  On a bare source field (no `Slice` / `AsText` / … in front) that was included
-  in the dataset embedding field set at `quail process`, scoring uses the
-  process-warmed segment map and does not load source cells. Prefix ops,
-  analysis fields, and source fields omitted from that set still materialize
-  cells. Re-run `quail process` after this layout change.
-  Re-processing the **same dataset id** (same `[[datasets]] id`) reuses
-  embeddings for unchanged text when the embedding profile is unchanged.
-  `--clear` and a new id rebuild. Analysis tags stay session-only and do not
-  use the warmed path.
+  (configured outside this API). Cosine is not a match bit — do not reuse
+  Lexical’s `score > 0` as “matched.” Empty cells score `None`.
 
-`quail_export_csv` is a **host MCP tool**, not a name inside `quail_exec`. Call
-it with `session_id` and `dataset_id`. It writes source columns plus this
-session's tags to a CSV on the serve host (a filesystem `path`, not the
-file body). That is the route to warm-path speed for session tags: stop
-`quail run`, point the same dataset `id` `source` at that path in the TOML
-(the CLI never writes it), then `quail process` so those columns are **source**
-and `Lexical` / `Semantic` skip cell load. Export itself does not reprocess.
-Do not overlap it with `quail_exec` on the same `session_id` (`session_busy`).
+Both run fastest on a bare source field (no ops before the search op) that was
+processed for search; transformed values and analysis fields load and score
+cell values instead. If search is not configured, the diagnostic is
+repairable — fix the config and rerun the whole exec.
+
+`quail_export_csv` is a **host MCP tool**, not a name inside `quail_exec`.
+Called with `session_id` and `dataset_id`, it writes source columns plus this
+session’s tags to a CSV path on the serve host (a filesystem path, not the
+file body) so the operator can process those tags as **source** columns later
+— the warm-path route to fast `Lexical` / `Semantic` over session tags.
+Export itself does not reprocess. Do not overlap it with `quail_exec` on the
+same `session_id` (`session_busy`).
 
 ---
 
@@ -387,16 +368,3 @@ Failures are atomic. Typical categories:
 
 Tool errors include `stable_error_code`, `message`, optional `repair_hint`, and
 optional source location. Prefer fixing from that over guessing.
-
----
-
-## Notes for maintainers
-
-This file is what agents read for `quail_exec`. Prefer workflows and short
-contracts over encyclopedic edge lists. Expand a section when agents repeatedly
-miss it; don’t restore the old long form by default.
-
-Open knobs:
-
-- How much query-syntax / aggregation detail agents need up front
-- Exact diagnostic field schema (keep stable codes; trim redacted_context lore)
