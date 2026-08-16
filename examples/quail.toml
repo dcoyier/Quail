@@ -1,7 +1,15 @@
+# Unrestricted template. Hand-edit only; the CLI never writes this file.
+# --config must be absolute. Paths are relative to this file.
+# Unknown keys fail closed. Clerk identity: examples/quail.clerk.toml.
+# Do not add [[workspaces]], [[users]], auth.clerk_domain, or
+# auth.clerk_authorized_parties here.
+
 [core]
 database = "data/quail.turso"
 feedback = "data/feedback.jsonl"
-# Optional search DB for Lexical FTS + Semantic vectors (must differ from database):
+# Lexical FTS + Semantic vectors. Must differ from database.
+# Required when any dataset sets embedding or lexical, and for process --clear.
+# Omit = no FTS/vectors.
 # search_database = "data/quail-search.turso"
 
 [auth]
@@ -11,38 +19,67 @@ workspace = "local"
 [hosting]
 bind = "127.0.0.1"
 port = 8000
-# Optional process-wide quail_exec slot ceiling (default 2, range 1–100):
+# URL clients use (default http://{bind}:{port}). Do not put /mcp in this value.
+# Required when bind is 0.0.0.0, ::, or [::].
+# public_base_url = "http://127.0.0.1:8000"
+# Max concurrent quail_exec (default 2, 1–100). Also sizes the search pool.
 # max_concurrent_executions = 2
-# Dangerous: allow unrestricted MCP on a non-loopback bind / public_base_url:
+# Unauthenticated non-loopback MCP. Also required for a wildcard bind.
 # allow_public_unrestricted = true
-# Embed connector dataset docs inside quail_setup (default false):
+# Put connector dataset docs in quail_setup rows (default false).
 # include_dataset_docs_in_setup = false
+# True is clerk-only. Leave false (default).
+# allow_insecure_http = false
 
-# Optional warm knobs for `quail process` (defaults: batch 32, concurrency 2):
+# Embedding batch and concurrency (defaults: 32 / 1–512, 2 / 1–32).
 # [search.warm]
 # embed_batch_size = 32
 # max_concurrent_embed_requests = 2
 
-# Optional embedding providers when any dataset declares [datasets.embedding]:
+# Required when any dataset sets embedding.provider to that name.
 # [providers.ollama]
 # base_url = "http://127.0.0.1:11434"
 #
+# OpenRouter warm and query send full field text off-host.
+# api_key must be env:NAME, not a raw secret.
 # [providers.openrouter]
 # base_url = "https://openrouter.ai/api/v1"
 # api_key = "env:QUAIL_OPENROUTER_API_KEY"
 
-# Demo dataset so this manifest runs in place. When copying this file for
-# your own data, replace this row — a missing source fails `quail process`.
+# Demo row so this file runs in place. Replace it with your own CSV.
+# CSV must be UTF-8 with a unique id column. Keep the same dataset id when the
+# CSV changes so unchanged embedding strings copy forward; a new id rebuilds.
 [[datasets]]
 id = "notes"
 source = "data/notes.csv"
 name = "Notes"
 
-# Optional per-dataset embedding profile (pinned and warmed by quail process):
+# Semantic pin. Changing provider, model, dimensions, revision, or fields rebuilds.
+# Omit fields = every non-empty source column. Unknown columns fail at process.
 # [datasets.embedding]
 # provider = "ollama"
 # model = "embeddinggemma:latest"
 # dimensions = 768
 # revision = "embeddinggemma-local-v1"
-# Optional: only embed these CSV columns (Lexical still uses all fields):
 # fields = ["body"]
+
+# Restrict Lexical columns. Omit this table (not empty fields) = all source fields.
+# Independent of embedding.fields.
+# [datasets.lexical]
+# fields = ["title", "body"]
+
+# Trusted connector pin (quail.connectors entry point, not a path).
+# id + version must match the installed package. Pinning without activating is legal.
+# `uv pip install -e ./examples/notes-connector`
+# [[extensions]]
+# id = "notes"
+# version = "1.0.0"
+
+# Activate a pin. Uncomment [[extensions]] too.
+# config keys must be on ConnectorManifest.config_keys. Dataset tables: id only.
+# [[connectors]]
+# id = "notes"
+# [connectors.config]
+# heading = "Notes"
+# [[connectors.datasets]]
+# id = "notes"
