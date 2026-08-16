@@ -65,8 +65,8 @@ if len(samples) > 0:
 
 Empty cells are `None`, not `""`.
 
-From here, follow the question — the pieces below compose into whatever shape
-it takes. Print what you learn; tag only when a label is worth keeping.
+From here, follow your question. The pieces below are designed for you to
+explore in any direction.
 
 ---
 
