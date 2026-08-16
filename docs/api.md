@@ -212,11 +212,10 @@ Comparisons (`==`, `!=`, `<`, …) produce a **Predicate**.
 | `Semantic(query, ...)` | Embedding similarity score (ends the pipeline) |
 
 Use `AsText()` before regex when values might not already be text.  
-`Lexical` / `Semantic` must be the **last** op. Rankable scores end in
+`Lexical` / `Semantic` must be the **last** op and cannot follow
+`RegexSearch` (that scores the match substring). Filter with
+`RegexSearch(...) != None`, then score the field. Rankable scores end in
 `AsNumber`, `Length`, `Lexical`, or `Semantic`.
-Do **not** put `Lexical` / `Semantic` after `RegexSearch` in the same
-pipeline — that scores the match substring, not the field. Filter with
-`RegexSearch(...) != None`, then run `Lexical` / `Semantic` on the field.
 `Lexical` / `Semantic` are ordinary score expressions — they are **not** tied to
 `Ranking`. Use them in predicates or as a `retrieve` unit with no ranking; wrap
 them in `Ranking(expression=...)` only when you want ordered retrieval.
@@ -254,9 +253,8 @@ ranked = retrieve(group=matching, rank=rank, limit=10)
 Do **not** wrap an already-combined Ranking in `Ranking(expression=…)` — that
 constructor takes a single Expression, not a Ranking.
 
-`Length()` is character or list length, not a 0–1 score. Combined with
-`Lexical` / `Semantic` it will dominate unless you use a much smaller weight
-or hit-counts (`RegexFindAll` + `Length`).
+`Length()` is character or list length, so `lex + length * 0.5` is mostly
+length. For hit counts, `RegexFindAll` then `Length`.
 
 Use the **same** group, rank, order, and limit when pulling aligned entries and
 scores.

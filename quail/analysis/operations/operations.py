@@ -80,9 +80,8 @@ def validate_operation_pipeline(operations: tuple[Operation, ...]) -> None:
                 )
             if any(prior.kind == "RegexSearch" for prior in operations[:index]):
                 raise QuailSyntaxError(
-                    f"{kind}(...) cannot follow RegexSearch() in the same pipeline. "
-                    "Filter with RegexSearch(...) != None, then run "
-                    f"{kind}(...) on the field."
+                    f"{kind}(...) cannot follow RegexSearch(); "
+                    "filter with RegexSearch(...) != None, then score the field"
                 )
             current_type = "score"
             continue

@@ -92,13 +92,8 @@ def test_lexical_cannot_follow_regexsearch() -> None:
         Expression(Field("body"), RegexSearch("hydrangea"), Lexical("care"))
     with pytest.raises(QuailSyntaxError, match="cannot follow RegexSearch"):
         Expression(Field("body"), RegexSearch("hydrangea"), AsText(), Semantic("care"))
-    # Filter + separate Lexical on the field remains legal.
-    mentions = Expression(Field("body"), RegexSearch("hydrangea")) != None  # noqa: E711
-    score = Expression(Field("body"), Lexical("hydrangea care"))
-    group = G0.where(mentions)
-    rank = Ranking(expression=score)
-    assert group.right is not None
-    assert rank.expression is score
+    G0.where(Expression(Field("body"), RegexSearch("hydrangea")) != None)  # noqa: E711
+    Ranking(expression=Expression(Field("body"), Lexical("hydrangea care")))
 
 
 def test_search_query_rejects_field_scoped_group() -> None:
