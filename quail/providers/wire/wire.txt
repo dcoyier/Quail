@@ -1,0 +1,13 @@
+post_json(url, payload, headers, label, config_key, http_hint):
+  POST the payload as JSON and give back the decoded JSON object body.
+  Raise ProviderError on HTTP status failures (message names label and the
+  status; repair_hint is http_hint), on transport failures (repair_hint says
+  to confirm [providers.config_key].base_url is reachable, then retry the
+  exec), and when the body is not a JSON object (repair_hint says to confirm
+  [providers.config_key].base_url).
+
+require_vector(item, dimensions, label):
+  Require one finite float vector of exactly dimensions components.
+  Raise ProviderError for a non-vector, a dimension mismatch (repair_hint
+  says to align datasets.embedding.dimensions and re-run quail process), or
+  any non-numeric or non-finite component.

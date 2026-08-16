@@ -5,8 +5,9 @@ Privacy: every embed_texts call sends the full input strings to the remote
 OpenRouter API (off-host). Prefer Ollama when corpus text must stay local.
 
 embed_texts(texts):
-  Give back one float vector per input text in request order.
-  Raise ProviderError on HTTP/JSON/shape/dimension mismatches.
-  Dimension mismatch repair_hint says to align datasets.embedding.dimensions
-  and re-run quail process.
-  Raise ProviderError when any embedding component is non-numeric or non-finite.
+  Give back one float vector per input text in request order (data entries may
+  carry an index).
+  HTTP, JSON, vector-shape, and dimension checks come from the shared
+  providers wire helpers (post_json, require_vector); all raise ProviderError.
+  Raise ProviderError when the response size does not match the request, an
+  index is out of range, or the response is incomplete.
