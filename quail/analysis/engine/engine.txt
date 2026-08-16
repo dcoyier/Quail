@@ -5,6 +5,14 @@ re-run quail process, then retry the whole exec.
 There is a repair hint _SEMANTIC_NOT_CONFIGURED_HINT that also names
 [providers.*] and [datasets.embedding].
 
+_SearchBackend is one scoring seam for Lexical and Semantic (search is not
+special). It remembers:
+  score_one (scalar scoring)
+  score_source_entries (warmed source-field batch scoring)
+  score_corpus_entries (materialized-corpus batch scoring)
+  corpus_reuses_source_field (True for Lexical: its corpus and scalar paths
+    take source_field to reuse a warmed corpus)
+
 It remembers db, scope, optional SimilarityService, optional LexicalService, staged
 mutations, created fields, value overlay, a per-exec Lexical/Semantic score cache,
 and an execution snapshot (ordered entry ids, positions, lazy per-field value maps,
@@ -62,11 +70,15 @@ _require_entry_in_scope(entry):
   raise QuailScopeError.
 
 Helpers evaluate groups and predicates, run expression pipelines (Value, AsText,
-AsNumber, regex, Slice, Length, Lexical via LexicalService, Semantic via
-SimilarityService). When LexicalService is missing, raise QuailRuntimeError with
-repair_hint to set core.search_database, re-run quail process, then retry.
-When SimilarityService is missing, the hint also names [providers.*] and
-[datasets.embedding]. Member entry groups validate each member's scope.
+AsNumber, regex, Slice, Length; Lexical and Semantic score through
+_search_backend). Member entry groups validate each member's scope.
+
+_search_backend(kind):
+  For Semantic, require SimilarityService or raise QuailRuntimeError with
+  _SEMANTIC_NOT_CONFIGURED_HINT; give back its scoring methods.
+  Otherwise require LexicalService or raise QuailRuntimeError with
+  _LEXICAL_NOT_CONFIGURED_HINT; give back its scoring methods with
+  corpus_reuses_source_field True.
 
 _apply_regex(operation, value):
   Compile the pattern with flags.
@@ -101,15 +113,14 @@ field; Lexical Entry* targets are term-quoted. Predicates and rankings that end 
 Lexical/Semantic share one per-exec score cache keyed by Expression.to_record():
 each distinct search-terminal Expression is batch-scored once over needed entry
 ids (gap-fill missing ids), then predicate filters and ranking reuse those scores.
-For Lexical and Semantic, when there are no transforming prefix operations and
-the root resolves to a source field, _bare_source_search_field gives that name.
-Lexical first asks lexical_scores_for_source_entries to score those entry ids
-directly without loading source values, and tells that path when the candidate
-ids are the complete dataset. Semantic does the same via
-semantic_scores_for_source_entries when the field was registered at embedding
-warm. If the source field is not warmed (or not registered for Semantic),
-materialize corpus values with _corpus_by_entry and use dynamic scoring (still
-pass source_field so Lexical can reuse a warmed corpus when possible).
+Batch scoring is one path through _search_backend: when there are no
+transforming prefix operations and the root resolves to a source field
+(_bare_source_search_field), first ask score_source_entries to score those
+entry ids without loading source values, telling that path when the candidate
+ids are the complete dataset. When that gives nothing back (field not warmed,
+or not registered for Semantic), materialize corpus values with
+_corpus_by_entry and use score_corpus_entries (passing source_field when the
+backend's corpus path reuses a warmed corpus).
 _warmed_lexical_source_field encodes the bare-source rule for scalar eval.
 
 _corpus_by_entry:
