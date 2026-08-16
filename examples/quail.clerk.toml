@@ -1,4 +1,4 @@
-# Clerk catalog. Hand-edit only; the CLI never writes this file.
+# Clerk template. Hand-edit only; the CLI never writes this file.
 # --config must be absolute. Paths are relative to this file.
 # Unknown keys fail closed. Sessions belong to the creating user.
 # Clerk proves identity (sub). [[users]] gates MCP. Enable Dynamic client

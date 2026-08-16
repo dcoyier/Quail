@@ -1,4 +1,4 @@
-# Unrestricted catalog. Hand-edit only; the CLI never writes this file.
+# Unrestricted template. Hand-edit only; the CLI never writes this file.
 # --config must be absolute. Paths are relative to this file.
 # Unknown keys fail closed. Clerk identity: examples/quail.clerk.toml.
 # Do not add [[workspaces]], [[users]], auth.clerk_domain, or

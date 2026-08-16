@@ -1,4 +1,4 @@
-"""Example TOMLs parse, and every catalog key is present in the file."""
+"""Example TOMLs parse, and every template key is present in the file."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ _EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
 # Every legal key (and the clerk-only / unrestricted-only flags that must be
 # named so a reader does not have to look elsewhere).
-_UNRESTRICTED_CATALOG = (
+_UNRESTRICTED_KEYS = (
     "database",
     "feedback",
     "search_database",
@@ -39,7 +39,7 @@ _UNRESTRICTED_CATALOG = (
     "process --clear",
 )
 
-_CLERK_CATALOG = (
+_CLERK_KEYS = (
     "database",
     "feedback",
     "search_database",
@@ -78,18 +78,18 @@ _CLERK_CATALOG = (
 )
 
 
-def test_example_unrestricted_toml_parses_and_catalogs_keys() -> None:
+def test_example_unrestricted_toml_parses_and_lists_template_keys() -> None:
     path = _EXAMPLES / "quail.toml"
     config = load_config(path)
     assert config.auth_mode == "unrestricted"
     assert config.workspace_id == "local"
     assert config.datasets[0].dataset_id == "notes"
     text = path.read_text(encoding="utf-8")
-    missing = [key for key in _UNRESTRICTED_CATALOG if key not in text]
+    missing = [key for key in _UNRESTRICTED_KEYS if key not in text]
     assert missing == []
 
 
-def test_example_clerk_toml_parses_and_catalogs_keys() -> None:
+def test_example_clerk_toml_parses_and_lists_template_keys() -> None:
     path = _EXAMPLES / "quail.clerk.toml"
     config = load_config(path)
     assert config.auth_mode == "clerk"
@@ -97,5 +97,5 @@ def test_example_clerk_toml_parses_and_catalogs_keys() -> None:
     assert {spec.workspace_id for spec in config.workspaces} == {"acme", "labs"}
     assert config.users[0].user_id == "alice"
     text = path.read_text(encoding="utf-8")
-    missing = [key for key in _CLERK_CATALOG if key not in text]
+    missing = [key for key in _CLERK_KEYS if key not in text]
     assert missing == []
