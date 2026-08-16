@@ -49,12 +49,9 @@ does not read the data. Quail evaluates when you `retrieve`, `count`,
 
 ---
 
-## Start here
+## First exec
 
-The shipped `examples/data/notes.csv` columns are `id`, `title`, `body`. Inspect
-`G1` on other datasets. Empty cells are `None`, not `""`.
-
-### 1. Look at fields
+Field names differ per dataset — inspect before assuming any:
 
 ```python
 for field in retrieve(unit=fields, group=G1, limit=50):
@@ -62,55 +59,14 @@ for field in retrieve(unit=fields, group=G1, limit=50):
 
 samples = retrieve(limit=1)
 if len(samples) > 0:
-    sample = samples[0]
-    for field in sample.fields():
-        print(field.name, repr(sample.value(field)))
+    for field in samples[0].fields():
+        print(field.name, repr(samples[0].value(field)))
 ```
 
-### 2. Pull a few entries
+Empty cells are `None`, not `""`.
 
-```python
-for entry in retrieve(group=G0, limit=10):
-    print(entry.id)
-```
-
-### 3. Filter with regex
-
-```python
-body = Field("body")
-mentions = Expression(body, RegexSearch("hydrangea", flags=re.I)) != None
-matching = G0.where(mentions)
-
-print("matches", count(group=matching))
-for entry in retrieve(group=matching, limit=10):
-    text = entry.value(body) or ""
-    print(entry.id, text[:500])
-```
-
-### 4. Rank with lexical search
-
-```python
-score = Expression(Field("body"), Lexical('"hydrangea care"'))
-matching = G0.where(score > 0)
-rank = Ranking(expression=score)
-
-ranked_entries = retrieve(group=matching, rank=rank, limit=10)
-ranked_scores = retrieve(unit=score, group=matching, rank=rank, limit=10)
-
-for i in range(len(ranked_entries)):
-    print(ranked_entries[i].id, ranked_scores[i])
-```
-
-### 5. Tag analysis labels (session only)
-
-```python
-selected = G0.where(
-    Expression(Field("body"), RegexSearch("climate", flags=re.I)) != None
-)
-topic = create_field("topic")
-tag(selected, topic, "climate")
-print(count(group=G0.where(Expression(topic, Value()) == "climate")))
-```
+From here, follow your question. The pieces below are designed for you to
+explore in any direction.
 
 ---
 
