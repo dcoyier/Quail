@@ -54,7 +54,6 @@ port = 8000
 
 # Deployment-wide trusted connector pin (quail.connectors entry point, not a path).
 # id + version must match the installed package. Pinning without activating is legal.
-# `uv pip install -e ./examples/notes-connector`
 # [[extensions]]
 # id = "notes"
 # version = "1.0.0"

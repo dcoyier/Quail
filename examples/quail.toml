@@ -46,9 +46,9 @@ port = 8000
 # base_url = "https://openrouter.ai/api/v1"
 # api_key = "env:QUAIL_OPENROUTER_API_KEY"
 
-# Demo row so this file runs in place. Replace it with your own CSV.
-# CSV must be UTF-8 with a unique id column. Keep the same dataset id when the
-# CSV changes so unchanged embedding strings copy forward; a new id rebuilds.
+# Replace source with your UTF-8 CSV (unique id column). Paths are relative
+# to this file. Keep the same dataset id when the CSV changes so unchanged
+# embedding strings copy forward; a new id rebuilds.
 [[datasets]]
 id = "notes"
 source = "data/notes.csv"
@@ -70,7 +70,6 @@ name = "Notes"
 
 # Trusted connector pin (quail.connectors entry point, not a path).
 # id + version must match the installed package. Pinning without activating is legal.
-# `uv pip install -e ./examples/notes-connector`
 # [[extensions]]
 # id = "notes"
 # version = "1.0.0"

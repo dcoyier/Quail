@@ -19,9 +19,6 @@ jobs:
       - name: Sync
         run: uv sync --group dev
 
-      - name: Install example connector
-        run: uv pip install -e ./examples/notes-connector
-
       - name: Ruff
         run: uv run ruff check quail tests
 

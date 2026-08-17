@@ -32,8 +32,7 @@ Hand-edit `quail.toml`, import CSVs with `quail process`, then serve with
 
 - Analysis language: [`docs/api.md`](docs/api.md)
 - Change routing: [`docs/development.md`](docs/development.md)
-- Connector SDK: [`docs/connector-sdk.md`](docs/connector-sdk.md) ·
-  [`examples/notes-connector/`](examples/notes-connector/)
+- Connector SDK: [`docs/connector-sdk.md`](docs/connector-sdk.md)
 
 ```sh
 uv sync
