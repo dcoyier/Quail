@@ -175,6 +175,7 @@ classes are ASCII). No lookaround, no backreferences.
 
 ```python
 pred = Expression(Field("body"), Length()) >= 500
+mentions = Expression(Field("body"), RegexSearch("hydrangea")) != None
 group = G0.where(pred)
 both = pred_a & pred_b
 either = pred_a | pred_b
