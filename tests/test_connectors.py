@@ -1,10 +1,9 @@
-"""Connector SDK load, docs ownership, MCP wire, and example package."""
+"""Connector SDK load, docs ownership, and MCP wire."""
 
 from __future__ import annotations
 
 import asyncio
 import base64
-import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -40,7 +39,7 @@ from quail.connectors.sdk import (
     WidgetSpec,
     WorkspaceConnectorRuntime,
 )
-from quail.datasets import get_dataset, import_csv_dataset, open_core_db
+from quail.datasets import import_csv_dataset, open_core_db
 from quail.mcp import create_mcp_server
 from quail.mcp.results import classify_exception, diagnostic_from_exception
 
@@ -570,65 +569,23 @@ def test_connector_error_classification() -> None:
     assert diagnostic["repair_hint"] == "fix the TOML pin"
 
 
-def test_example_package_surface(tmp_path: Path) -> None:
-    example_src = Path(__file__).resolve().parents[1] / "examples" / "notes-connector" / "src"
-    sys.path.insert(0, str(example_src))
-    try:
-        from quail_notes_connector import create_connector
-    finally:
-        sys.path.remove(str(example_src))
-
-    db_path = _seed_db(tmp_path)
-    with open_core_db(db_path) as db:
-        host = _CoreHostAdapter(db)
-        environment = ConnectorEnvironment(
-            host=host,
-            public_base_url="http://127.0.0.1:8765",
-            base_path=tmp_path,
-        )
-        connector = create_connector(environment)
-        assert connector.manifest.id == "notes"
-        assert connector.manifest.version == "1.0.0"
-        assert any(t.name == "notes_describe_dataset" for t in connector.manifest.tools)
-        assert any(w.uri.startswith("ui://") for w in connector.manifest.widgets)
-        provider = connector.connect(
-            WorkspaceConnectorRuntime(
-                workspace_id="local",
-                config={"heading": "Notes"},
-                dataset_ids=frozenset({"notes"}),
-            )
-        )
-        context = ConnectorContext(
-            workspace_id="local",
-            user_id=None,
-            extension_id="notes",
-            extension_version="1.0.0",
-            dataset_ids=frozenset({"notes"}),
-        )
-        docs = provider.dataset_document(context, "notes")
-        assert docs is not None
-        assert "Lexical" in docs
-        result = provider.call_tool(context, "notes_describe_dataset", {"dataset_id": "notes"})
-        assert isinstance(result, ToolResult)
-        assert result.structured_content["heading"] == "Notes"
-        html = connector.read_resource("ui://notes/dataset-card.html")
-        assert "notes_describe_dataset" in html
-
-
-def test_production_shaped_toml_loads_notes_via_entry_point(tmp_path: Path) -> None:
-    """Garden-like pin/connect TOML through real entry points + create_mcp_server_from_config."""
-
-    from importlib.metadata import entry_points
+def test_production_shaped_toml_loads_connector(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pin/connect TOML through apply_config + create_mcp_server_from_config."""
 
     from quail.mcp import create_mcp_server_from_config
     from quail.run import apply_config
 
-    if "notes" not in {
-        ep.name for ep in entry_points().select(group=load_module.ENTRY_POINT_GROUP)
-    }:
-        pytest.skip(
-            "install examples/notes-connector (uv pip install -e ./examples/notes-connector)"
+    def factory(environment: ConnectorEnvironment) -> _FakeConnector:
+        return _FakeConnector(
+            environment,
+            extension_id="alpha",
+            version="1.0.0",
+            docs={"notes": "Alpha docs for notes"},
         )
+
+    _install_factory(monkeypatch, extension_id="alpha", version="1.0.0", factory=factory)
 
     data = tmp_path / "data"
     data.mkdir()
@@ -649,7 +606,7 @@ bind = "127.0.0.1"
 port = 8765
 
 [[extensions]]
-id = "notes"
+id = "alpha"
 version = "1.0.0"
 
 [[datasets]]
@@ -658,10 +615,10 @@ source = "data/notes.csv"
 name = "Notes"
 
 [[connectors]]
-id = "notes"
+id = "alpha"
 
 [connectors.config]
-heading = "Notes"
+heading = "Hello"
 
 [[connectors.datasets]]
 id = "notes"
@@ -675,30 +632,11 @@ id = "notes"
     try:
         bundle = prepared.connector_catalog.for_workspace("local")
         assert len(bundle.providers) == 1
-        assert bundle.providers[0].extension_id == "notes"
+        assert bundle.providers[0].extension_id == "alpha"
         assert bundle.providers[0].version == "1.0.0"
         assert "notes" in bundle.docs_by_dataset
     finally:
         prepared.close()
-
-
-class _CoreHostAdapter:
-    def __init__(self, db: Any) -> None:
-        self._db = db
-
-    def dataset(self, context: ConnectorContext, dataset_id: str) -> DatasetRef:
-        context.require_dataset(dataset_id)
-        ref = get_dataset(self._db, context.workspace_id, dataset_id)
-        if ref is None:
-            raise PermissionError("missing")
-        return DatasetRef(
-            id=ref.dataset_id,
-            name=ref.name,
-            active_version_id=ref.active_version_id,
-        )
-
-    def require_dataset(self, context: ConnectorContext, dataset_id: str) -> None:
-        context.require_dataset(dataset_id)
 
 
 def test_register_connectors_noop_catalog() -> None:

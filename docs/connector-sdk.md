@@ -113,10 +113,6 @@ the URL `workspace_id`; missing/invalid tokens are 401 and non-members are 403.
 Unrestricted mode does not authenticate these GETs. `FileResponse.expires_at`,
 when set, is enforced: an expired timestamp is 404, not a file.
 
-## Example
-
-See [`examples/notes-connector/`](../examples/notes-connector/) for a runnable
-package (tool + notes docs + widget) and install notes.
 ## Fail-closed operator errors
 
 | Situation | Behavior |
