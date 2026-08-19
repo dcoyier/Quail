@@ -109,9 +109,12 @@ the whole exec atomically (no tags, bindings, or printed output).
 
 ## Types
 
-These types are **symbolic recipes**. Constructing them does not read data.
-Evaluation happens only at `retrieve`, `count`, `tag`, `untag`, `entry.value`,
-and `entry.fields`.
+`Field`, `Unit`, `Expression`, `Predicate`, `GroupExpr`, and `Ranking` are
+**symbolic recipes**. Constructing them does not read data. `Entry` is a
+runtime handle issued by `retrieve`, not a recipe you construct.
+
+Evaluation happens at `retrieve`, `count`, `tag`, `untag`, `entry.value`, and
+`entry.fields`. Binding commit also checks Field kinds without those verbs.
 
 Each symbol below has a **signature**, then parameters / returns / errors /
 notes in the same order. Call constructors and functions by these signatures.
@@ -125,9 +128,12 @@ GroupScope = "entries" | "fields"
 UnitScope = "entries" | "fields" | "values"
 Order = "top" | "middle" | "bottom"
 Aggregation = "total" | "avg" | None          # None means "total"
+# Non-empty: "" / [] / [""] are illegal. GroupExpr must be entry-scoped.
 Query = str | list[str] | GroupExpr | list[Entry]
+# Acyclic. float means a finite float (not inf/nan).
 JSONLike = None | bool | int | float | str | list[JSONLike] | dict[str, JSONLike]
-TagValue = JSONLike                           # None is forbidden anywhere in the tree
+# Like JSONLike, but None is forbidden at every depth.
+TagValue = bool | int | float | str | list[TagValue] | dict[str, TagValue]
 ```
 
 ---
@@ -149,7 +155,7 @@ A named source or analysis column. A Field is a **name**, not a cell value.
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `name` | `str` | required | Non-empty column name. The CSV `id` column is `entry.id`, not `Field("id")`. |
-| `kind` | `"source"` \| `"analysis"` \| `None` | `None` | `None` resolves by name at use. An explicit kind must match the catalog when the Field is used or committed in a binding. |
+| `kind` | `"source"` \| `"analysis"` \| `None` | `None` | `None` resolves by name at use. An explicit kind must match the catalog when the Field is **used**. Commit of a binding fails only if that name **already exists** in this dataset catalog with a different kind; an unknown name with an explicit kind may still be bound. |
 
 **Attributes**
 
@@ -162,9 +168,10 @@ A named source or analysis column. A Field is a **name**, not a cell value.
 
 | When | Error |
 | --- | --- |
-| `name` is missing or not a non-empty `str` | `QuailSyntaxError` |
+| `name` is not a non-empty `str` | `QuailSyntaxError` |
 | `kind` is not `"source"`, `"analysis"`, or `None` | `QuailSyntaxError` |
-| Explicit `kind` does not match the catalog at use | `QuailFieldError` (the error names the registered kind — use it, or omit `kind`) |
+| Unknown name at use | `QuailFieldError` |
+| Explicit `kind` does not match the catalog at use, or at commit when the name already exists with a different kind | `QuailFieldError` (the error names the registered kind — use it, or omit `kind`) |
 | Compared to a non-`Field`, or ordered with `<` `<=` `>` `>=` | `QuailSyntaxError` |
 
 **Notes**
@@ -197,7 +204,7 @@ What `retrieve` / `count` should return. The population is `group=`, not the Uni
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `scope` | `"entries"` \| `"fields"` \| `"values"` | required | Which kind of item comes back. |
-| `field` | `Field` \| `None` | `None` | Required for `"values"`. Optional for `"entries"` (present values of that field, aligned to entries). Forbidden for `"fields"`. |
+| `field` | `Field` \| `None` | `None` | Required for `"values"`. Optional for `"entries"` (present values of that field; absent cells dropped; not distinct). Forbidden for `"fields"`. |
 
 **Legal forms**
 
@@ -242,7 +249,7 @@ constructor** — calling `Entry(...)` raises `QuailSyntaxError`.
 | `.id` | `str` | Row id (the CSV `id` column). |
 | `.dataset_id` | `str` | Dataset this handle belongs to. |
 | `.dataset_version_id` | `str` | Immutable dataset version this handle belongs to. |
-| `.dataset` | `str` | Dataset label on the handle. |
+| `.dataset` | `str` | Same as `.dataset_id` on retrieve-issued handles. |
 
 #### `Entry.value`
 
@@ -253,13 +260,15 @@ entry.value(field: Field | str, default: Any = None) -> Any
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `field` | `Field` \| `str` | required | Column to read. A string must be non-empty. |
-| `default` | `Any` | `None` | Returned when the cell is absent. |
+| `default` | `Any` | `None` | Substituted when the stored cell is `None` (CSV blanks are omitted at import, so absence is `None`, not `""`). |
 
-**Returns:** the cell value, or `default` if absent. Empty cells are `None`, not `""`.
+**Returns:** the stored cell value, or `default` when that value is `None`.
+Unknown names and kind mismatches raise; they do not use `default`.
 
 **Errors:** `QuailSyntaxError` if `field` is not a `Field` or non-empty `str`;
-`QuailScopeError` if the handle is out of session/dataset scope;
-`QuailRuntimeError` if called outside evaluation.
+`QuailFieldError` if the name is unknown or the explicit kind does not match
+the catalog; `QuailScopeError` if the handle belongs to another dataset or
+dataset version; `QuailRuntimeError` if called outside evaluation.
 
 #### `Entry.fields`
 
@@ -267,10 +276,11 @@ entry.value(field: Field | str, default: Any = None) -> Any
 entry.fields() -> list[Field]
 ```
 
-**Returns:** `Field` handles present on this row.
+**Returns:** `Field` handles present on this row (catalog fields whose cell is
+not `None`).
 
-**Errors:** `QuailScopeError` if the handle is out of scope;
-`QuailRuntimeError` if called outside evaluation.
+**Errors:** `QuailScopeError` if the handle belongs to another dataset or
+dataset version; `QuailRuntimeError` if called outside evaluation.
 
 ---
 
@@ -289,11 +299,14 @@ Construction type-checks the pipeline; it does not read data.
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `input` | `Field` \| `Expression` | required | Root field, or an existing expression to extend. |
-| `*operations` | `Operation` | required (≥1) | Pipeline steps from the op factories (`Value()`, `Length()`, …). |
+| `*operations` | `Operation` | see notes | Pipeline steps from the op factories (`Value()`, `Length()`, …). |
 
-When `input` is a `Field`, the pipeline is exactly `*operations`. When `input`
-is an `Expression`, `*operations` are appended. Start with `Value()` when
-reading a field as-is.
+The **resulting** pipeline must have at least one op. When `input` is a
+`Field`, that means `*operations` is non-empty. When `input` is an
+`Expression`, extra ops may be omitted (clone) or appended. `Value()` is the
+identity when reading a field as-is — it is **not** required; `Length()`,
+`AsText()`, regex, and search ops may be first. If `Value()` appears, it must
+be first. If `Lexical` / `Semantic` appear, they must be last.
 
 **Returns:** a new `Expression`.
 
@@ -302,9 +315,11 @@ reading a field as-is.
 | When | Error |
 | --- | --- |
 | `input` is not a `Field` or `Expression` | `QuailSyntaxError` |
-| No operations, or an argument is not an `Operation` | `QuailSyntaxError` |
+| Resulting pipeline is empty | `QuailSyntaxError` |
+| An argument is not an `Operation` | `QuailSyntaxError` |
 | An op does not accept the previous op’s kind | `QuailSyntaxError` (names both sides) |
-| `Value()` is not first, or `Lexical` / `Semantic` is not last | `QuailSyntaxError` |
+| `Value()` appears after the first op | `QuailSyntaxError` |
+| `Lexical` / `Semantic` appear before the last op | `QuailSyntaxError` |
 
 **Comparisons** — each yields a `Predicate` (not a Python `bool`):
 
@@ -319,15 +334,15 @@ reading a field as-is.
 
 | Operator | Right operand |
 | --- | --- |
-| `==` `!=` | A sealed literal, `None`, or another `Expression`. Use `== None` / `!= None`, not `is None`. |
-| `<` `<=` `>` `>=` | A finite numeric literal, or another `Expression`. |
+| `==` `!=` | `None`, a JSON-like literal (finite floats; lists/dicts with string keys; no cycles), or another `Expression`. Use `== None` / `!= None`, not `is None`. |
+| `<` `<=` `>` `>=` | A finite numeric literal (not `bool`, not `inf`/`nan`), or another `Expression`. |
 
 **Ranking arithmetic** — an Expression used with `+` / `*` becomes a `Ranking`
 (the expression must be rankable; see `Ranking`):
 
 ```python
 (self + other: Expression | Ranking) -> Ranking
-(self * weight: int | float) -> Ranking   # weight on the right, ≥ 0
+(self * weight: int | float) -> Ranking   # weight on the right; finite, not bool, ≥ 0
 ```
 
 **Forbidden**
@@ -341,11 +356,22 @@ reading a field as-is.
 ### `Predicate`
 
 ```python
-class Predicate: ...
+class Predicate:
+    def __init__(self, left: Any, operator: str, right: Any = None) -> None: ...
 ```
 
-True/false recipe per entry. Produced by comparing an `Expression`. Do not
-call `Predicate(...)` yourself.
+True/false recipe per entry. The usual path is comparing an `Expression`, or
+composing with `&` `|` `~` — those operators call this constructor. Direct
+construction is allowed when the operands match the operator:
+
+| `operator` | `left` | `right` |
+| --- | --- | --- |
+| `"=="` `"!="` `"<"` `"<="` `">"` `">="` | `Expression` | Same as Expression comparisons |
+| `"and"` `"or"` | `Predicate` | `Predicate` |
+| `"not"` | `Predicate` | must be omitted (`None`) |
+
+Anything else, including a missing `left`/`operator`, is not a valid
+`Predicate` (wrong operands → `QuailSyntaxError`; omitted args → `TypeError`).
 
 **Operators**
 
@@ -395,13 +421,15 @@ G1: GroupExpr  # all fields (source then analysis)
 Symbolic set of entries or fields. Not a Python list — materialize with
 `retrieve` / `count`. Do not iterate, index, or use in `if` / `while`.
 
-Exactly one population form per constructor call:
+Exactly one population form per constructor call. `&` `|` `~` build a fourth
+**composition** form (do not mix it with the others):
 
 | Form | Call | Meaning |
 | --- | --- | --- |
 | Named builtin | `GroupExpr("entries", name="G0")` / `GroupExpr("fields", name="G1")` | The injected `G0` / `G1`. |
 | Filtered | `GroupExpr("entries", predicate=pred)` | Entries matching `pred`. |
 | Members | `GroupExpr("entries", members=[...])` or `GroupExpr("fields", members=[...])` | Explicit `Entry` or `Field` handles matching `scope`. |
+| Composition | `group_a & group_b`, `group_a \| group_b`, `~group` | Intersection, union, complement. Same `scope` on both sides. |
 
 **Parameters**
 
@@ -420,7 +448,9 @@ Exactly one population form per constructor call:
 | No form, or more than one form | `QuailSyntaxError` |
 | `predicate` on a field group | `QuailScopeError` |
 | `members` is not a `list`, or item types do not match `scope` | `QuailSyntaxError` |
+| `predicate` is not a `Predicate` | `QuailSyntaxError` |
 | `name` is not the matching builtin | `QuailSyntaxError` |
+| Mixed-scope `&` / `\|`, or a non-`GroupExpr` operand | `QuailScopeError` |
 
 **Operators** — both sides must share `scope`:
 
@@ -455,7 +485,10 @@ class Ranking:
 ```
 
 How `retrieve` orders entry-scoped candidates. Empty ranking = processing
-order. Non-empty = score each candidate, **higher first**.
+order. Non-empty = score each candidate, **higher first**. A missing or
+non-finite score sorts as lowest (`-inf`): `AsNumber` / `Semantic` of an
+absent cell is `None` → last; `Length` absence is `0`; `Lexical` absence is
+`0.0`.
 
 **Parameters**
 
@@ -478,7 +511,7 @@ only for ordered retrieval.
 | Rule | Detail |
 | --- | --- |
 | `+` | Sum of rankable scores. An Expression on either side is treated as `Ranking(expression=...)`. Adding an empty Ranking is a no-op. |
-| `*` | Scale by `weight`. `weight` must be a finite number `>= 0`, and must be on the **right** (`expr * 0.5`, not `0.5 * expr`). Cannot weight an empty Ranking. |
+| `*` | Scale by `weight`. `weight` must be a finite `int` or `float` `>= 0` (not `bool`), and must be on the **right** (`expr * 0.5`, not `0.5 * expr`). Cannot weight an empty Ranking. |
 
 **Example**
 
@@ -488,15 +521,16 @@ rank = score_a + score_b * 0.5
 ranked = retrieve(group=matching, rank=rank, limit=10)
 ```
 
-Use the **same** `group`, `rank`, `order`, and `limit` when pulling aligned
-entries and scores.
+To pull **aligned** entries and scores, pass the same `group`, `rank`, `order`,
+and `limit` on both `retrieve` calls. The runtime does not check that pairing.
 
 **Errors**
 
 | When | Error |
 | --- | --- |
 | `expression` is set but is not a rankable `Expression` | `QuailSyntaxError` |
-| Weight is not a finite non-negative number, or is on the left | `QuailSyntaxError` |
+| Weight is not a finite non-negative `int`/`float` (including `bool`), or is on the left | `QuailSyntaxError` |
+| Weighting an empty `Ranking()` | `QuailSyntaxError` |
 
 ---
 
@@ -517,8 +551,10 @@ not classes you subclass. Pipelines are checked at construction.
 | `score` | Search relevance score; **ends the pipeline**. |
 
 **Rule:** each op must accept the kind the previous op produced. Rankable
-expressions are those whose final kind is `number` or `score`. Use `AsText()`
-first when values might not already be text.
+expressions are those whose final kind is `number` or `score`. For regex ops,
+use `AsText()` first when values might not already be text. Do **not** insert
+`AsText()` only to “prepare” a search op — extra ops before `Lexical` /
+`Semantic` drop the warm source index and score the pipeline output instead.
 
 | Op | Accepts | Produces |
 | --- | --- | --- |
@@ -558,7 +594,9 @@ Identity. First in the pipeline when reading the field as-is.
 AsText() -> Operation
 ```
 
-Canonical text. `None` becomes `""`.
+Canonical text. `None` becomes `""`. That means a later `Semantic` scores the
+empty string instead of `None`, and a later `Lexical` FTS-scores an empty
+segment instead of the absent-cell `0.0` short-circuit.
 
 **Accepts:** any pipeline kind. **Produces:** `text`.
 
@@ -570,7 +608,8 @@ Canonical text. `None` becomes `""`.
 AsNumber() -> Operation
 ```
 
-Finite float from a number or numeric string.
+Finite float from a number or numeric string. `None` stays `None`. `bool` and
+non-numeric text raise `QuailRuntimeError` at evaluation.
 
 **Accepts:** `any`, `text`, `number`, `text_or_list`. **Produces:** `number`.
 
@@ -582,14 +621,17 @@ Finite float from a number or numeric string.
 RegexSearch(pattern: str, flags: int = 0) -> Operation
 ```
 
-First match substring, or `None` if there is no match.
+First match substring (`group(0)`, not capturing groups), or `None` if there
+is no match or the input cell is `None`.
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `pattern` | `str` | required | RE2-style pattern. |
 | `flags` | `int` | `0` | `re.I`, `re.M`, `re.S` only; combine with `\|`. |
 
-**Accepts:** `any`, `text`, `text_or_list`. **Produces:** `text`.
+**Accepts:** `any`, `text`, `text_or_list` at construction. **Produces:** `text`.
+At evaluation the cell must be `str` (or `None`); a list raises
+`QuailRuntimeError` (`use AsText() first`).
 
 ---
 
@@ -599,14 +641,17 @@ First match substring, or `None` if there is no match.
 RegexFindAll(pattern: str, flags: int = 0) -> Operation
 ```
 
-All matches as `list[str]`.
+All matches as `list[str]` of full-match text (`group(0)`). `None` input or
+no match yields `[]`.
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `pattern` | `str` | required | RE2-style pattern. |
 | `flags` | `int` | `0` | `re.I`, `re.M`, `re.S` only. |
 
-**Accepts:** `any`, `text`, `text_or_list`. **Produces:** `list_text`.
+**Accepts:** `any`, `text`, `text_or_list` at construction. **Produces:** `list_text`.
+At evaluation the cell must be `str` (or `None`); a list raises
+`QuailRuntimeError` (`use AsText() first`).
 
 ---
 
@@ -616,7 +661,8 @@ All matches as `list[str]`.
 RegexSub(pattern: str, replacement: str, flags: int = 0) -> Operation
 ```
 
-Literal replace. The replacement is not a backreference template.
+Literal replace. The replacement is not a backreference template. `None`
+input stays `None`.
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -635,12 +681,12 @@ Literal replace. The replacement is not a backreference template.
 Slice(start: int, end: int | None = None) -> Operation
 ```
 
-Python slice `[start:end]` on text **or** list.
+Python slice `[start:end]` on text **or** list. `None` input stays `None`.
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `start` | `int` | required | Slice start (not `bool`). |
-| `end` | `int` \| `None` | `None` | Slice end; `None` means through the last item. |
+| `end` | `int` \| `None` | `None` | Slice end (not `bool`); `None` means through the last item. |
 
 **Accepts:** `any`, `text`, `list_text`, `text_or_list`.
 **Produces:** the input kind (`any` → `text_or_list`).
@@ -653,7 +699,8 @@ Python slice `[start:end]` on text **or** list.
 Length() -> Operation
 ```
 
-`len(text)`, `len(list)`, or `0` for `None`. Rankable (`number`).
+`len(text)`, `len(list)`, or `0` for `None`. Rankable (`number`). Other cell
+types (including numbers) raise `QuailRuntimeError` at evaluation.
 
 **Accepts:** `any`, `text`, `list_text`, `text_or_list`. **Produces:** `number`.
 
@@ -683,7 +730,7 @@ Ordinary score expression: usable in predicates and as a `retrieve` unit.
 | Spell as | Meaning |
 | --- | --- |
 | `str` | One target. FTS query syntax (below). |
-| `list[str]` | Each string is its own query; the list is OR’d. |
+| `list[str]` | Each string is its own query. Target aggregation **sums** those scores (`None` / `"total"`) or takes their **mean** (`"avg"`). That is not the same as unquoted spaces inside one string (those are FTS OR). |
 | Entry-scoped `GroupExpr` | Each member’s expression-root field becomes a target. |
 | `list[Entry]` | Same, from explicit handles. |
 
@@ -698,16 +745,20 @@ Ordinary score expression: usable in predicates and as a `retrieve` unit.
 | lowercase `and` / `not` / `or` | Ordinary terms |
 | punctuation | Splits into terms the same way indexing does |
 
-Entry-derived targets tokenize and quote their terms (OR).
+Entry-derived targets tokenize and quote their terms so prose like `AND` is
+not an FTS operator.
 
-**Scoring:** `score > 0` means “matched”. Scores are corpus-relative.
+**Scoring:** `score > 0` means “matched”. Unmatched and absent cells score
+`0.0` (not `None`). Scores are corpus-relative.
 
 **Accepts:** `any`, `text`, `list_text`, `text_or_list`. **Produces:** `score`.
 
-**Errors:** `QuailSyntaxError` if the query is empty or the wrong shape, or an
-aggregation is not `"total"` / `"avg"` / `None`. `QuailScopeError` if a
-`GroupExpr` query is not entry-scoped. If search is not configured, the
-diagnostic is repairable — fix the config and rerun the whole exec.
+**Errors:** `QuailSyntaxError` if the query is the wrong shape, an empty
+`str` / `list[str]` / `list[Entry]`, or an aggregation is not `"total"` /
+`"avg"` / `None`. `QuailScopeError` if a `GroupExpr` query is not
+entry-scoped. `QuailRuntimeError` if resolved entry targets have no non-empty
+text, or if search is not configured (repairable — fix the config and rerun
+the whole exec).
 
 ---
 
@@ -721,24 +772,33 @@ Semantic(
 ) -> Operation
 ```
 
-Embedding cosine similarity under the dataset embedding profile (configured
-outside this API). Terminal. Rankable (`score`). Same query and aggregation
+Exact cosine similarity under the dataset embedding profile (configured
+outside this API). Terminal. Rankable (`score`). Ordinary score expression:
+usable in predicates and as a `retrieve` unit. Same query and aggregation
 shapes as `Lexical`.
 
 **Scoring:** cosine is **not** a match bit. Do not reuse Lexical’s
-`score > 0` as “matched.” Empty cells score `None`.
+`score > 0` as “matched.” Empty cells score `None` (Lexical absence is `0.0`).
 
 **Accepts:** `any`, `text`, `list_text`, `text_or_list`. **Produces:** `score`.
 
-**Errors:** same query / aggregation / configuration failures as `Lexical`.
+**Errors:** same construction-shape and configuration failures as `Lexical`
+(empty `str` / `list[str]` / `list[Entry]`, wrong shape, bad aggregation,
+non-entry group, unconfigured search, empty resolved entry targets). FTS parse
+failures (whitespace-only or punctuation-only string queries) are **Lexical
+only** — Semantic still embeds that string.
 
 ---
 
 ### Search performance
 
-Both `Lexical` and `Semantic` run fastest on a **bare source field** (no ops
-before the search op) that was processed for search. Transformed values and
-analysis fields load and score cell values instead.
+Both `Lexical` and `Semantic` run fastest on a **bare source field** (the
+search op is the only op, field `kind` is `"source"`, and that field was
+processed for search). Any prefix op — including identity `Value()` — skips
+that warm index and scores a scratch corpus (Lexical scores are
+corpus-relative, so they can differ). Transforming prefixes score the
+**pipeline output**, not the raw cell. Analysis fields load and score cell
+values.
 
 `quail_export_csv` is the warm-path route to fast search over session tags —
 see [Host tool: `quail_export_csv`](#host-tool-quail_export_csv).
@@ -770,7 +830,7 @@ Materialize a bounded list from a symbolic group.
 | `unit` | `Unit` \| `Expression` | `entries` | What each list item is. An Expression yields one computed value per remaining entry. Not a `GroupExpr` or a string. |
 | `group` | `GroupExpr` | `G0` | Population to draw from. Must match the unit’s scope. |
 | `limit` | `int` | `1` | Positive int. Omitted `limit` is **1**, not the whole group. |
-| `order` | `"top"` \| `"middle"` \| `"bottom"` | `"top"` | Which slice of the ordered candidate sequence to take. |
+| `order` | `"top"` \| `"middle"` \| `"bottom"` | `"top"` | Slice of the ordered candidate sequence: `"top"` is the prefix `items[:limit]`; `"bottom"` is the suffix `items[-limit:]` (order preserved, not reversed); `"middle"` is a centered window `start = (len - limit) // 2`. |
 | `rank` | `Ranking` \| `None` | `None` (`Ranking()`) | Ordering. Empty ranking = processing order. |
 
 **Returns:** always a `list` (possibly empty). Item type depends on `unit`:
@@ -787,10 +847,14 @@ Materialize a bounded list from a symbolic group.
 
 - Narrow with `.where` **before** expensive ranking when you can. Ranking
   scores the whole candidate set before applying `limit`.
-- `fields` and `values` units cannot be ranked (`QuailScopeError`).
+- `fields` and `values` units cannot take a **non-empty** ranking
+  (`QuailScopeError`). The default empty `Ranking()` is allowed.
 
 **Errors:** `QuailSyntaxError` for bad argument shapes; `QuailScopeError` for
-unit/group mismatch or ranking a non-rankable unit.
+unit/group mismatch, ranking a non-rankable unit, or out-of-scope member
+`Entry`s; `QuailFieldError` if a unit `Field` is unknown or kind-mismatched;
+`QuailRuntimeError` if materializing an Expression fails (bad data, search
+down, timeout).
 
 ---
 
@@ -813,8 +877,9 @@ Size of the population `retrieve` would draw from (no `limit` / `order` /
 
 **Returns:** `int`. For `Unit("values", field)`, the number of distinct present
 values over the full group. For `Unit("entries", field)`, the number of entries
-where that field is present. For an `Expression` unit, the number of matching
-entries (the expression is not evaluated just to count).
+where that field is present. For an `Expression` unit, `count` is `len` of the
+group’s entry ids — the unit expression is **not** run (so a Lexical unit does
+not require search to be configured, unlike `retrieve`).
 
 ---
 
@@ -829,14 +894,14 @@ overwritten.
 
 | Name | Type | Description |
 | --- | --- | --- |
-| `field` | `str` \| `Field` | Column name, `Field("topic")`, or `Field("topic", "analysis")`. |
+| `field` | `str` \| `Field` | Column name, `Field("topic")`, or `Field("topic", "analysis")`. The name is stripped; empty after strip is illegal. |
 
 **Returns:** `Field(name, kind="analysis")`. Creating an analysis field that
 already exists is a no-op and returns that Field.
 
-**Errors:** `QuailSyntaxError` if the name is empty, the argument is the wrong
-type, or `Field.kind` is `"source"`. `QuailFieldError` if the name collides
-with a source field.
+**Errors:** `QuailSyntaxError` if the name is empty after strip, the argument
+is the wrong type, or `Field.kind` is `"source"`. `QuailFieldError` if the
+name collides with a source field.
 
 ---
 
@@ -854,15 +919,16 @@ Write `value` onto `field` for every selected entry. Session overlay only.
 
 | Name | Type | Description |
 | --- | --- | --- |
-| `group` | `GroupExpr` \| `list[Entry]` | Entry-scoped group, or a list of `Entry` handles. An empty list is a no-op. |
+| `group` | `GroupExpr` \| `list[Entry]` | Entry-scoped group, or a list of `Entry` handles. An empty list or empty group writes nothing; `field` is still resolved (unknown/source field still errors). |
 | `field` | `Field` | Analysis field (create it first if needed). |
-| `value` | JSON-like | `bool`, `int`, finite `float`, `str`, lists, and dicts with string keys. **No `None` anywhere**, no cycles, no non-finite floats. |
+| `value` | `TagValue` | `bool`, `int`, finite `float`, `str`, lists, and dicts with string keys. **No `None` anywhere**, no cycles, no non-finite floats. |
 
 **Returns:** `None`.
 
 **Errors:** `QuailSyntaxError` if `field` is not a `Field`, `value` is `None` or
-not JSON-like, or `group` is the wrong shape. `QuailScopeError` if `group` is
-not entry-scoped. `QuailFieldError` if `field` is source or unknown.
+not a `TagValue`, or `group` is the wrong shape. `QuailScopeError` if `group`
+is not entry-scoped, or a listed `Entry` belongs to another dataset or
+version. `QuailFieldError` if `field` is source or unknown.
 
 ---
 
@@ -880,9 +946,9 @@ Clear analysis tags on the selection.
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| `group` | `GroupExpr` \| `list[Entry]` | required | Same as `tag`. Empty selection is a no-op. |
+| `group` | `GroupExpr` \| `list[Entry]` | required | Same as `tag`. Empty selection writes nothing; `field` is still resolved. |
 | `field` | `Field` | required | Analysis field to clear. |
-| `value` | `TagValue` \| `None` | `None` | `None` clears all selected cells. A value clears **exact matches** only. |
+| `value` | `TagValue` \| `None` | `None` | `None` clears all selected present cells. A value clears cells where Python `==` matches (not JSON-canonical identity). |
 
 **Returns:** `None`.
 
@@ -960,21 +1026,28 @@ class QuailRuntimeError(QuailError): ...
 
 Failures are atomic: no tags, no bindings, no printed text.
 
-Tool errors include `stable_error_code`, `message`, optional `repair_hint`, and
-optional source location. Prefer fixing from that over guessing.
+A failed `quail_exec` returns a `diagnostic` object with `error_class`,
+`stable_error_code`, `message`, and optional `repair_hint`. Prefer fixing from
+that over guessing. (`execution_id` is `null` for these failures.)
 
 ---
 
 ## Bindings
 
-After a **successful** exec, supported top-level names you assigned are
+After a **successful** exec, supported top-level names that still exist are
 restored next time in the **same session**. Delete with `del name` if it
-should not persist.
+should not persist. Rebinding to a persistable value before the exec ends
+is fine; only the **final** value of each name is encoded.
 
-| Persist | Do not persist |
+If that final value cannot persist, the whole exec fails (`QuailRuntimeError`)
+— nothing commits. Typical messages: `Cannot persist value of type …`, or
+`LiteralValue cannot contain …` (non-finite floats, cycles, non-string keys).
+
+| Persist | Fail the exec |
 | --- | --- |
-| JSON-like values | tuples, sets, callables, and similar |
-| Quail symbolic objects (`Field`, `Expression`, `Predicate`, `GroupExpr`, `Ranking`, `Unit`, `Entry`, ops) | Anything that cannot round-trip as a binding |
+| JSON-like scalars (including `None`), lists, and string-key dicts of JSON-like values — finite floats, no cycles | tuples, sets, callables, `re`, non-finite floats, cycles, non-string dict keys |
+| Quail objects: `Field`, `Unit`, `Operation` instances (e.g. `Length()`), `Expression`, `Predicate`, `GroupExpr`, `Ranking`, `Entry` | Op **factories** (`Length` itself) and other callables |
+| Lists of JSON-like values **and** lists of those Quail objects (including `retrieve` results; mixed lists of persistable objects are OK) | Dicts whose values are Quail objects (no list-style fallback) |
 
 Analysis tags remain scoped to the session + dataset version. Bindings are
 session-scoped.
@@ -983,17 +1056,21 @@ session-scoped.
 
 ## Python surface (bounded)
 
-**Allowed in spirit:** literals, assignment, `if` / `for` / `while` on
-**concrete** values, calls to the injected API, `entry.value` / `entry.fields`
-/ `group.where` / `re.escape`, and these string methods:
+Allowed: literals, assignment (not `+=` / annotations / walrus), `if` / `for`
+/ `while` on **concrete** values, calls to the injected API, `entry.value` /
+`entry.fields` / `group.where` / `re.escape`, and these string methods:
 
 `startswith`, `endswith`, `lower`, `upper`, `casefold`, `strip`, `lstrip`,
 `rstrip`, `replace`, `split`, `rsplit`, `splitlines`, `count`, `find`,
 `rfind`, `removeprefix`, `removesuffix`.
 
-**Not allowed:** imports, `def` / `lambda`, comprehensions, f-strings,
-`try` / `except`, `is`, `open` / `eval` / `exec`, mutating methods on
-containers (rebind instead), anything that reaches outside the sandbox.
+Not allowed (`QuailSyntaxError` at parse): imports, `def` / `lambda` /
+`class`, comprehensions, f-strings, `try` / `except`, `raise` / `assert` /
+`with`, `is`, `open` / `eval` / `exec`, mutating methods on containers,
+item or attribute assignment/deletion (`xs[0] = …`, `obj.x = …` — rebind the
+**name** instead), unlisted methods (including `str.join` / `str.format` and
+`dict.get` / `.items` / `.keys` / `.values`), `re.compile`, anything that
+reaches outside the sandbox.
 
 ---
 
@@ -1005,9 +1082,17 @@ containers (rebind instead), anything that reaches outside the sandbox.
 quail_export_csv(session_id, dataset_id)
 ```
 
-Writes source columns plus this session’s tags to a CSV **path** on the serve
-host (a filesystem path, not the file body) so the operator can process those
-tags as **source** columns later — the warm-path route to fast `Lexical` /
-`Semantic` over session tags. Export itself does not reprocess.
+Writes source columns plus this session’s **analysis fields** (created columns
+and tags) to a CSV on the serve host. The tool result is not the file body:
 
-Do not overlap it with `quail_exec` on the same `session_id` (`session_busy`).
+```text
+{"path": str, "session_id": str, "dataset_id": str,
+ "dataset_version_id": str, "columns": list[str], "row_count": int}
+```
+
+`path` is a filesystem path on the serve host. The operator can process those
+analysis columns as **source** columns later — the warm-path route to fast
+`Lexical` / `Semantic` over session tags. Export itself does not reprocess.
+
+Do not overlap it with `quail_exec` or another `quail_export_csv` on the same
+`session_id` (`session_busy`).
