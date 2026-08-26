@@ -16,7 +16,8 @@ entry_value_rpc / entry_fields_rpc:
   Require an active host callback and forward entry_value / entry_fields.
 
 build_namespace(endpoint, prints):
-  Give back the injected quail_exec namespace with RPC wrappers and safe builtins.
+  Give back the injected quail_exec namespace with RPC wrappers and safe builtins
+  (including enumerate and zip).
 
 host_call_from_endpoint(endpoint):
   Adapt HostEndpoint.call for the Entry context var.

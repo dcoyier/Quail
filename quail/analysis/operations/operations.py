@@ -119,7 +119,7 @@ def final_pipeline_kind(operations: tuple[Operation, ...]) -> str:
     """Walk the pipeline through OP_SPECS; give back the kind it produces."""
 
     if not operations:
-        raise QuailSyntaxError("Expression requires at least one operation")
+        return "any"
     current = "any"
     last_index = len(operations) - 1
     for index, operation in enumerate(operations):

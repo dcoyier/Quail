@@ -70,7 +70,7 @@ class RetrievePlan:
 
 @dataclass(frozen=True, slots=True)
 class CountPlan:
-    unit: Unit | Expression
+    unit: Unit
     group: GroupExpr
 
 
@@ -98,7 +98,7 @@ def plan_retrieve(
     group: Any = None,
     limit: int = 1,
     order: str = "top",
-    rank: Ranking | None = None,
+    rank: Ranking | Expression | None = None,
 ) -> RetrievePlan:
     from quail.analysis.group import G0
 
@@ -109,8 +109,10 @@ def plan_retrieve(
     limit = _require_positive_int(limit, label="limit")
     order = _require_order(order)
     ranking = Ranking() if rank is None else rank
+    if isinstance(ranking, Expression):
+        ranking = Ranking(expression=ranking)
     if not isinstance(ranking, Ranking):
-        raise QuailSyntaxError("rank must be a Ranking")
+        raise QuailSyntaxError("rank must be a Ranking or rankable Expression")
     _require_unit_group_scope(unit, group)
     if (
         isinstance(unit, Unit)
@@ -127,6 +129,8 @@ def plan_count(unit: Any = entries, group: Any = None) -> CountPlan:
     if group is None:
         group = G0
     unit = _require_unit_or_expression(unit)
+    if not isinstance(unit, Unit):
+        raise QuailSyntaxError("count unit must be a Unit")
     group = _require_group(group)
     _require_unit_group_scope(unit, group)
     return CountPlan(unit=unit, group=group)
@@ -146,6 +150,8 @@ def plan_create_field(field: str | Field) -> CreateFieldPlan:
         resolved = Field(name, kind="analysis")
     else:
         raise QuailSyntaxError("create_field requires a string name or Field")
+    if resolved.name == "id":
+        raise QuailSyntaxError('create_field cannot use the name "id"')
     return CreateFieldPlan(field=resolved)
 
 
@@ -185,9 +191,11 @@ def _require_unit_or_expression(unit: Any) -> Unit | Expression:
 
 
 def _require_group(group: Any) -> GroupExpr:
-    if not isinstance(group, GroupExpr):
-        raise QuailSyntaxError("group must be a GroupExpr")
-    return group
+    if isinstance(group, GroupExpr):
+        return group
+    if isinstance(group, list):
+        return GroupExpr("entries", members=group)
+    raise QuailSyntaxError("group must be a GroupExpr or list of Entry")
 
 
 def _require_tag_group(group: GroupExpr | list[Any]) -> GroupExpr | tuple[Entry, ...]:

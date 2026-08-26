@@ -159,6 +159,7 @@ def build_namespace(endpoint: HostEndpoint, prints: PrintBuffer) -> dict[str, An
         "str": str,
         "sum": sum,
         "tuple": tuple,
+        "zip": zip,
     }
 
     return {

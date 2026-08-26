@@ -75,6 +75,8 @@ def _require_nonempty_name(name: Any) -> None:
 
 
 def _require_allowed_kind(kind: Any) -> None:
+    if kind is not None and not isinstance(kind, str):
+        raise QuailSyntaxError("Field kind must be source, analysis, or None")
     if kind not in _ALLOWED_KINDS:
         raise QuailSyntaxError("Field kind must be source, analysis, or None")
 

@@ -57,11 +57,7 @@ class GroupExpr:
         if members is not None:
             if not isinstance(members, list):
                 raise QuailSyntaxError("GroupExpr members must be provided as a list")
-            for member in members:
-                if scope == "entries" and not isinstance(member, Entry):
-                    raise QuailSyntaxError("Entry-scoped group members must be Entry handles")
-                if scope == "fields" and not isinstance(member, Field):
-                    raise QuailSyntaxError("Field-scoped group members must be Field references")
+            members = _unique_members(scope, members)
         if composed:
             if not isinstance(left, GroupExpr) or left.scope != scope:
                 raise QuailScopeError("Group composition requires a compatible left GroupExpr")
@@ -132,6 +128,25 @@ class GroupExpr:
 
 def _member_record(member: Any) -> dict[str, Any]:
     return member.to_record()
+
+
+def _unique_members(scope: str, members: list[Any]) -> list[Any]:
+    unique: list[Any] = []
+    seen: set[Any] = set()
+    for member in members:
+        if scope == "entries":
+            if not isinstance(member, Entry):
+                raise QuailSyntaxError("Entry-scoped group members must be Entry handles")
+            key: Any = member.id
+        else:
+            if not isinstance(member, Field):
+                raise QuailSyntaxError("Field-scoped group members must be Field references")
+            key = (member.name, member.kind)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(member)
+    return unique
 
 
 G0 = GroupExpr(scope="entries", name="G0")

@@ -42,7 +42,7 @@ validate_operation_pipeline(operations):
   Walk the pipeline with final_pipeline_kind; discard the result.
 
 final_pipeline_kind(operations):
-  If there are no operations, raise a syntax error that Expression requires at least one operation.
+  If there are no operations, give back any (identity: the unread field value).
   Track the current kind starting as any.
   For each operation in order, look up its OpSpec:
     If there is no spec, raise unsupported operation.

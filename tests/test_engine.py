@@ -379,6 +379,10 @@ def test_plan_create_field_strips_field_name() -> None:
     assert plan.field.kind == "analysis"
     with pytest.raises(QuailSyntaxError, match="non-empty"):
         plan_create_field(Field("   "))
+    with pytest.raises(QuailSyntaxError, match='"id"'):
+        plan_create_field("id")
+    with pytest.raises(QuailSyntaxError, match='"id"'):
+        plan_create_field(Field("id"))
 
 
 def test_distinct_values_normalize_dict_key_order(tmp_path: Path) -> None:

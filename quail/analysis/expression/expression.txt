@@ -9,6 +9,7 @@ To create an Expression from input and zero or more operations:
   If input is an Expression, root is input.root and pipeline is input.operations plus the new operations.
   Otherwise raise that input must be a Field or Expression.
   Require every pipeline item is an Operation.
+  Drop leading Value() ops (identity). An empty pipeline is identity: the field value.
   Validate the operation pipeline.
   Remember root and operations.
 

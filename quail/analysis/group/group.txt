@@ -22,6 +22,7 @@ To create a GroupExpr:
     Require a list.
     For entries scope, every member must be an Entry.
     For fields scope, every member must be a Field.
+    Keep first-seen members (entry id, or field name and kind). Drop later duplicates.
   If composition is set:
     Require left is a GroupExpr with the same scope.
     For not, require right is omitted.
@@ -47,6 +48,12 @@ Iterating or indexing a GroupExpr:
 
 _member_record(member):
   Give back member.to_record().
+
+_unique_members(scope, members):
+  Walk the list once.
+  Require Entry handles for entries scope and Field references for fields scope.
+  Keep the first member for each entry id or (field name, kind).
+  Give back that list.
 
 G0:
   Builtin entry group named G0 — every entry.
