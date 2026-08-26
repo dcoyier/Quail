@@ -27,6 +27,12 @@ def test_every_op_appears_in_api_md_table() -> None:
         assert f"| `{kind}(" in api, f"{kind} missing from the api.md operations table"
 
 
+def test_every_op_appears_in_api_draft_md_table() -> None:
+    draft = (_DOCS / "api_draft.md").read_text(encoding="utf-8")
+    for kind in OP_SPECS:
+        assert f"| `{kind}(" in draft, f"{kind} missing from the api_draft.md operations table"
+
+
 def test_every_op_appears_in_core_md_table() -> None:
     core = (_DOCS / "core.md").read_text(encoding="utf-8")
     for kind in OP_SPECS:
