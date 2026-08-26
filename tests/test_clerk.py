@@ -17,15 +17,15 @@ from quail.run import apply_config
 
 def _as_dict(result: object) -> dict:
     if isinstance(result, CallToolResult):
-        assert result.structuredContent is not None
-        return dict(result.structuredContent)
+        assert result.structured_content is not None
+        return dict(result.structured_content)
     if isinstance(result, dict):
         return result
     raise AssertionError(f"Unexpected tool result type: {type(result)!r}")
 
 
 def _is_error(result: object) -> bool:
-    return isinstance(result, CallToolResult) and bool(result.isError)
+    return isinstance(result, CallToolResult) and bool(result.is_error)
 
 
 def _write_clerk_manifest(

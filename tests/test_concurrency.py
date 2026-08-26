@@ -82,8 +82,8 @@ def test_mcp_session_busy_diagnostic(tmp_path: Path) -> None:
 
     def as_dict(result: object) -> dict:
         if isinstance(result, CallToolResult):
-            assert result.structuredContent is not None
-            return dict(result.structuredContent)
+            assert result.structured_content is not None
+            return dict(result.structured_content)
         if isinstance(result, dict):
             return result
         raise AssertionError(type(result))
@@ -111,7 +111,7 @@ def test_mcp_session_busy_diagnostic(tmp_path: Path) -> None:
         )
         release.set()
         thread.join(timeout=2)
-        assert isinstance(result, CallToolResult) and result.isError
+        assert isinstance(result, CallToolResult) and result.is_error
         payload = as_dict(result)
         assert payload["diagnostic"]["stable_error_code"] == "session_busy"
 
@@ -157,8 +157,8 @@ def test_mcp_list_during_blocking_exec(tmp_path: Path) -> None:
 
     def as_dict(result: object) -> dict:
         if isinstance(result, CallToolResult):
-            assert result.structuredContent is not None
-            return dict(result.structuredContent)
+            assert result.structured_content is not None
+            return dict(result.structured_content)
         if isinstance(result, dict):
             return result
         if hasattr(result, "keys"):

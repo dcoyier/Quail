@@ -467,14 +467,14 @@ def test_mcp_tool_and_widget_and_dataset_info(
         assert "ui://probe/card.html" in resources
         probe = await server.call_tool("probe_dataset", {"dataset_id": "sample"})
         assert isinstance(probe, CallToolResult)
-        assert not probe.isError
-        assert probe.structuredContent is not None
-        assert probe.structuredContent["label"] == "alpha"
+        assert not probe.is_error
+        assert probe.structured_content is not None
+        assert probe.structured_content["label"] == "alpha"
         info = await server.call_tool("quail_get_dataset_info", {"dataset_id": "sample"})
         assert isinstance(info, CallToolResult)
-        assert not info.isError
-        assert info.structuredContent is not None
-        assert "Docs from alpha" in info.structuredContent["documentation"]
+        assert not info.is_error
+        assert info.structured_content is not None
+        assert "Docs from alpha" in info.structured_content["documentation"]
         body = list(await server.read_resource("ui://probe/card.html"))
         assert "probe" in str(body[0].content)
 
@@ -640,9 +640,9 @@ id = "notes"
 
 
 def test_register_connectors_noop_catalog() -> None:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
-    server = FastMCP("t")
+    server = MCPServer("t")
     register_connectors(
         server,
         ConnectorCatalog(),
@@ -666,7 +666,7 @@ def test_tool_spec_rejects_ctx_input_property() -> None:
 
 
 def test_connector_tools_list_publishes_input_schema_and_hides_context() -> None:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
 
@@ -743,7 +743,7 @@ def test_connector_tools_list_publishes_input_schema_and_hides_context() -> None
             )
         }
     )
-    server = FastMCP("t")
+    server = MCPServer("t")
     register_connectors(
         server,
         catalog,
@@ -753,8 +753,8 @@ def test_connector_tools_list_publishes_input_schema_and_hides_context() -> None
     async def run() -> None:
         tools = {tool.name: tool for tool in await server.list_tools()}
         tool = tools["schema_demo_show"]
-        assert tool.inputSchema == input_schema
-        assert "ctx" not in tool.inputSchema.get("properties", {})
+        assert tool.input_schema == input_schema
+        assert "ctx" not in tool.input_schema.get("properties", {})
         registered = server._tool_manager.get_tool("schema_demo_show")
         assert registered is not None
         assert registered.context_kwarg == "ctx"
@@ -763,7 +763,7 @@ def test_connector_tools_list_publishes_input_schema_and_hides_context() -> None
 
 
 def test_optional_connector_args_omit_none() -> None:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
 
@@ -837,7 +837,7 @@ def test_optional_connector_args_omit_none() -> None:
             )
         }
     )
-    server = FastMCP("t")
+    server = MCPServer("t")
     register_connectors(
         server,
         catalog,
@@ -847,15 +847,15 @@ def test_optional_connector_args_omit_none() -> None:
     async def run() -> None:
         omitted = await server.call_tool("opt_describe", {"dataset_id": "notes"})
         assert isinstance(omitted, CallToolResult)
-        assert not omitted.isError
-        assert omitted.structuredContent == {"include_version": True}
+        assert not omitted.is_error
+        assert omitted.structured_content == {"include_version": True}
         assert "include_version" not in seen[0]
         explicit = await server.call_tool(
             "opt_describe", {"dataset_id": "notes", "include_version": False}
         )
         assert isinstance(explicit, CallToolResult)
-        assert not explicit.isError
-        assert explicit.structuredContent == {"include_version": False}
+        assert not explicit.is_error
+        assert explicit.structured_content == {"include_version": False}
 
     asyncio.run(run())
 
@@ -892,10 +892,10 @@ def _catalog_with_probe_in(workspace_id: str) -> ConnectorCatalog:
 
 
 def test_tools_list_omits_connector_outside_workspace() -> None:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     current = {"id": "garden"}
-    server = FastMCP("t")
+    server = MCPServer("t")
 
     @server.tool()
     async def quail_setup() -> str:
@@ -915,10 +915,10 @@ def test_tools_list_omits_connector_outside_workspace() -> None:
         assert names == {"quail_setup"}
         result = await server.call_tool("probe_dataset", {"dataset_id": "sample"})
         assert isinstance(result, CallToolResult)
-        assert result.isError
-        assert result.structuredContent is not None
+        assert result.is_error
+        assert result.structured_content is not None
         assert (
-            result.structuredContent["diagnostic"]["stable_error_code"]
+            result.structured_content["diagnostic"]["stable_error_code"]
             == "connector_not_in_workspace"
         )
 
@@ -926,9 +926,9 @@ def test_tools_list_omits_connector_outside_workspace() -> None:
 
 
 def test_tools_list_omits_connectors_when_workspace_unresolved() -> None:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
-    server = FastMCP("t")
+    server = MCPServer("t")
 
     @server.tool()
     async def quail_setup() -> str:
@@ -952,7 +952,7 @@ def test_tools_list_omits_connectors_when_workspace_unresolved() -> None:
 
 
 def test_connector_file_route_serves_bytes(tmp_path: Path) -> None:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
     from starlette.testclient import TestClient
 
     from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
@@ -1013,7 +1013,7 @@ def test_connector_file_route_serves_bytes(tmp_path: Path) -> None:
             )
         }
     )
-    server = FastMCP("t")
+    server = MCPServer("t")
     register_connectors(
         server,
         catalog,
@@ -1032,12 +1032,12 @@ def test_connector_file_route_serves_bytes(tmp_path: Path) -> None:
 
 
 def test_connector_file_route_expired_is_404(tmp_path: Path) -> None:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
     from starlette.testclient import TestClient
 
     asset, catalog = _file_route_catalog(tmp_path, expires_at=1)
     del asset
-    server = FastMCP("t")
+    server = MCPServer("t")
     register_connectors(
         server,
         catalog,
@@ -1049,7 +1049,7 @@ def test_connector_file_route_expired_is_404(tmp_path: Path) -> None:
 
 
 def test_connector_file_route_authenticate_route(tmp_path: Path) -> None:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
     from starlette.testclient import TestClient
 
     from quail.auth.errors import ForbiddenError, UnauthorizedError
@@ -1067,7 +1067,7 @@ def test_connector_file_route_authenticate_route(tmp_path: Path) -> None:
             raise ForbiddenError("Not a member of this workspace")
         return "alice"
 
-    server = FastMCP("t")
+    server = MCPServer("t")
     register_connectors(
         server,
         catalog,
@@ -1192,7 +1192,7 @@ def test_unknown_config_keys_rejected_even_with_empty_allowlist(
 
 
 def test_tool_name_conflict_across_connectors() -> None:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
 
@@ -1231,7 +1231,7 @@ def test_tool_name_conflict_across_connectors() -> None:
             )
         }
     )
-    server = FastMCP("conflict")
+    server = MCPServer("conflict")
     with pytest.raises(ConnectorError, match="TOOL_NAME_CONFLICT|claimed"):
         register_connectors(
             server,
@@ -1241,7 +1241,7 @@ def test_tool_name_conflict_across_connectors() -> None:
 
 
 def test_connector_tool_cannot_claim_core_mcp_name() -> None:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
     from quail.connectors.load import ConnectedProvider, WorkspaceConnectorBundle
     from quail.connectors.mcp_wire import CORE_MCP_TOOL_NAMES
@@ -1292,7 +1292,7 @@ def test_connector_tool_cannot_claim_core_mcp_name() -> None:
 
     for name in ("quail_exec", "quail_export_csv", "provide_feedback", "quail_list_workspaces"):
         assert name in CORE_MCP_TOOL_NAMES
-        server = FastMCP("core-clash")
+        server = MCPServer("core-clash")
 
         @server.tool()
         async def quail_setup() -> str:
@@ -1312,9 +1312,9 @@ def test_tool_result_text_not_merged_into_structured() -> None:
     from quail.mcp.results import success_result
 
     result = success_result({"assets": [{"id": "a"}]}, text="two previews")
-    assert result.structuredContent == {"assets": [{"id": "a"}]}
+    assert result.structured_content == {"assets": [{"id": "a"}]}
     assert result.content[0].text == "two previews"
-    assert "text" not in result.structuredContent
+    assert "text" not in result.structured_content
 
 
 def test_tool_result_images_become_image_content() -> None:
@@ -1336,11 +1336,11 @@ def test_tool_result_images_become_image_content() -> None:
         text=wrapped.text,
         images=wrapped.images,
     )
-    assert result.structuredContent == {"assets": [{"id": "a"}]}
+    assert result.structured_content == {"assets": [{"id": "a"}]}
     assert isinstance(result.content[0], TextContent)
     assert result.content[0].text == "one preview"
     assert isinstance(result.content[1], ImageContent)
-    assert result.content[1].mimeType == "image/png"
+    assert result.content[1].mime_type == "image/png"
     assert result.content[1].data == base64.b64encode(png).decode("ascii")
 
 
@@ -1355,7 +1355,7 @@ def test_tool_result_images_only_omit_text_content() -> None:
         {"assets": [{"id": "a"}]},
         images=(ToolImage(png),),
     )
-    assert result.structuredContent == {"assets": [{"id": "a"}]}
+    assert result.structured_content == {"assets": [{"id": "a"}]}
     assert len(result.content) == 1
     assert isinstance(result.content[0], ImageContent)
     assert not any(isinstance(block, TextContent) for block in result.content)

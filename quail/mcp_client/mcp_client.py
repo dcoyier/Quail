@@ -6,21 +6,15 @@ import argparse
 import asyncio
 import json
 import sys
-from contextlib import AsyncExitStack, asynccontextmanager
-from datetime import timedelta
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
-import httpx
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
+from mcp.client import Client
 from mcp.types import CallToolResult
 
 DEFAULT_URL = "http://127.0.0.1:8000/mcp"
 # Cover Quail extended quail_exec wall time (100s) with queue/headroom budget.
 _READ_TIMEOUT_SECONDS = 300.0
-_CONNECT_TIMEOUT_SECONDS = 30.0
-_TOOL_READ_TIMEOUT = timedelta(seconds=_READ_TIMEOUT_SECONDS)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -46,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         result = asyncio.run(call_tool(url, args.tool_name, arguments))
         _print_json(_call_result_payload(result))
-        return 1 if result.isError else 0
+        return 1 if result.is_error else 0
     except Exception as error:
         print(f"mcp_client: {_client_error_message(error)}", file=sys.stderr)
         return 1
@@ -77,16 +71,16 @@ def load_arguments(spec: str) -> dict[str, Any]:
 
 
 async def list_tools(url: str) -> dict[str, Any]:
-    """Connect, initialize, list tools. Give back a JSON-ready mapping."""
+    """Connect, list tools. Give back a JSON-ready mapping."""
 
-    async with _session(url) as session:
-        result = await session.list_tools()
+    async with Client(url, read_timeout_seconds=_READ_TIMEOUT_SECONDS) as client:
+        result = await client.list_tools()
     return {
         "tools": [
             {
                 "name": tool.name,
                 "description": tool.description,
-                "inputSchema": tool.inputSchema,
+                "inputSchema": tool.input_schema,
             }
             for tool in result.tools
         ]
@@ -98,13 +92,13 @@ async def call_tool(
     name: str,
     arguments: dict[str, Any] | None = None,
 ) -> CallToolResult:
-    """Connect, initialize, call one tool. Give back the MCP CallToolResult."""
+    """Connect, call one tool. Give back the MCP CallToolResult."""
 
-    async with _session(url) as session:
-        return await session.call_tool(
+    async with Client(url, read_timeout_seconds=_READ_TIMEOUT_SECONDS) as client:
+        return await client.call_tool(
             name,
             arguments or {},
-            read_timeout_seconds=_TOOL_READ_TIMEOUT,
+            read_timeout_seconds=_READ_TIMEOUT_SECONDS,
         )
 
 
@@ -171,33 +165,13 @@ def _client_error_message(error: BaseException) -> str:
     return text or type(current).__name__
 
 
-@asynccontextmanager
-async def _session(url: str) -> AsyncIterator[ClientSession]:
-    """Open Streamable HTTP, initialize a ClientSession, then close cleanly."""
-
-    async with AsyncExitStack() as stack:
-        http_client = await stack.enter_async_context(
-            httpx.AsyncClient(
-                timeout=httpx.Timeout(
-                    _CONNECT_TIMEOUT_SECONDS,
-                    read=_READ_TIMEOUT_SECONDS,
-                ),
-                follow_redirects=False,
-            )
-        )
-        transport = streamable_http_client(url, http_client=http_client)
-        read_write = await stack.enter_async_context(transport)
-        read_stream, write_stream = read_write[0], read_write[1]
-        session = await stack.enter_async_context(ClientSession(read_stream, write_stream))
-        await session.initialize()
-        yield session
-
-
 def _call_result_payload(result: CallToolResult) -> dict[str, Any]:
     return {
-        "isError": bool(result.isError),
-        "structuredContent": result.structuredContent,
-        "content": [block.model_dump(mode="json") for block in result.content],
+        "isError": bool(result.is_error),
+        "structuredContent": result.structured_content,
+        "content": [
+            block.model_dump(mode="json", by_alias=True) for block in result.content
+        ],
     }
 
 

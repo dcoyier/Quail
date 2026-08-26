@@ -17,20 +17,19 @@ _ToolHost remembers everything the core tools need, however the server was built
   resolve_user (user resolver)
 
 ClerkMcpRuntime remembers clerk-mode MCP dependencies (db path, feedback, users,
-verifier, sticky store, host, port, optional SearchRuntime,
+verifier, sticky store, optional SearchRuntime,
 include_dataset_docs_in_setup).
 
 PreparedMcp remembers server, optional search_runtime, optional connector_catalog.
 close(): close the search pool and call ConnectorCatalog.close when present.
 
 create_mcp_server(db_path, feedback_path, workspace_id default local, api_docs_path default None,
-                  host default 127.0.0.1, port default 8000,
                   search_runtime default None, connector_catalog default None,
                   include_dataset_docs_in_setup default false):
   Build a _ToolHost whose resolvers always give back the fixed workspace_id
   with user_id None.
-  Build FastMCP with unrestricted instructions, register the core tools, and
-  give back the server.
+  Build MCPServer with unrestricted instructions, register the core tools, and
+  give back the server. Bind address is chosen later at serve run.
 
 create_mcp_server_from_config(config, api_docs_path default None, verifier default None):
   Configure process-wide exec slots from config.max_concurrent_executions.
@@ -46,7 +45,7 @@ create_clerk_mcp_server(config, verifier, api_docs_path default None,
   Remember ClerkMcpRuntime (build search runtime from config when omitted;
   include_dataset_docs_in_setup from config). Build ClerkJwtVerifier with
   config.clerk_authorized_parties when verifier is omitted.
-  Build FastMCP with locking-agnostic clerk instructions, MCP AuthSettings
+  Build MCPServer with locking-agnostic clerk instructions, MCP AuthSettings
   (Clerk issuer + public /mcp resource), and ClerkAccessTokenVerifier
   (token verify plus TOML [[users]] allowlist).
   Register /.well-known/oauth-authorization-server proxy for older clients.

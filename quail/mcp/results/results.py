@@ -49,7 +49,7 @@ def success_result(
     JSON-serialized into a text content block.
     When ``text`` is omitted and ``images`` is non-empty, content is
     image-only (no text block).
-    ``structuredContent`` is always the payload alone (never merged with text).
+    ``structured_content`` is always the payload alone (never merged with text).
     Optional ``images`` become MCP ``ImageContent`` blocks after any text block.
     """
 
@@ -65,13 +65,13 @@ def success_result(
             ImageContent(
                 type="image",
                 data=base64.b64encode(image.data).decode("ascii"),
-                mimeType=image.mime_type,
+                mime_type=image.mime_type,
             )
         )
     return CallToolResult(
         content=content,
-        structuredContent=payload,
-        isError=False,
+        structured_content=payload,
+        is_error=False,
     )
 
 def validate_time_window(time_window: str | None) -> str:
@@ -98,8 +98,8 @@ def error_result(
     text = json.dumps(payload, ensure_ascii=False)
     return CallToolResult(
         content=[TextContent(type="text", text=text)],
-        structuredContent=payload,
-        isError=True,
+        structured_content=payload,
+        is_error=True,
     )
 
 

@@ -135,23 +135,23 @@ def test_list_and_call_against_live_server(mcp_url: str) -> None:
     assert "quail_exec" in names
 
     setup = asyncio.run(call_tool(mcp_url, "quail_setup", {}))
-    assert setup.isError is False
-    assert setup.structuredContent is not None
-    assert "session_id" in setup.structuredContent
-    assert "datasets" in setup.structuredContent
+    assert setup.is_error is False
+    assert setup.structured_content is not None
+    assert "session_id" in setup.structured_content
+    assert "datasets" in setup.structured_content
 
-    session_id = setup.structuredContent["session_id"]
-    dataset_id = setup.structuredContent["datasets"][0]["dataset_id"]
+    session_id = setup.structured_content["session_id"]
+    dataset_id = setup.structured_content["datasets"][0]["dataset_id"]
     exec_args = {
         "session_id": session_id,
         "dataset_id": dataset_id,
         "code": "print(count())",
     }
     outcome = asyncio.run(call_tool(mcp_url, "quail_exec", exec_args))
-    assert outcome.isError is False
-    assert outcome.structuredContent is not None
-    assert "printed_output" in outcome.structuredContent
-    assert "2" in outcome.structuredContent["printed_output"]
+    assert outcome.is_error is False
+    assert outcome.structured_content is not None
+    assert "printed_output" in outcome.structured_content
+    assert "2" in outcome.structured_content["printed_output"]
 
 
 def test_main_list_and_call_exit_codes(mcp_url: str, capsys: pytest.CaptureFixture[str]) -> None:

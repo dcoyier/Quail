@@ -13,7 +13,7 @@ T = TypeVar("T")
 async def run_blocking(fn: Callable[[], T]) -> T:
     """Await ``fn()`` in a worker thread without abandoning on cancel.
 
-    FastMCP sync tools block the asyncio loop. Call this from ``async def``
+    MCPServer sync tools block the asyncio loop. Call this from ``async def``
     tools so catalog/auth/exec work cannot freeze other MCP clients.
     """
 

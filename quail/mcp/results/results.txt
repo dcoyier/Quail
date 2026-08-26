@@ -2,11 +2,11 @@ success_printed_output(printed_output):
   Give back a success CallToolResult with {"printed_output": printed_output}.
 
 success_result(payload, text default None, images default empty):
-  Give back a CallToolResult with isError false and the payload as structuredContent.
+  Give back a CallToolResult with is_error false and the payload as structured_content.
   When text is set, use it for the text content block.
   When text is omitted and images is empty, JSON-dump payload into a text block.
   When text is omitted and images is non-empty, omit the text block (image-only).
-  Never merge text into structuredContent.
+  Never merge text into structured_content.
   Append one ImageContent block per ToolImage after any text block (base64 data).
 
 validate_time_window(time_window):
@@ -16,7 +16,7 @@ validate_time_window(time_window):
 
 error_result(error, execution_id default None, repair_hint default None):
   Build a diagnostic from the exception.
-  Give back a CallToolResult with isError true, execution_id, and diagnostic.
+  Give back a CallToolResult with is_error true, execution_id, and diagnostic.
 
 diagnostic_from_exception(error, repair_hint default None):
   Classify the exception into error_class and stable_error_code.

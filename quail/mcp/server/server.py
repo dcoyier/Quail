@@ -1,4 +1,4 @@
-"""Thin FastMCP adapter over host analysis APIs (unrestricted + Clerk)."""
+"""Thin MCPServer adapter over host analysis APIs (unrestricted + Clerk)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import CallToolResult
 
 from quail.analysis.errors import QuailRuntimeError, QuailScopeError
@@ -104,17 +104,15 @@ class ClerkMcpRuntime:
     users: tuple[UserSpec, ...]
     verifier: TokenVerifier
     sticky: StickyWorkspaceStore
-    host: str
-    port: int
     search_runtime: SearchRuntime | None = None
     include_dataset_docs_in_setup: bool = False
 
 
 @dataclass(slots=True)
 class PreparedMcp:
-    """FastMCP server plus resources that must close when serve exits."""
+    """MCPServer plus resources that must close when serve exits."""
 
-    server: FastMCP
+    server: MCPServer
     search_runtime: SearchRuntime | None = None
     connector_catalog: Any | None = None
 
@@ -135,13 +133,11 @@ def create_mcp_server(
     *,
     workspace_id: str = DEFAULT_WORKSPACE_ID,
     api_docs_path: str | Path | None = None,
-    host: str = "127.0.0.1",
-    port: int = 8000,
     search_runtime: SearchRuntime | None = None,
     connector_catalog: Any | None = None,
     include_dataset_docs_in_setup: bool = False,
-) -> FastMCP:
-    """Build an unrestricted FastMCP app with the core tools."""
+) -> MCPServer:
+    """Build an unrestricted MCPServer app with the core tools."""
 
     docs_path = Path(api_docs_path).expanduser().resolve() if api_docs_path is not None else None
     tool_host = _ToolHost(
@@ -154,11 +150,9 @@ def create_mcp_server(
         resolve=lambda _ctx: (workspace_id, None),
         resolve_user=lambda _ctx: None,
     )
-    server = FastMCP(
+    server = MCPServer(
         "quail",
         instructions=unrestricted_instructions(workspace_id),
-        host=host,
-        port=port,
     )
     _register_core_tools(server, tool_host)
     if connector_catalog is not None:
@@ -195,8 +189,6 @@ def create_mcp_server_from_config(
             config.feedback,
             workspace_id=config.workspace_id,
             api_docs_path=api_docs_path,
-            host=config.bind,
-            port=config.port,
             search_runtime=runtime,
             connector_catalog=connector_catalog,
             include_dataset_docs_in_setup=config.include_dataset_docs_in_setup,
@@ -232,7 +224,7 @@ def create_clerk_mcp_server(
     api_docs_path: str | Path | None = None,
     search_runtime: SearchRuntime | None = None,
     connector_catalog: Any | None = None,
-) -> FastMCP:
+) -> MCPServer:
     """Build Clerk-authenticated MCP with list/switch workspace tools."""
 
     docs_path = Path(api_docs_path).expanduser().resolve() if api_docs_path is not None else None
@@ -245,17 +237,13 @@ def create_clerk_mcp_server(
         users=config.users,
         verifier=verifier,
         sticky=StickyWorkspaceStore(),
-        host=config.bind,
-        port=config.port,
         search_runtime=search_runtime,
         include_dataset_docs_in_setup=config.include_dataset_docs_in_setup,
     )
     assert config.clerk_domain is not None
-    server = FastMCP(
+    server = MCPServer(
         "quail",
         instructions=clerk_instructions(locked=False),
-        host=config.bind,
-        port=config.port,
         auth=build_clerk_auth_settings(
             clerk_domain=config.clerk_domain,
             public_base_url=config.public_base_url,
@@ -386,7 +374,7 @@ def _export_csv_payload(
     }
 
 
-def _register_core_tools(server: FastMCP, host: _ToolHost) -> None:
+def _register_core_tools(server: MCPServer, host: _ToolHost) -> None:
     """Register the frozen core tool surface once; modes differ only in resolvers."""
 
     @server.tool(title="Set up Quail workspace")
@@ -730,7 +718,7 @@ def _clerk_resolve_user(runtime: ClerkMcpRuntime) -> _ResolveUser:
     return resolve
 
 
-def _register_clerk_workspace_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
+def _register_clerk_workspace_tools(server: MCPServer, runtime: ClerkMcpRuntime) -> None:
     @server.tool(title="List Quail workspaces")
     async def quail_list_workspaces(ctx: Context | None = None) -> CallToolResult:
         """List workspaces you may use and the active sticky workspace id.

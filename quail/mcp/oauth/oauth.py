@@ -11,7 +11,7 @@ from typing import Any
 import anyio
 from mcp.server.auth.provider import AccessToken
 from mcp.server.auth.settings import AuthSettings
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from pydantic import AnyHttpUrl
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
@@ -98,7 +98,7 @@ class ClerkAccessTokenVerifier:
         )
 
 
-def register_clerk_oauth_discovery(server: FastMCP, *, clerk_domain: str) -> None:
+def register_clerk_oauth_discovery(server: MCPServer, *, clerk_domain: str) -> None:
     """Expose AS metadata for older MCP clients (proxy Clerk's discovery doc)."""
 
     issuer = clerk_issuer_url(clerk_domain)
