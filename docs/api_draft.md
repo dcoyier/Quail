@@ -23,7 +23,7 @@ sandbox.
 | Argument | Meaning |
 | --- | --- |
 | `session_id` | Durable analysis context in one workspace. Bindings persist across successful calls in this session. Analysis fields and tagged values persist for this session and dataset version. A session belongs to the workspace in which it was created; reuse it serially. After `quail_switch_workspace`, start a new session. Unrestricted deployments have one fixed workspace. Run one `quail_exec` at a time per `session_id`. Overlap with another `quail_exec` or `quail_export_csv` on the same session fails with stable code `session_busy`. Process-wide execution capacity exhausted fails with `server_busy`. Both report `error_class` `"QuailRuntimeError"`. Retry the same session; do not start a new one. |
-| `dataset_id` | Selects one dataset. The call uses that dataset's active immutable version. |
+| `dataset_id` | Selects one dataset. The call uses that dataset's active immutable version; `entry.dataset_version_id` reports which version you got. |
 | `code` | Bounded Quail Python (no imports, no files, no network). |
 | `time_window` | `"standard"` (30 seconds wall-clock, 15 seconds CPU) or `"extended"` (100 seconds wall-clock, 60 seconds CPU). Omitted or `null` means `"standard"`. Worker resident memory is capped at 256 MiB for both. |
 
@@ -44,8 +44,8 @@ sandbox.
 argument-validation failures may use the client's native tool-error form
 instead of this envelope.
 
-Nothing partial is kept if `quail_exec` fails — no tags, no bindings, no
-printed text.
+Nothing partial is kept if `quail_exec` fails — no overlay writes (`create_field`,
+`tag`, `untag`), no bindings, no printed text.
 
 Only `print(...)` adds text to `printed_output`. The value of a bare Python
 expression statement is discarded.
@@ -112,15 +112,17 @@ Callables, groups, units, types, ops, `re`, and error classes are **reserved**
 
 - **`G0`**: all entries (import order). **`G1`**: all fields (source, then
   analysis). Retrieve fields with `retrieve(unit=fields, group=G1, ...)`.
-- **`entries` / `fields`**: default units for `retrieve` / `count` — not
-  groups. `retrieve(group=G1)` fails because the default unit is `entries`.
+- **`entries` / `fields`**: prebuilt `Unit` values, not groups. `entries` is
+  the default unit. `fields` requires a field group such as `G1`.
+  `retrieve(group=G1)` fails because the default unit is `entries`.
 
 Compose `Predicate` values and same-scope `GroupExpr` values with `&`, `|`,
 and `~`. Compare `Expression` values with `==`, `!=`, `<`, `<=`, `>`, `>=`.
-Do **not** use Python `and` / `or` / `not` on those symbolic values. Do not
-truth-test an `Expression`, `Predicate`, or `GroupExpr` with `if`, `while`,
-or `bool(...)`. Do not chain comparisons (`a < expr < b`). Use `== None` /
-`!= None`, not `is None`.
+Python `and` / `or` / `not` work only on materialized values. On an
+`Expression`, `Predicate`, or `GroupExpr`, use `&` `|` `~`. Do not
+truth-test those symbolic values with `if`, `while`, or `bool(...)`. Do not
+chain comparisons (`a < expr < b`). `is` is rejected at parse — write
+`== None` / `!= None`.
 
 `Operation` is the opaque value returned by operation factories such as
 `Length()`. It is not an injected constructor.
@@ -225,11 +227,13 @@ A `Field` identifies a column by name. It is not a cell value.
 
 **Notes**
 
-- Two `Field` values compare equal only to each other, by `(name, kind)`.
+- Two `Field` values compare equal by `(name, kind)`. `==` / `!=` against a
+  non-`Field` raises `QuailSyntaxError`.
 - Do not compare a Field to a cell value. Read the column with
   `Expression(field, Value())` (or a numeric / search op) and compare that.
-- A restored binding with a stale `kind` does not fail the exec. Using that
-  Field still raises `QuailFieldError`; `del saved_field` recovers.
+- Commit checks only names you bind or rebind in this exec, so a restored
+  binding with a stale `kind` does not fail the exec. Using that Field still
+  raises `QuailFieldError`; `del saved_field` recovers.
 
 ---
 
@@ -263,7 +267,7 @@ not the Unit.
 | `Unit("entries")` / `entries` | Entry handles. |
 | `Unit("entries", field)` | Present values of `field`, one per matching entry (absent cells dropped; duplicates kept). Items are cell values, not `Entry` handles. |
 | `Unit("fields")` / `fields` | Field handles. Use with a field group such as `G1`. |
-| `Unit("values", field)` | Distinct present values over the **full** group, first-seen in group processing order. Distinctness is JSON-text identity (`1` and `1.0` are distinct). `limit` / `order` apply to that distinct sequence, not to entries first. |
+| `Unit("values", field)` | Distinct present values over the **full** group, first-seen in the group's own order. Distinctness is JSON-text identity (`1` and `1.0` are distinct). `limit` / `order` apply to that distinct sequence, not to entries first. |
 
 **Errors**
 
@@ -392,7 +396,7 @@ be first. If `Lexical(...)` / `Semantic(...)` appear, they must be last.
 
 | Operator | Right operand |
 | --- | --- |
-| `==` `!=` | `None`, a JSON-like literal (finite floats; lists/dicts with string keys; no cycles), or another `Expression`. Use `== None` / `!= None`, not `is None`. |
+| `==` `!=` | A `JSONLike` value, or another `Expression`. `is` is rejected at parse — write `== None` / `!= None`. |
 | `<` `<=` `>` `>=` | A finite numeric literal (not `bool`, not `inf`/`nan`), or another `Expression`. Expression-to-Expression ordering is accepted at construction and fails at evaluation unless both non-missing results are numeric. |
 
 **Ranking arithmetic** — an Expression used with `+` / `*` becomes a `Ranking`.
@@ -484,8 +488,8 @@ G1: GroupExpr  # all fields (source then analysis)
 Symbolic population of entries or fields. Not a Python list — pass it to
 `retrieve` / `count`. Do not iterate, index, or use in `if` / `while`.
 
-Exactly one population form per constructor call. `&` `|` `~` build a fourth
-**composition** form (do not mix it with the others):
+One constructor call takes exactly one of `predicate`, `members`, or `name`.
+`&` `|` `~` combine finished groups; they are not constructor arguments:
 
 | Form | Call | Meaning |
 | --- | --- | --- |
@@ -504,7 +508,7 @@ or `G1` (fields), in that universe's order.
 | --- | --- | --- | --- |
 | `scope` | `"entries"` \| `"fields"` | required | What the group contains. |
 | `predicate` | `Predicate` \| `None` | `None` | Entry filter. Invalid on field groups. |
-| `members` | `list[Entry]` \| `list[Field]` \| `None` | `None` | Must be a `list`. Entry groups take `Entry` handles; field groups take `Field` references. |
+| `members` | `list[Entry]` \| `list[Field]` \| `None` | `None` | Must be a `list`. An empty list is a legal empty group. Entry groups take `Entry` handles; field groups take `Field` references. |
 | `name` | `str` \| `None` | `None` | Only `"G0"` with `"entries"`, or `"G1"` with `"fields"`. |
 
 **Errors**
@@ -551,12 +555,14 @@ class Ranking:
     def __init__(self, expression: Expression | None = None) -> None: ...
 ```
 
-How `retrieve` orders entry-scoped candidates. Empty ranking = the group's
-processing order. Non-empty = score each candidate, **higher first**. Ties
-break by dataset import order. A missing or non-finite score sorts as lowest
-(`-inf`): `AsNumber` / `Semantic` of an absent cell is `None` → last;
-`Length` absence is `0`; `Lexical` absence is `0.0`. In a sum, any `-inf`
-term makes the total `-inf`.
+How `retrieve` orders entry-scoped candidates. An empty ranking keeps the
+group's own order: import order for `G0`, source-then-analysis for `G1`,
+supplied order for `members` groups, left-then-unseen-right for union.
+Non-empty = score each candidate, **higher first**. Ties break by dataset
+import order. A missing (`None`) or non-finite score sorts last, as `-inf`.
+`AsNumber` and `Semantic` produce `None` for an absent cell. `Length` and
+`Lexical` never go missing: absence is the finite score `0` / `0.0`, which
+sorts by value. In a sum, any `-inf` term makes the total `-inf`.
 
 **Parameters**
 
@@ -564,8 +570,8 @@ term makes the total `-inf`.
 | --- | --- | --- | --- |
 | `expression` | `Expression` \| `None` | `None` | A **single** rankable Expression. Combined Rankings are already Rankings — do not wrap them again. |
 
-A rankable Expression ends in `AsNumber()`, `Length()`, `Lexical()`, or
-`Semantic()`. An `Expression` ending in `Lexical(...)` or `Semantic(...)` is
+A rankable Expression is one whose final pipeline kind is `number` or
+`score`. An `Expression` ending in `Lexical(...)` or `Semantic(...)` is
 an ordinary score expression — use it in predicates or as a `retrieve` unit;
 wrap it in `Ranking(expression=...)` only for ordered retrieval.
 
@@ -610,8 +616,8 @@ arguments are not aligned.
 
 ## Operations
 
-Each op is a **factory**: call it, pass the result to `Expression`. Ops are
-not classes you subclass. Pipelines are checked at construction.
+Each op is a **factory**: call it, pass the result to `Expression`.
+Pipelines are checked at construction.
 
 ### Pipeline kinds
 
@@ -940,11 +946,11 @@ Materialize a bounded list from a symbolic group.
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| `unit` | `Unit` \| `Expression` | `entries` | What each list item is. An Expression yields one computed value per remaining entry. Not a `GroupExpr` or a string. |
+| `unit` | `Unit` \| `Expression` | `entries` | What each list item is. An Expression yields one computed value per entry that remains after ranking and `limit`. Not a `GroupExpr` or a string. |
 | `group` | `GroupExpr` | `G0` | Population to draw from. Must match the unit's scope. |
 | `limit` | `int` | `1` | Positive `int` (`bool` is invalid). Omitted `limit` is **1**, not the whole group. `limit` must be at least 1, so do not pass `limit=count(...)` when the group is empty. |
 | `order` | `"top"` \| `"middle"` \| `"bottom"` | `"top"` | Slice of the ordered candidate sequence. If `limit >= len(items)`, all items are returned. `"top"` is the prefix `items[:limit]`. `"bottom"` is the suffix `items[-limit:]` (order preserved, not reversed). `"middle"` is a centered window `start = (len(items) - limit) // 2`. |
-| `rank` | `Ranking` \| `None` | `None` | Ordering. `None` is normalized to `Ranking()`. Empty ranking = processing order. |
+| `rank` | `Ranking` \| `None` | `None` | Ordering. `None` is normalized to `Ranking()`. Empty ranking keeps the group's own order. |
 
 **Returns:** always a `list` (possibly empty). Item type depends on `unit`:
 
@@ -1039,12 +1045,13 @@ tag(
 ) -> None
 ```
 
-Write `value` to `field` for every selected entry. Session overlay only.
+Write `value` to `field` for every selected entry, replacing any value already
+there. Session overlay only.
 
 | Name | Type | Description |
 | --- | --- | --- |
 | `group` | `GroupExpr` \| `list[Entry]` | Entry-scoped group, or a list of `Entry` handles. Prefer the group. `retrieve` defaults to `limit=1`, so `tag(retrieve(group=matching), ...)` tags at most one entry. An empty list or empty group writes nothing; `field` is still resolved (unknown/source field still errors). |
-| `field` | `Field` | Analysis field (create it first if needed). |
+| `field` | `Field` | An existing analysis field. Call `create_field` first; tagging an unknown field is a `QuailFieldError`. |
 | `value` | `TagValue` | Recursively: `bool`, `int`, finite `float`, `str`, list, or string-keyed dictionary. **No `None` anywhere**, no cycles, no non-finite floats. |
 
 **Returns:** `None`.
@@ -1073,7 +1080,7 @@ Clear analysis tags on the selection.
 | --- | --- | --- | --- |
 | `group` | `GroupExpr` \| `list[Entry]` | required | Same as `tag`. Empty selection writes nothing; `field` is still resolved. |
 | `field` | `Field` | required | Analysis field to clear. |
-| `value` | `TagValue` \| `None` | `None` | `None` clears all selected present cells. A value clears cells where Python `==` matches (not JSON-canonical identity). |
+| `value` | `TagValue` \| `None` | `None` | `None` clears all selected present cells. A value clears cells where Python `==` matches, so `True` also matches `1` and `1` also matches `1.0`. |
 
 **Returns:** `None`.
 
@@ -1156,9 +1163,9 @@ class QuailRuntimeError(QuailError): ...
 | `QuailSyntaxError` | Bad API shape, illegal Python construct, or bad symbolic combo. |
 | `QuailScopeError` | Wrong group, unit, session, or version pairing. |
 | `QuailFieldError` | Unknown field, kind mismatch, or source mutation. |
-| `QuailRuntimeError` | Bad data for an op, search down, timeout, resource limit, `session_busy`, or `server_busy`. |
+| `QuailRuntimeError` | Bad data for an op, search down, timeout, resource limit, unpersistable binding, `session_busy`, or `server_busy`. |
 
-Failures are atomic: no tags, no bindings, no printed text.
+Failures are atomic: no overlay writes, no bindings, no printed text.
 
 A failed `quail_exec` returns the diagnostic object documented under
 [How you call Quail](#how-you-call-quail). Host failures are not limited to
@@ -1169,10 +1176,10 @@ the four concrete `QuailError` subclasses listed above; follow
 
 ## Bindings
 
-After a **successful** exec, supported top-level names that still exist are
-restored next time in the **same session**. Delete with `del name` if it
-should not persist. A name may be rebound during execution; only its **final**
-value is encoded.
+After a **successful** exec, every top-level name that still exists is restored
+on the next exec in the **same session**, provided its final value is
+persistable. Delete with `del name` if it should not persist. A name may be
+rebound during execution; only its **final** value is encoded.
 
 Every surviving top-level name is committed, including loop targets and
 temporary iterators. If that final value cannot persist, the whole exec fails
@@ -1191,7 +1198,8 @@ under 100 decimal digits.
 
 Analysis tags remain scoped to the session + dataset version. Bindings are
 session-scoped. A persisted `Entry` remains bound; using it against another
-dataset or dataset version raises `QuailScopeError`.
+dataset or dataset version raises `QuailScopeError`. A persisted `Field` may
+raise `QuailFieldError` against another dataset.
 
 ---
 
@@ -1199,18 +1207,21 @@ dataset or dataset version raises `QuailScopeError`.
 
 Allowed: literals; simple assignment (not annotated assignment, assignment
 expressions, or any augmented assignment such as `+=`); `del name`; `if` /
-`for` / `while` / `break` / `continue` / `pass` on **materialized** Python
-values (booleans, numbers, strings, lists, tuples, sets, dictionaries, and
-`Entry` / `Field` handles); read-only indexing and slicing of concrete lists,
-tuples, dictionaries, and strings; membership (`in`); arithmetic and bitwise
-operators on concrete numbers; the operators documented for Quail symbolic
-types; calls to the injected API; reads of attributes documented in this API;
-`entry.value` / `entry.fields` / `group.where` / `re.escape`; and these
-string methods, called directly on a receiver:
+`elif` / `else` / `for` / `while` / `break` / `continue` / `pass` on
+**materialized** Python values (booleans, numbers, strings, lists, tuples,
+sets, dictionaries, and `Entry` / `Field` handles); Python `and` / `or` /
+`not` on those materialized values; read-only indexing and slicing of
+materialized lists, tuples, dictionaries, and strings; membership (`in`);
+arithmetic and bitwise operators on materialized numbers; the operators
+documented for Quail symbolic types; calls to the injected API; reads of
+attributes documented in this API; `entry.value` / `entry.fields` /
+`group.where` / `re.escape`; and these string methods, called directly on a
+receiver:
 
 `startswith`, `endswith`, `lower`, `upper`, `casefold`, `strip`, `lstrip`,
-`rstrip`, `replace`, `split`, `rsplit`, `splitlines`, `count`, `find`,
-`rfind`, `removeprefix`, `removesuffix`.
+`rstrip`, `replace`, `split`, `rsplit`, `splitlines`, `count` (the `str`
+method, distinct from the injected `count()`), `find`, `rfind`,
+`removeprefix`, `removesuffix`.
 
 Rebuild and rebind instead of mutating containers:
 
