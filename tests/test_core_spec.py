@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,7 @@ from quail.analysis import (
     RegexSearch,
 )
 from quail.analysis.operations import OP_SPECS, final_pipeline_kind
+from quail.analysis.worker.sandbox import validate_quail_code
 
 _DOCS = Path(__file__).resolve().parent.parent / "docs"
 
@@ -31,6 +33,19 @@ def test_every_op_appears_in_api_draft_md_table() -> None:
     draft = (_DOCS / "api_draft.md").read_text(encoding="utf-8")
     for kind in OP_SPECS:
         assert f"| `{kind}(" in draft, f"{kind} missing from the api_draft.md operations table"
+
+
+def test_api_draft_recipes_are_valid_quail_code() -> None:
+    draft = (_DOCS / "api_draft.md").read_text(encoding="utf-8")
+    recipes = []
+    for block in re.findall(r"```python\n(.*?)```", draft, flags=re.S):
+        stripped = block.strip()
+        if "->" in block or stripped.startswith(("class ", "(self", "re.")):
+            continue
+        recipes.append(block)
+    assert recipes, "expected executable recipes in api_draft.md"
+    for recipe in recipes:
+        validate_quail_code(recipe)
 
 
 def test_every_op_appears_in_core_md_table() -> None:
