@@ -89,7 +89,8 @@ if len(samples) > 0:
 ```
 
 Imported blank cells are absent and read as `None`. A stored `""` remains an
-empty string.
+empty string. Imported CSV cells are stripped strings, not numbers — use
+`AsNumber()` for numeric compare.
 
 ---
 
@@ -105,7 +106,7 @@ No imports. These names are injected.
 | Ops | `Value`, `AsText`, `AsNumber`, `RegexSearch`, `RegexFindAll`, `RegexSub`, `Slice`, `Length`, `Lexical`, `Semantic` |
 | Regex helper | `re` (flags + `re.escape` only — not Python's `re` module) |
 | Errors | `QuailError`, `QuailSyntaxError`, `QuailScopeError`, `QuailFieldError`, `QuailRuntimeError` |
-| Safe builtins | `abs`, `all`, `any`, `bool`, `dict`, `enumerate`, `float`, `int`, `len`, `list`, `max`, `min`, `range`, `repr`, `round`, `set`, `str`, `sum`, `tuple` |
+| Safe builtins | `abs`, `all`, `any`, `bool`, `dict`, `enumerate`, `float`, `int`, `len`, `list`, `max`, `min`, `range`, `repr`, `round`, `set`, `str`, `sum`, `tuple`, `zip` |
 
 Callables, groups, units, types, ops, `re`, and error classes are **reserved**
 (cannot be assigned or deleted). Safe builtins are injected but not reserved.
@@ -361,12 +362,12 @@ operations. Construction type-checks the pipeline; it does not read data.
 | `input` | `Field` \| `Expression` | required | Root field, or an existing expression to extend. |
 | `*operations` | `Operation` | see notes | Pipeline steps from the op factories (`Value()`, `Length()`, …). |
 
-The **resulting** pipeline must have at least one operation. When `input` is a
-`Field`, that means `*operations` is non-empty. When `input` is an
-`Expression`, extra ops may be omitted (clone) or appended. `Value()` is the
-identity when reading a field as-is — it is **not** required; `Length()`,
-`AsText()`, regex, and search ops may be first. If `Value()` appears, it must
-be first. If `Lexical(...)` / `Semantic(...)` appear, they must be last.
+The pipeline may be empty — that is identity (the field value as-is).
+`Value()` is the same identity and is dropped when other operations follow,
+so `Expression(Field("body"), Value(), Lexical("q"))` is a bare search.
+`Length()`, `AsText()`, regex, and search ops may be first. If `Value()`
+appears, it must be first. If `Lexical(...)` / `Semantic(...)` appear, they
+must be last.
 
 **Returns:** a new `Expression`.
 
@@ -375,7 +376,6 @@ be first. If `Lexical(...)` / `Semantic(...)` appear, they must be last.
 | When | Error |
 | --- | --- |
 | `input` is not a `Field` or `Expression` | `QuailSyntaxError` |
-| Resulting pipeline is empty | `QuailSyntaxError` |
 | An argument is not an `Operation` | `QuailSyntaxError` |
 | An op does not accept the previous op's kind | `QuailSyntaxError` (names both sides) |
 | `Value()` appears after the first op | `QuailSyntaxError` |
@@ -495,7 +495,7 @@ One constructor call takes exactly one of `predicate`, `members`, or `name`.
 | --- | --- | --- |
 | Named builtin | `GroupExpr("entries", name="G0")` / `GroupExpr("fields", name="G1")` | The injected `G0` / `G1`. |
 | Filtered | `GroupExpr("entries", predicate=pred)` | Entries matching `pred`. |
-| Members | `GroupExpr("entries", members=[entry])` or `GroupExpr("fields", members=[field])` | Explicit `Entry` or `Field` handles matching `scope`, in the given order. |
+| Members | `GroupExpr("entries", members=[entry])` or `GroupExpr("fields", members=[field])` | Explicit `Entry` or `Field` handles matching `scope`, in the given order (first-seen; later duplicates dropped). |
 | Composition | `group_a & group_b`, `group_a \| group_b`, `~group` | Intersection, union, complement. Same `scope` on both sides. |
 
 Intersection keeps the left group's order. Union is the left group, then
@@ -562,7 +562,8 @@ Non-empty = score each candidate, **higher first**. Ties break by dataset
 import order. A missing (`None`) or non-finite score sorts last, as `-inf`.
 `AsNumber` and `Semantic` produce `None` for an absent cell. `Length` and
 `Lexical` never go missing: absence is the finite score `0` / `0.0`, which
-sorts by value. In a sum, any `-inf` term makes the total `-inf`.
+sorts by value. In a sum, any `-inf` term makes the total `-inf`. Weight `0`
+contributes `0`, including when that term is missing.
 
 **Parameters**
 
@@ -573,7 +574,8 @@ sorts by value. In a sum, any `-inf` term makes the total `-inf`.
 A rankable Expression is one whose final pipeline kind is `number` or
 `score`. An `Expression` ending in `Lexical(...)` or `Semantic(...)` is
 an ordinary score expression — use it in predicates or as a `retrieve` unit;
-wrap it in `Ranking(expression=...)` only for ordered retrieval.
+pass it to `rank=` or wrap it in `Ranking(expression=...)` for ordered
+retrieval.
 
 **Operators**
 
@@ -594,7 +596,7 @@ matching = G0.where(Expression(Field("body"), Length()) >= 500)
 score_a = Expression(Field("body"), Length())
 score_b = Expression(Field("body"), Lexical("hydrangea"))
 rank = score_a + score_b * 0.5
-# or: Ranking(expression=score_a) + Ranking(expression=score_b) * 0.5
+# or: retrieve(..., rank=score_a)
 ranked = retrieve(group=matching, rank=rank, limit=10)
 ```
 
@@ -641,8 +643,9 @@ the pipeline is legal, not that every cell will succeed.
 Before `RegexSearch` or `RegexFindAll`, use `AsText()` if the cell may be a
 list or another non-string value. `RegexSub` and `Slice` also accept
 `list[str]`. Do **not** insert `AsText()` only to "prepare" a search op —
-extra ops before `Lexical` / `Semantic` skip the warm source index and score
-the pipeline output instead.
+transforming ops before `Lexical` / `Semantic` skip the warm source index and
+score the pipeline output instead. Identity `Value()` is dropped and does not
+skip the warm index.
 
 | Op | Accepts | Produces |
 | --- | --- | --- |
@@ -911,12 +914,12 @@ Semantic still embeds that string.
 ### Search performance
 
 Both `Lexical` and `Semantic` run fastest on a **bare source field** (the
-search op is the only op, field `kind` is `"source"`, and that field was
-processed for search). Any prefix op — including identity `Value()` — skips
-that warm index and scores the pipeline output instead. Analysis fields load
-and score cell values. Warm paths are optimizations; they do not change the
-recipe. Lexical scores are corpus-relative, so they are not comparable across
-different candidate populations.
+search op is the only remaining op after identity `Value()` is dropped, field
+`kind` is `"source"`, and that field was processed for search). Transforming
+prefix ops skip that warm index and score the pipeline output instead. Analysis
+fields load and score cell values. Warm paths are optimizations; they do not
+change the recipe. Lexical scores are corpus-relative, so they are not
+comparable across different candidate populations.
 
 `quail_export_csv` is the host route to treat session analysis columns as
 source columns after the operator processes the export — see
@@ -935,10 +938,10 @@ These names are injected. They are not methods on a type.
 ```python
 retrieve(
     unit: Unit | Expression = entries,
-    group: GroupExpr = G0,
+    group: GroupExpr | list[Entry] = G0,
     limit: int = 1,
     order: Order = "top",
-    rank: Ranking | None = None,
+    rank: Ranking | Expression | None = None,
 ) -> list[Any]
 ```
 
@@ -947,10 +950,10 @@ Materialize a bounded list from a symbolic group.
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `unit` | `Unit` \| `Expression` | `entries` | What each list item is. An Expression yields one computed value per entry that remains after ranking and `limit`. Not a `GroupExpr` or a string. |
-| `group` | `GroupExpr` | `G0` | Population to draw from. Must match the unit's scope. |
+| `group` | `GroupExpr` \| `list[Entry]` | `G0` | Population to draw from. `Unit("fields")` needs a fields group; every other unit needs an entries group. A `list[Entry]` is wrapped as a members group. |
 | `limit` | `int` | `1` | Positive `int` (`bool` is invalid). Omitted `limit` is **1**, not the whole group. `limit` must be at least 1, so do not pass `limit=count(...)` when the group is empty. |
 | `order` | `"top"` \| `"middle"` \| `"bottom"` | `"top"` | Slice of the ordered candidate sequence. If `limit >= len(items)`, all items are returned. `"top"` is the prefix `items[:limit]`. `"bottom"` is the suffix `items[-limit:]` (order preserved, not reversed). `"middle"` is a centered window `start = (len(items) - limit) // 2`. |
-| `rank` | `Ranking` \| `None` | `None` | Ordering. `None` is normalized to `Ranking()`. Empty ranking keeps the group's own order. |
+| `rank` | `Ranking` \| `Expression` \| `None` | `None` | Ordering. `None` is empty `Ranking()`. A rankable Expression is wrapped as `Ranking(expression=...)`. Empty ranking keeps the group's own order. |
 
 **Returns:** always a `list` (possibly empty). Item type depends on `unit`:
 
@@ -984,30 +987,27 @@ search unavailable, timeout, or another resource limit).
 
 ```python
 count(
-    unit: Unit | Expression = entries,
-    group: GroupExpr = G0,
+    unit: Unit = entries,
+    group: GroupExpr | list[Entry] = G0,
 ) -> int
 ```
 
 Size of the population `retrieve` would draw from (no `limit` / `order` /
-`rank`).
+`rank`). Not an Expression unit — filter with `.where`, then count the group.
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| `unit` | `Unit` \| `Expression` | `entries` | Same legal pairs as `retrieve`. |
-| `group` | `GroupExpr` | `G0` | Population. Must match the unit's scope. |
+| `unit` | `Unit` | `entries` | Same legal `Unit` pairs as `retrieve`. |
+| `group` | `GroupExpr` \| `list[Entry]` | `G0` | Population. `Unit("fields")` needs a fields group; every other unit needs an entries group. |
 
 **Returns:** `int`. For `Unit("values", field)`, the number of distinct present
 values over the full group. For `Unit("entries", field)`, the number of entries
-where that field is present. For an `Expression` unit, `count` returns the
-number of entry IDs in the group — the unit expression is **not** run (so a
-Lexical unit does not require search to be configured, unlike `retrieve`).
+where that field is present.
 
-**Errors:** `QuailSyntaxError` for invalid argument shapes; `QuailScopeError`
-for unit/group mismatch or out-of-scope members; `QuailFieldError` for unknown
-or kind-mismatched unit fields. The unit expression is not evaluated, so its
-runtime failures do not occur. Expressions used by `group` are still evaluated
-and can fail.
+**Errors:** `QuailSyntaxError` for invalid argument shapes, including an
+`Expression` unit; `QuailScopeError` for unit/group mismatch or out-of-scope
+members; `QuailFieldError` for unknown or kind-mismatched unit fields.
+Expressions used by `group` are still evaluated and can fail.
 
 ---
 
@@ -1022,16 +1022,16 @@ overwritten.
 
 | Name | Type | Description |
 | --- | --- | --- |
-| `field` | `str` \| `Field` | Column name, `Field("topic")`, or `Field("topic", "analysis")`. The name is stripped; empty after strip is illegal. |
+| `field` | `str` \| `Field` | Column name, `Field("topic")`, or `Field("topic", "analysis")`. The name is stripped; empty after strip is illegal. The name `id` is illegal (`entry.id` is the row id). |
 
 **Returns:** `Field(stripped_name, kind="analysis")`. If the analysis field
 already exists, no write occurs; the function still returns that normalized
 `Field`. Use the returned handle for later `tag` / `untag` (a `Field` you
 construct yourself does not strip whitespace).
 
-**Errors:** `QuailSyntaxError` if the name is empty after strip, the argument
-is the wrong type, or `Field.kind` is `"source"`. `QuailFieldError` if the
-name collides with a source field.
+**Errors:** `QuailSyntaxError` if the name is empty after strip, the name is
+`id`, the argument is the wrong type, or `Field.kind` is `"source"`.
+`QuailFieldError` if the name collides with a source field.
 
 ---
 
@@ -1080,7 +1080,7 @@ Clear analysis tags on the selection.
 | --- | --- | --- | --- |
 | `group` | `GroupExpr` \| `list[Entry]` | required | Same as `tag`. Empty selection writes nothing; `field` is still resolved. |
 | `field` | `Field` | required | Analysis field to clear. |
-| `value` | `TagValue` \| `None` | `None` | `None` clears all selected present cells. A value clears cells where Python `==` matches, so `True` also matches `1` and `1` also matches `1.0`. |
+| `value` | `TagValue` \| `None` | `None` | `None` clears all selected present cells. A value clears cells with the same JSON-text identity (`1` and `1.0` are distinct; `True` does not match `1`). |
 
 **Returns:** `None`.
 

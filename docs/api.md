@@ -63,7 +63,8 @@ if len(samples) > 0:
         print(field.name, repr(samples[0].value(field)))
 ```
 
-Empty cells are `None`, not `""`.
+Empty cells are `None`, not `""`. Imported CSV cells are stripped strings, not
+numbers — use `AsNumber()` for numeric compare.
 
 From here, follow your question. The pieces below are designed for you to
 explore in any direction.
@@ -82,7 +83,7 @@ No imports. These names are injected and reserved.
 | Ops | `Value`, `AsText`, `AsNumber`, `RegexSearch`, `RegexFindAll`, `RegexSub`, `Slice`, `Length`, `Lexical`, `Semantic` |
 | Regex helper | `re` (flags + `re.escape` only — not Python’s `re` module) |
 | Errors | `QuailError`, `QuailSyntaxError`, `QuailScopeError`, `QuailFieldError`, `QuailRuntimeError` |
-| Safe builtins | `abs`, `all`, `any`, `bool`, `dict`, `enumerate`, `float`, `int`, `len`, `list`, `max`, `min`, `range`, `repr`, `round`, `set`, `str`, `sum`, `tuple` |
+| Safe builtins | `abs`, `all`, `any`, `bool`, `dict`, `enumerate`, `float`, `int`, `len`, `list`, `max`, `min`, `range`, `repr`, `round`, `set`, `str`, `sum`, `tuple`, `zip` |
 
 - **`G0`**: all entries (import order). **`G1`**: all fields (source then analysis).
 - **`entries` / `fields`**: default units for retrieve/count — not groups.
@@ -139,8 +140,9 @@ entry.fields()                    # list[Field] present on this entry
 
 ### `Expression(input, operation, ...)`
 
-`input` is a `Field` or another `Expression`. Pipeline must start with `Value()`
-when reading a field as-is; nest to append ops.
+`input` is a `Field` or another `Expression`. An empty pipeline is identity
+(the field value). `Value()` is the same identity and is dropped when other
+ops follow.
 
 Comparisons (`==`, `!=`, `<`, …) produce a **Predicate**.
 
@@ -164,8 +166,8 @@ previous op produces, and the error names both sides. Use `AsText()` first
 when values might not already be text. `Lexical` / `Semantic` end the
 pipeline; rankable expressions end in `AsNumber`, `Length`, `Lexical`, or
 `Semantic`. `Lexical` / `Semantic` are ordinary score expressions — use them
-in predicates or as a `retrieve` unit; wrap them in `Ranking(expression=...)`
-only for ordered retrieval.
+in predicates or as a `retrieve` unit; pass them to `rank=` or wrap them in
+`Ranking(expression=...)` for ordered retrieval.
 
 Regex uses a bounded RE2-style engine (not Python backtracking). Supported
 flags via `re`: `I`, `M`, `S` only (`re.A` / `re.U` are rejected — word
@@ -215,7 +217,10 @@ count(unit=entries, group=G0)
 
 - `retrieve` always returns a **list** (possibly empty).
 - Omitted `limit` defaults to **1** (not the whole group).
-- `unit` may be a `Unit` or an `Expression` (expression → one value per entry).
+- `retrieve` `unit` may be a `Unit` or an `Expression` (expression → one value per entry).
+- `count` `unit` is a `Unit` only — filter with `.where`, then count the group.
+- `group` may be a `GroupExpr` or a `list[Entry]`.
+- `rank` may be a `Ranking` or a rankable `Expression`.
 - `order`: `"top"` | `"middle"` | `"bottom"`.
 - Narrow with `.where` **before** expensive ranking when you can — ranking
   scores the whole candidate set before applying `limit`.
@@ -236,10 +241,11 @@ count(unit=entries, group=G0)
 create_field("topic")           # or Field("topic") / Field("topic", "analysis")
 tag(group_or_entries, field, value)      # value: JSON-like, no None inside
 untag(group_or_entries, field)           # clear all selected
-untag(group_or_entries, field, value)    # clear exact matches only
+untag(group_or_entries, field, value)    # clear JSON-text identity matches
 ```
 
-Source fields cannot be created or overwritten. Empty selections are no-ops.
+Source fields cannot be created or overwritten. The name `id` is illegal on
+`create_field` (`entry.id` is the row id). Empty selections are no-ops.
 
 ---
 
