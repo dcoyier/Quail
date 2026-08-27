@@ -130,17 +130,42 @@ def test_main_call_sdk_value_error_exits_1(
 
 def test_legacy_client_cannot_connect(mcp_url: str) -> None:
     from mcp.client import Client
+    from mcp.shared.exceptions import MCPError
     from mcp_types import UNSUPPORTED_PROTOCOL_VERSION
+
+    from quail.mcp.http import PROTOCOL_VERSION
+    from quail.mcp_client.mcp_client import _client_error_message
 
     async def _legacy() -> None:
         async with Client(mcp_url, mode="legacy") as client:
             await client.list_tools()
 
-    with pytest.raises(Exception) as raised:  # noqa: BLE001 - SDK wraps the -32022
+    with pytest.raises(BaseExceptionGroup) as raised:
         asyncio.run(_legacy())
-    text = str(raised.value)
-    assert "TaskGroup" not in text
-    assert str(UNSUPPORTED_PROTOCOL_VERSION) in text or "protocol version" in text.lower()
+    assert _client_error_message(raised.value) == "Unsupported protocol version"
+    inner: BaseException = raised.value
+    while isinstance(inner, BaseExceptionGroup) and inner.exceptions:
+        inner = inner.exceptions[0]
+    assert isinstance(inner, MCPError)
+    assert inner.code == UNSUPPORTED_PROTOCOL_VERSION
+    assert inner.error.data == {
+        "supported": [PROTOCOL_VERSION],
+        "requested": "2025-11-25",
+    }
+
+
+def test_auto_client_speaks_2026(mcp_url: str) -> None:
+    from mcp.client import Client
+
+    from quail.mcp.http import PROTOCOL_VERSION
+
+    async def _auto() -> str:
+        async with Client(mcp_url, mode="auto") as client:
+            tools = await client.list_tools()
+            assert any(tool.name == "quail_setup" for tool in tools.tools)
+            return client.protocol_version
+
+    assert asyncio.run(_auto()) == PROTOCOL_VERSION
 
 
 def test_list_and_call_against_live_server(mcp_url: str) -> None:

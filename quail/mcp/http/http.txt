@@ -14,7 +14,8 @@ _HandshakeRejectMiddleware:
   PROTOCOL_VERSION. Otherwise call the inner app.
 
 _buffer_http_body / _header:
-  Read the POST body once and look up a header on the ASGI scope.
+  Read the POST body once, replay it, then any leftover ASGI message, and
+  look up a header on the ASGI scope.
 
 _handshake_rejection(header_version, body):
   If method is initialize or notifications/initialized, reject (include

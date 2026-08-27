@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
@@ -34,7 +34,7 @@ def attach_modern_http(server: MCPServer) -> None:
         path = str(kwargs.get("streamable_http_path") or "/mcp")
         return _HandshakeRejectMiddleware(inner(**kwargs), mcp_path=path)
 
-    server.streamable_http_app = streamable_http_app  # type: ignore[method-assign]
+    setattr(server, "streamable_http_app", streamable_http_app)
 
 
 class _HandshakeRejectMiddleware:
@@ -69,7 +69,7 @@ async def _buffer_http_body(receive: Receive) -> tuple[bytes, Receive]:
     """Read the HTTP request body once and give back a replay receive."""
 
     chunks: list[bytes] = []
-    leftover: Mapping[str, Any] | None = None
+    leftover: MutableMapping[str, Any] | None = None
     while True:
         message = await receive()
         if message["type"] != "http.request":
@@ -82,7 +82,7 @@ async def _buffer_http_body(receive: Receive) -> tuple[bytes, Receive]:
     sent_body = False
     sent_leftover = leftover is None
 
-    async def replay() -> Mapping[str, Any]:
+    async def replay() -> MutableMapping[str, Any]:
         nonlocal sent_body, sent_leftover
         if not sent_body:
             sent_body = True

@@ -7,12 +7,18 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp_types import PROTOCOL_VERSION_META_KEY, UNSUPPORTED_PROTOCOL_VERSION
+from mcp_types.version import MODERN_PROTOCOL_VERSIONS
 from starlette.testclient import TestClient
 
 from quail.mcp.http import PROTOCOL_VERSION, attach_modern_http
 from quail.mcp.http.http import _handshake_rejection
 
 _TEST_TRANSPORT_SECURITY = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
+
+def test_protocol_version_is_the_modern_revision() -> None:
+    assert PROTOCOL_VERSION == "2026-07-28"
+    assert PROTOCOL_VERSION in MODERN_PROTOCOL_VERSIONS
 
 
 def _app(*, streamable_http_path: str = "/mcp") -> Any:
@@ -77,12 +83,25 @@ def test_jsonrpc_without_modern_envelope_is_rejected() -> None:
     _assert_unsupported(response)
 
 
+def _error_code(response: Any) -> object:
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    if not isinstance(body, dict):
+        return None
+    error = body.get("error")
+    if not isinstance(error, dict):
+        return None
+    return error.get("code")
+
+
 def test_empty_and_non_rpc_posts_are_not_handshake_rejected() -> None:
     with TestClient(_app()) as client:
         empty = client.post("/mcp")
         blank = client.post("/mcp", content=b"{}")
-    assert empty.json().get("error", {}).get("code") != UNSUPPORTED_PROTOCOL_VERSION
-    assert blank.json().get("error", {}).get("code") != UNSUPPORTED_PROTOCOL_VERSION
+    assert _error_code(empty) != UNSUPPORTED_PROTOCOL_VERSION
+    assert _error_code(blank) != UNSUPPORTED_PROTOCOL_VERSION
 
 
 def test_modern_header_is_not_handshake_rejected() -> None:
