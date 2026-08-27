@@ -49,7 +49,8 @@ create_clerk_mcp_server(config, verifier, api_docs_path default None,
   Build MCPServer with locking-agnostic clerk instructions, MCP AuthSettings
   (Clerk issuer + public /mcp resource), and ClerkAccessTokenVerifier
   (token verify plus TOML [[users]] allowlist).
-  Register /.well-known/oauth-authorization-server proxy for older clients.
+  Register /.well-known/oauth-authorization-server proxy for OAuth clients
+  that look up AS metadata on the resource origin.
   Register the clerk list/switch workspace tools, then the same core tools with
   clerk resolvers, attach_modern_http, and give back the server.
   Connector HTTP file routes authenticate Bearer and require workspace membership.

@@ -9,10 +9,17 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp_types import PROTOCOL_VERSION_META_KEY, UNSUPPORTED_PROTOCOL_VERSION
 from mcp_types.version import MODERN_PROTOCOL_VERSIONS
+from starlette.applications import Starlette
+from starlette.responses import JSONResponse
+from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from quail.mcp.http import PROTOCOL_VERSION, attach_modern_http
-from quail.mcp.http.http import _handshake_rejection
+from quail.mcp.http.http import (
+    _HandshakeRejectMiddleware,
+    _handshake_rejection,
+    _header,
+)
 
 _TEST_TRANSPORT_SECURITY = TransportSecuritySettings(enable_dns_rebinding_protection=False)
 
@@ -184,6 +191,36 @@ def test_create_mcp_server_rejects_initialize_and_get(tmp_path: Path) -> None:
         get = client.get("/mcp")
     _assert_unsupported(response, requested="2025-11-25")
     assert get.status_code == 405
+
+
+def test_allowed_post_stamps_protocol_version_header() -> None:
+    seen: list[str | None] = []
+
+    async def echo(request: Any) -> JSONResponse:
+        seen.append(_header(request.scope, "mcp-protocol-version"))
+        return JSONResponse({"ok": True})
+
+    inner = Starlette(routes=[Route("/mcp", echo, methods=["GET", "POST", "DELETE"])])
+    app = _HandshakeRejectMiddleware(inner, mcp_path="/mcp")
+    with TestClient(app) as client:
+        empty = client.post("/mcp")
+        envelope = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/list",
+                "params": {"_meta": {PROTOCOL_VERSION_META_KEY: PROTOCOL_VERSION}},
+            },
+        )
+        handshake = client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": 2, "method": "initialize", "params": {}},
+        )
+    assert empty.status_code == 200
+    assert envelope.status_code == 200
+    assert handshake.status_code == 400
+    assert seen == [PROTOCOL_VERSION, PROTOCOL_VERSION]
 
 
 def test_handshake_rejection_classifier() -> None:

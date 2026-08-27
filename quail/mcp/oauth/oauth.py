@@ -99,7 +99,7 @@ class ClerkAccessTokenVerifier:
 
 
 def register_clerk_oauth_discovery(server: MCPServer, *, clerk_domain: str) -> None:
-    """Expose AS metadata for older MCP clients (proxy Clerk's discovery doc)."""
+    """Expose AS metadata at the resource origin (proxy Clerk's discovery doc)."""
 
     issuer = clerk_issuer_url(clerk_domain)
     metadata_url = f"{issuer}{_AS_METADATA_PATH}"
