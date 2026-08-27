@@ -12,11 +12,12 @@ from pathlib import Path
 
 import pytest
 import uvicorn
+from mcp.types import CallToolResult, TextContent
 
 from quail.datasets import import_csv_dataset, open_core_db
 from quail.mcp import create_mcp_server
 from quail.mcp_client import load_arguments, main
-from quail.mcp_client.mcp_client import call_tool, list_tools
+from quail.mcp_client.mcp_client import _stdout_packet, call_tool, list_tools
 
 
 def test_load_arguments_inline_file_and_stdin(
@@ -36,6 +37,44 @@ def test_load_arguments_inline_file_and_stdin(
         load_arguments("[1]")
     with pytest.raises(ValueError, match="JSON object"):
         load_arguments("not-json")
+
+
+def test_stdout_packet_prefers_structured_content() -> None:
+    result = CallToolResult(
+        content=[TextContent(type="text", text='{"b": 2}')],
+        structured_content={"a": 1},
+        is_error=False,
+    )
+    assert _stdout_packet(result) == {"a": 1}
+
+
+def test_stdout_packet_error_is_diagnostic_object() -> None:
+    payload = {
+        "execution_id": None,
+        "diagnostic": {"error_class": "QuailScopeError", "message": "missing"},
+    }
+    result = CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(payload))],
+        structured_content=payload,
+        is_error=True,
+    )
+    assert _stdout_packet(result) == payload
+
+
+def test_stdout_packet_unstructured_error_becomes_diagnostic() -> None:
+    result = CallToolResult(
+        content=[TextContent(type="text", text="Unknown tool: nope")],
+        structured_content=None,
+        is_error=True,
+    )
+    assert _stdout_packet(result) == {
+        "execution_id": None,
+        "diagnostic": {
+            "error_class": "QuailSyntaxError",
+            "stable_error_code": "quail_syntax_error",
+            "message": "Unknown tool: nope",
+        },
+    }
 
 
 def test_main_rejects_bad_usage() -> None:
@@ -218,8 +257,10 @@ def test_main_list_and_call_exit_codes(mcp_url: str, capsys: pytest.CaptureFixtu
 
     assert main(["call", "quail_setup", "{}", "--url", mcp_url]) == 0
     setup = json.loads(capsys.readouterr().out)
-    assert setup["isError"] is False
-    assert setup["structuredContent"]["session_id"]
+    assert setup["session_id"]
+    assert "structuredContent" not in setup
+    assert "isError" not in setup
+    assert "content" not in setup
 
     assert (
         main(
@@ -228,7 +269,29 @@ def test_main_list_and_call_exit_codes(mcp_url: str, capsys: pytest.CaptureFixtu
                 "quail_exec",
                 json.dumps(
                     {
-                        "session_id": setup["structuredContent"]["session_id"],
+                        "session_id": setup["session_id"],
+                        "dataset_id": "notes",
+                        "code": "print(count())",
+                    }
+                ),
+                "--url",
+                mcp_url,
+            ]
+        )
+        == 0
+    )
+    outcome = json.loads(capsys.readouterr().out)
+    assert "2" in outcome["printed_output"]
+    assert "structuredContent" not in outcome
+
+    assert (
+        main(
+            [
+                "call",
+                "quail_exec",
+                json.dumps(
+                    {
+                        "session_id": setup["session_id"],
                         "dataset_id": "missing-dataset",
                         "code": "print(1)",
                     }
@@ -240,7 +303,13 @@ def test_main_list_and_call_exit_codes(mcp_url: str, capsys: pytest.CaptureFixtu
         == 1
     )
     failed = json.loads(capsys.readouterr().out)
-    assert failed["isError"] is True
+    assert "diagnostic" in failed
+    assert "isError" not in failed
+
+    assert main(["call", "quail_exec", "{}", "--url", mcp_url]) == 1
+    missing_args = json.loads(capsys.readouterr().out)
+    assert missing_args["diagnostic"]["stable_error_code"] == "quail_syntax_error"
+    assert "session_id" in missing_args["diagnostic"]["message"]
 
 
 class _FakeStdin:

@@ -246,8 +246,9 @@ stay local.
 If you do not have a native MCP client, a thin Streamable HTTP helper is
 included. The default URL is `http://127.0.0.1:8000/mcp`, and `--url` may
 sit before or after the subcommand (`list --url …` still works). Arguments
-are a JSON object, `@path.json`, or `-` for stdin. On `list` and `call`,
-stdout is JSON only.
+are a JSON object, `@path.json`, or `-` for stdin. `call` stdout is the
+tool result JSON object, not the MCP envelope (`list` prints
+`{"tools": [...]}`). A tool error still prints that packet and exits 1.
 
 ```sh
 uv run python -m quail.mcp_client list

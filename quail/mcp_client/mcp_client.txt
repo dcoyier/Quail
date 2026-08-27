@@ -8,7 +8,12 @@ main(optional argv):
   Resolve --url with _mcp_url.
   If argparse raises SystemExit, give back that integer code, or 2 if the code is not an int.
   For list, call list_tools with the URL, print JSON, give back 0.
-  For call, load_arguments, call_tool, print the CallToolResult JSON payload.
+  For call, load_arguments, call_tool, print the tool result JSON object.
+  That object is structured_content when it is a JSON object; otherwise a
+  JSON object parsed from text content blocks (or {"text": ...} when the
+  text is not a JSON object). When is_error is true and there is no
+  diagnostic object, print {execution_id: null, diagnostic} from the text
+  instead of a {"text": ...} wrap. Never print isError or content blocks.
   Give back 1 when the tool result is_error is true.
   Give back 2 for bad usage, bad JSON arguments, or an unreadable @path file.
   Give back 1 for other connection or runtime failures.
@@ -54,9 +59,18 @@ _build_parser:
   list/call (after the subcommand).
   Subcommand call takes tool_name and arguments.
 
-_call_result_payload(result):
-  Give back isError, structuredContent, and content (JSON dumps of content
-  blocks with wire aliases so mimeType stays camelCase).
+_stdout_packet(result):
+  If structured_content is a JSON object, give that mapping back.
+  Otherwise start from _text_content_packet of the content blocks.
+  If is_error is true and that mapping has no diagnostic, give back
+  {execution_id: null, diagnostic} with QuailSyntaxError / quail_syntax_error
+  and the text as message.
+
+_text_content_packet(content):
+  Join non-empty text blocks with a newline, then strip.
+  If there is no text, give back {}.
+  If the stripped text is a JSON object, give that mapping back.
+  Otherwise give back {"text": the raw text}.
 
 _print_json(payload):
   Write indented JSON with sorted keys plus a trailing newline to stdout.
