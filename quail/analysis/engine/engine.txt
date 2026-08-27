@@ -117,12 +117,15 @@ Batch scoring is one path through _search_backend: when there are no
 transforming prefix operations and the root resolves to a source field
 (_bare_source_search_field), first ask score_source_entries to score those
 entry ids without loading source values, telling that path when the candidate
-ids are the complete dataset. When that gives nothing back (field not warmed,
-or not registered for Semantic), materialize corpus values with
-_corpus_by_entry and use score_corpus_entries (passing source_field when the
-backend's corpus path reuses a warmed corpus).
-_warmed_lexical_source_field encodes the bare-source rule for scalar eval.
+ids are the complete dataset. Identity Value() prefixes are not transforming.
+When that gives nothing back (field not warmed, or not registered for
+Semantic), materialize corpus values with _corpus_by_entry and use
+score_corpus_entries (passing source_field when the backend's corpus path
+reuses a warmed corpus).
+_warmed_lexical_source_field encodes the same rule for scalar eval: prefixes
+before Lexical may only be Value().
 
 _corpus_by_entry:
   Materialize requested corpus values only for dynamic or unwarmed search.
-  Apply transforming prefix operations when present.
+  Apply prefix operations when present (identity Value() leaves the cell
+  unchanged).

@@ -61,7 +61,7 @@ expression statement is discarded.
 | **Expression** | A recipe that reads or transforms one field's value for each entry. |
 | **Predicate** | A true-or-false recipe for each entry. |
 | **GroupExpr** | A symbolic population of entries or fields. It is not iterable. Pass it to `retrieve` for a list, or to `count` for a size. |
-| **Unit** | What `retrieve` returns and what `count` measures (entries, fields, present values, distinct values, or computed values). |
+| **Unit** | What `retrieve` lists and what `count` sizes. `count` always returns `int`. An Expression unit is computed values for `retrieve` and group size for `count` (the expression is not run). |
 | **Ranking** | How to score and order entry-scoped candidates. |
 | **Binding** | A top-level name that survives a successful exec in this session. |
 | **Overlay write** | `create_field`, `tag`, or `untag`. These change only the session overlay. |
@@ -89,7 +89,8 @@ if len(samples) > 0:
 ```
 
 Imported blank cells are absent and read as `None`. A stored `""` remains an
-empty string.
+empty string. Imported CSV cells are stripped strings, not numbers — use
+`AsNumber()` for numeric compare.
 
 ---
 
@@ -116,13 +117,12 @@ Callables, groups, units, types, ops, `re`, and error classes are **reserved**
   the default unit. `fields` requires a field group such as `G1`.
   `retrieve(group=G1)` fails because the default unit is `entries`.
 
-Compose `Predicate` values and same-scope `GroupExpr` values with `&`, `|`,
-and `~`. Compare `Expression` values with `==`, `!=`, `<`, `<=`, `>`, `>=`.
-Python `and` / `or` / `not` work only on materialized values. On an
-`Expression`, `Predicate`, or `GroupExpr`, use `&` `|` `~`. Do not
-truth-test those symbolic values with `if`, `while`, or `bool(...)`. Do not
-chain comparisons (`a < expr < b`). `is` is rejected at parse — write
-`== None` / `!= None`.
+Compose `Predicate` values with `&`, `|`, and `~`. Compose same-scope
+`GroupExpr` values with `&`, `|`, and `~`. Compare `Expression` values with
+`==`, `!=`, `<`, `<=`, `>`, `>=`. Python `and` / `or` / `not` work only on
+materialized values. Do not truth-test an `Expression`, `Predicate`, or
+`GroupExpr` with `if`, `while`, or `bool(...)`. Do not chain comparisons
+(`a < expr < b`). `is` is rejected at parse — write `== None` / `!= None`.
 
 `Operation` is the opaque value returned by operation factories such as
 `Length()`. It is not an injected constructor.
@@ -250,8 +250,8 @@ entries: Unit  # Unit("entries")
 fields: Unit   # Unit("fields")
 ```
 
-What `retrieve` returns and what `count` measures. The population is `group=`,
-not the Unit.
+What `retrieve` lists and what `count` sizes. The population is `group=`,
+not the Unit. `count` always returns `int`.
 
 **Parameters**
 
@@ -641,8 +641,8 @@ the pipeline is legal, not that every cell will succeed.
 Before `RegexSearch` or `RegexFindAll`, use `AsText()` if the cell may be a
 list or another non-string value. `RegexSub` and `Slice` also accept
 `list[str]`. Do **not** insert `AsText()` only to "prepare" a search op —
-extra ops before `Lexical` / `Semantic` skip the warm source index and score
-the pipeline output instead.
+transforming ops before `Lexical` / `Semantic` skip the warm source index and
+score the pipeline output instead. Identity `Value()` does not.
 
 | Op | Accepts | Produces |
 | --- | --- | --- |
@@ -854,7 +854,7 @@ element.
 | Uppercase `AND` / `NOT` | Operators. `NOT` is infix and requires a positive left operand (`rose NOT soil`, not `NOT spam`). |
 | Uppercase `OR` | Error. Separate terms with spaces. |
 | Lowercase `and` / `not` / `or` | Ordinary terms |
-| Punctuation | Splits into terms the same way indexing does |
+| Punctuation | One unquoted atom with hyphens/punctuation becomes OR of the split tokens |
 
 A whitespace-only or punctuation-only string query raises `QuailRuntimeError`
 because it contains no FTS terms.
@@ -911,12 +911,11 @@ Semantic still embeds that string.
 ### Search performance
 
 Both `Lexical` and `Semantic` run fastest on a **bare source field** (the
-search op is the only op, field `kind` is `"source"`, and that field was
-processed for search). Any prefix op — including identity `Value()` — skips
-that warm index and scores the pipeline output instead. Analysis fields load
-and score cell values. Warm paths are optimizations; they do not change the
-recipe. Lexical scores are corpus-relative, so they are not comparable across
-different candidate populations.
+search op is the only transforming op, field `kind` is `"source"`, and that
+field was processed for search). Identity `Value()` before the search op does
+not skip that index. Transforming prefix ops skip it and score the pipeline
+output instead. Analysis fields load and score cell values. Warm paths are
+optimizations; they do not change the recipe. Lexical scores are corpus-relative.
 
 `quail_export_csv` is the host route to treat session analysis columns as
 source columns after the operator processes the export — see
@@ -947,7 +946,7 @@ Materialize a bounded list from a symbolic group.
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `unit` | `Unit` \| `Expression` | `entries` | What each list item is. An Expression yields one computed value per entry that remains after ranking and `limit`. Not a `GroupExpr` or a string. |
-| `group` | `GroupExpr` | `G0` | Population to draw from. Must match the unit's scope. |
+| `group` | `GroupExpr` | `G0` | Population to draw from. `Unit("fields")` needs a fields group; every other unit needs an entries group. |
 | `limit` | `int` | `1` | Positive `int` (`bool` is invalid). Omitted `limit` is **1**, not the whole group. `limit` must be at least 1, so do not pass `limit=count(...)` when the group is empty. |
 | `order` | `"top"` \| `"middle"` \| `"bottom"` | `"top"` | Slice of the ordered candidate sequence. If `limit >= len(items)`, all items are returned. `"top"` is the prefix `items[:limit]`. `"bottom"` is the suffix `items[-limit:]` (order preserved, not reversed). `"middle"` is a centered window `start = (len(items) - limit) // 2`. |
 | `rank` | `Ranking` \| `None` | `None` | Ordering. `None` is normalized to `Ranking()`. Empty ranking keeps the group's own order. |
@@ -995,7 +994,7 @@ Size of the population `retrieve` would draw from (no `limit` / `order` /
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `unit` | `Unit` \| `Expression` | `entries` | Same legal pairs as `retrieve`. |
-| `group` | `GroupExpr` | `G0` | Population. Must match the unit's scope. |
+| `group` | `GroupExpr` | `G0` | Population. `Unit("fields")` needs a fields group; every other unit needs an entries group. |
 
 **Returns:** `int`. For `Unit("values", field)`, the number of distinct present
 values over the full group. For `Unit("entries", field)`, the number of entries
@@ -1254,8 +1253,9 @@ directly), and any operation not listed as allowed.
 quail_export_csv(session_id, dataset_id)
 ```
 
-Pass arguments by name. Writes source columns plus this session's **analysis
-fields** (including created-but-untagged columns) to a CSV on the Quail server host.
+Pass arguments by name. Writes `"id"`, source columns, and this session's
+**analysis fields** (including created-but-untagged columns) to a CSV on the
+Quail server host.
 The tool result is not the file body:
 
 ```text
