@@ -507,7 +507,8 @@ class QueryEngine:
     ) -> str | None:
         """Source field name for warm reuse when Lexical has no transforming prefixes."""
 
-        if prefix_count != 0:
+        prefixes = expression.operations[:prefix_count]
+        if any(operation.kind != "Value" for operation in prefixes):
             return None
         return self._bare_source_search_field(expression)
 
@@ -875,7 +876,10 @@ class QueryEngine:
     def _bare_source_search_field(self, expression: Expression) -> str | None:
         """Source field name when the search op has no transforming prefixes."""
 
-        if len(expression.operations) != 1:
+        operations = expression.operations
+        if not operations or operations[-1].kind not in ("Lexical", "Semantic"):
+            return None
+        if any(operation.kind != "Value" for operation in operations[:-1]):
             return None
         resolved = self.resolve_field(expression.root)
         if resolved.kind != "source":

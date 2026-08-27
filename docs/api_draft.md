@@ -641,8 +641,8 @@ the pipeline is legal, not that every cell will succeed.
 Before `RegexSearch` or `RegexFindAll`, use `AsText()` if the cell may be a
 list or another non-string value. `RegexSub` and `Slice` also accept
 `list[str]`. Do **not** insert `AsText()` only to "prepare" a search op —
-extra ops before `Lexical` / `Semantic` skip the warm source index and score
-the pipeline output instead.
+transforming ops before `Lexical` / `Semantic` skip the warm source index and
+score the pipeline output instead. Identity `Value()` does not.
 
 | Op | Accepts | Produces |
 | --- | --- | --- |
@@ -911,11 +911,11 @@ Semantic still embeds that string.
 ### Search performance
 
 Both `Lexical` and `Semantic` run fastest on a **bare source field** (the
-search op is the only op, field `kind` is `"source"`, and that field was
-processed for search). Any prefix op — including identity `Value()` — skips
-that warm index and scores the pipeline output instead. Analysis fields load
-and score cell values. Warm paths are optimizations; they do not change the
-recipe. Lexical scores are corpus-relative.
+search op is the only transforming op, field `kind` is `"source"`, and that
+field was processed for search). Identity `Value()` before the search op does
+not skip that index. Transforming prefix ops skip it and score the pipeline
+output instead. Analysis fields load and score cell values. Warm paths are
+optimizations; they do not change the recipe. Lexical scores are corpus-relative.
 
 `quail_export_csv` is the host route to treat session analysis columns as
 source columns after the operator processes the export — see

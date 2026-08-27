@@ -12,7 +12,7 @@ from quail.analysis.exec_host import dispatch_call, exec_script, run_analysis
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
 from quail.analysis.group import G0
-from quail.analysis.operations import Lexical
+from quail.analysis.operations import Lexical, Value
 from quail.analysis.ranking import Ranking
 from quail.datasets import import_csv_dataset, open_core_db
 from quail.search import LexicalService, open_search_db
@@ -167,8 +167,13 @@ def test_lexical_score_reuses_warm_segments_without_rewrite(
     search.close()
 
 
+@pytest.mark.parametrize(
+    "prefix",
+    [(), (Value(),)],
+    ids=["bare", "identity_value"],
+)
 def test_engine_uses_warmed_source_lexical_without_dynamic_corpus_or_counts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, prefix: tuple[object, ...]
 ) -> None:
     from quail.config.models import SearchWarmConfig
     from quail.search.warm import warm_dataset
@@ -207,7 +212,7 @@ def test_engine_uses_warmed_source_lexical_without_dynamic_corpus_or_counts(
     )
 
     def driver(engine: QueryEngine, _prints) -> None:
-        score = Expression(Field("body"), Lexical("hydrangea"))
+        score = Expression(Field("body"), *prefix, Lexical("hydrangea"))
         ranked = dispatch_call(
             engine,
             "retrieve",

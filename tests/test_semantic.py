@@ -13,7 +13,7 @@ from quail.analysis.exec_host import dispatch_call, exec_script, run_analysis
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
 from quail.analysis.group import G0
-from quail.analysis.operations import Lexical, Semantic
+from quail.analysis.operations import Semantic, Value
 from quail.analysis.ranking import Ranking
 from quail.analysis.unit import Unit
 from quail.config import ConfigError, load_config
@@ -296,8 +296,13 @@ def test_process_pins_embedding_profile(tmp_path: Path) -> None:
         db.close()
 
 
+@pytest.mark.parametrize(
+    "prefix",
+    [(), (Value(),)],
+    ids=["bare", "identity_value"],
+)
 def test_engine_uses_warmed_source_semantic_without_dynamic_corpus(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, prefix: tuple[object, ...]
 ) -> None:
     manifest = _write_semantic_manifest(tmp_path)
     (tmp_path / "data" / "notes.csv").write_text(
@@ -324,7 +329,7 @@ def test_engine_uses_warmed_source_semantic_without_dynamic_corpus(
         monkeypatch.setattr(SimilarityService, "semantic_scores_for_entries", _reject_dynamic)
 
         def driver(engine: QueryEngine, _prints) -> None:
-            score = Expression(Field("body"), Semantic("hydrangea"))
+            score = Expression(Field("body"), *prefix, Semantic("hydrangea"))
             assert dispatch_call(engine, "count", (), {"group": G0.where(score > 0.5)}) == 1
             ranked = dispatch_call(
                 engine,
