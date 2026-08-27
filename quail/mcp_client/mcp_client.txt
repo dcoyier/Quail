@@ -64,7 +64,9 @@ _stdout_packet(result):
   Otherwise start from _text_content_packet of the content blocks.
   If is_error is true and that mapping has no diagnostic, give back
   {execution_id: null, diagnostic} with QuailSyntaxError / quail_syntax_error
-  and the text as message.
+  and the text as message (packet["text"] when the mapping is only {text},
+  otherwise json.dumps of the mapping).
+  Otherwise give back that mapping.
 
 _text_content_packet(content):
   Join non-empty text blocks with a newline, then strip.

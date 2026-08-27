@@ -190,7 +190,7 @@ def _stdout_packet(result: CallToolResult) -> dict[str, Any]:
             "diagnostic": {
                 "error_class": "QuailSyntaxError",
                 "stable_error_code": "quail_syntax_error",
-                "message": message or "tool error",
+                "message": message,
             },
         }
     return packet

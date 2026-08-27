@@ -283,6 +283,8 @@ def test_main_list_and_call_exit_codes(mcp_url: str, capsys: pytest.CaptureFixtu
     outcome = json.loads(capsys.readouterr().out)
     assert "2" in outcome["printed_output"]
     assert "structuredContent" not in outcome
+    assert "isError" not in outcome
+    assert "content" not in outcome
 
     assert (
         main(
@@ -305,6 +307,8 @@ def test_main_list_and_call_exit_codes(mcp_url: str, capsys: pytest.CaptureFixtu
     failed = json.loads(capsys.readouterr().out)
     assert "diagnostic" in failed
     assert "isError" not in failed
+    assert "structuredContent" not in failed
+    assert "content" not in failed
 
     assert main(["call", "quail_exec", "{}", "--url", mcp_url]) == 1
     missing_args = json.loads(capsys.readouterr().out)
