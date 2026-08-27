@@ -254,14 +254,17 @@ tool result JSON object, not the MCP envelope (`list` prints
 uv run python -m quail.mcp_client list
 uv run python -m quail.mcp_client --url http://127.0.0.1:8000/mcp list
 uv run python -m quail.mcp_client call quail_setup '{}'
-uv run python -m quail.mcp_client call quail_exec @exec.json
 ```
 
-Setup’s stdout has `session_id` and `datasets` at the top level. Copy those
-into `exec.json` with the analysis `code`:
+Setup’s stdout has `session_id` at the top level and `dataset_id` on each
+`datasets` row. Write `exec.json` from those plus `code`, then exec:
 
 ```json
-{"session_id": "ses_…", "dataset_id": "notes", "code": "print(count())"}
+{"session_id": "<session_id>", "dataset_id": "<dataset_id>", "code": "print(count())"}
+```
+
+```sh
+uv run python -m quail.mcp_client call quail_exec @exec.json
 ```
 
 ## Clerk
