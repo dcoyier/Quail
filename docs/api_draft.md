@@ -61,7 +61,7 @@ expression statement is discarded.
 | **Expression** | A recipe that reads or transforms one field's value for each entry. |
 | **Predicate** | A true-or-false recipe for each entry. |
 | **GroupExpr** | A symbolic population of entries or fields. It is not iterable. Pass it to `retrieve` for a list, or to `count` for a size. |
-| **Unit** | What `retrieve` returns and what `count` measures (entries, fields, present values, distinct values, or computed values). |
+| **Unit** | What `retrieve` lists and what `count` sizes. `count` always returns `int`. An Expression unit is computed values for `retrieve` and group size for `count` (the expression is not run). |
 | **Ranking** | How to score and order entry-scoped candidates. |
 | **Binding** | A top-level name that survives a successful exec in this session. |
 | **Overlay write** | `create_field`, `tag`, or `untag`. These change only the session overlay. |
@@ -117,12 +117,12 @@ Callables, groups, units, types, ops, `re`, and error classes are **reserved**
   the default unit. `fields` requires a field group such as `G1`.
   `retrieve(group=G1)` fails because the default unit is `entries`.
 
-Compose `Predicate` values and same-scope `GroupExpr` values with `&`, `|`,
-and `~`. Compare `Expression` values with `==`, `!=`, `<`, `<=`, `>`, `>=`.
-Python `and` / `or` / `not` work only on materialized values. Do not
-truth-test an `Expression`, `Predicate`, or `GroupExpr` with `if`, `while`,
-or `bool(...)`. Do not chain comparisons (`a < expr < b`). `is` is rejected
-at parse — write `== None` / `!= None`.
+Compose `Predicate` values with `&`, `|`, and `~`. Compose same-scope
+`GroupExpr` values with `&`, `|`, and `~`. Compare `Expression` values with
+`==`, `!=`, `<`, `<=`, `>`, `>=`. Python `and` / `or` / `not` work only on
+materialized values. Do not truth-test an `Expression`, `Predicate`, or
+`GroupExpr` with `if`, `while`, or `bool(...)`. Do not chain comparisons
+(`a < expr < b`). `is` is rejected at parse — write `== None` / `!= None`.
 
 `Operation` is the opaque value returned by operation factories such as
 `Length()`. It is not an injected constructor.
@@ -915,8 +915,7 @@ search op is the only op, field `kind` is `"source"`, and that field was
 processed for search). Any prefix op — including identity `Value()` — skips
 that warm index and scores the pipeline output instead. Analysis fields load
 and score cell values. Warm paths are optimizations; they do not change the
-recipe. Lexical scores are corpus-relative, so they are not comparable across
-different candidate populations.
+recipe. Lexical scores are corpus-relative.
 
 `quail_export_csv` is the host route to treat session analysis columns as
 source columns after the operator processes the export — see
@@ -1254,8 +1253,9 @@ directly), and any operation not listed as allowed.
 quail_export_csv(session_id, dataset_id)
 ```
 
-Pass arguments by name. Writes source columns plus this session's **analysis
-fields** (including created-but-untagged columns) to a CSV on the Quail server host.
+Pass arguments by name. Writes `"id"`, source columns, and this session's
+**analysis fields** (including created-but-untagged columns) to a CSV on the
+Quail server host.
 The tool result is not the file body:
 
 ```text
