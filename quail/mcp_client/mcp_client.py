@@ -12,6 +12,8 @@ from typing import Any
 from mcp.client import Client
 from mcp.types import CallToolResult
 
+from quail.mcp.http import PROTOCOL_VERSION
+
 DEFAULT_URL = "http://127.0.0.1:8000/mcp"
 # Cover Quail extended quail_exec wall time (100s) with queue/headroom budget.
 _READ_TIMEOUT_SECONDS = 300.0
@@ -73,7 +75,7 @@ def load_arguments(spec: str) -> dict[str, Any]:
 async def list_tools(url: str) -> dict[str, Any]:
     """Connect, list tools. Give back a JSON-ready mapping."""
 
-    async with Client(url, read_timeout_seconds=_READ_TIMEOUT_SECONDS) as client:
+    async with _client(url) as client:
         result = await client.list_tools()
     return {
         "tools": [
@@ -94,7 +96,7 @@ async def call_tool(
 ) -> CallToolResult:
     """Connect, call one tool. Give back the MCP CallToolResult."""
 
-    async with Client(url, read_timeout_seconds=_READ_TIMEOUT_SECONDS) as client:
+    async with _client(url) as client:
         return await client.call_tool(
             name,
             arguments or {},
@@ -147,6 +149,16 @@ def _mcp_url(args: argparse.Namespace) -> str:
     after = getattr(args, "url_after", None)
     before = getattr(args, "url_before", None)
     return after or before or DEFAULT_URL
+
+
+def _client(url: str) -> Client:
+    """MCP 2026-07-28 Streamable HTTP client; no initialize handshake."""
+
+    return Client(
+        url,
+        read_timeout_seconds=_READ_TIMEOUT_SECONDS,
+        mode=PROTOCOL_VERSION,
+    )
 
 
 def _client_error_message(error: BaseException) -> str:

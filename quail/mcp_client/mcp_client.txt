@@ -1,4 +1,5 @@
 There is a default MCP URL called DEFAULT_URL: http://127.0.0.1:8000/mcp.
+There is PROTOCOL_VERSION 2026-07-28, the only MCP revision this client speaks.
 There is a private HTTP read timeout of 300 seconds, used for Client connect
 and for each tools/call round.
 
@@ -19,6 +20,9 @@ main(optional argv):
 _mcp_url(args):
   Prefer --url after the subcommand, then --url before it, then DEFAULT_URL.
 
+_client(url):
+  Give back mcp.Client for url at PROTOCOL_VERSION with the private read timeout.
+
 _client_error_message(error):
   Walk ExceptionGroup to the first leaf. If the text is empty or a TaskGroup
   wrapper, use __cause__ / __context__. Give back that string.
@@ -33,13 +37,13 @@ load_arguments(spec):
   If JSON is invalid or not an object, raise ValueError.
 
 list_tools(url):
-  Open mcp.Client against url with the private read timeout.
+  Open a 2026-07-28 mcp.Client against url with the private read timeout.
   List tools.
   Give back a mapping with tools: name, description, inputSchema for each tool
   (camelCase keys for the operator stdout contract).
 
 call_tool(url, name, optional arguments):
-  Open mcp.Client against url with the private read timeout.
+  Open a 2026-07-28 mcp.Client against url with the private read timeout.
   Call the named tool with arguments (default {}).
   Pass the same read timeout on the call.
   Give back the MCP CallToolResult.

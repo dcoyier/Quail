@@ -128,6 +128,21 @@ def test_main_call_sdk_value_error_exits_1(
     assert "unexpected content type" in captured.err
 
 
+def test_legacy_client_cannot_connect(mcp_url: str) -> None:
+    from mcp.client import Client
+    from mcp_types import UNSUPPORTED_PROTOCOL_VERSION
+
+    async def _legacy() -> None:
+        async with Client(mcp_url, mode="legacy") as client:
+            await client.list_tools()
+
+    with pytest.raises(Exception) as raised:  # noqa: BLE001 - SDK wraps the -32022
+        asyncio.run(_legacy())
+    text = str(raised.value)
+    assert "TaskGroup" not in text
+    assert str(UNSUPPORTED_PROTOCOL_VERSION) in text or "protocol version" in text.lower()
+
+
 def test_list_and_call_against_live_server(mcp_url: str) -> None:
     listed = asyncio.run(list_tools(mcp_url))
     names = {tool["name"] for tool in listed["tools"]}

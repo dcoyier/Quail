@@ -7,8 +7,9 @@ serve(config, verifier default None):
   Close the core DB handle.
   Build MCP from config (optional test verifier for Clerk), including search
   runtime and connector catalog.
-  Block on streamable-http at config.bind/config.port; on exit close the
-  search pool and disconnect connectors, then release the lease.
+  Block on streamable-http at config.bind/config.port (2026-07-28 only,
+  stateless); on exit close the search pool and disconnect connectors, then
+  release the lease.
 
 run_from_config(config, verifier default None):
   Same as serve.

@@ -28,8 +28,9 @@ create_mcp_server(db_path, feedback_path, workspace_id default local, api_docs_p
                   include_dataset_docs_in_setup default false):
   Build a _ToolHost whose resolvers always give back the fixed workspace_id
   with user_id None.
-  Build MCPServer with unrestricted instructions, register the core tools, and
-  give back the server. Bind address is chosen later at serve run.
+  Build MCPServer with unrestricted instructions, register the core tools,
+  attach_modern_http so Streamable HTTP is 2026-07-28 only, and give back
+  the server. Bind address is chosen later at serve run.
 
 create_mcp_server_from_config(config, api_docs_path default None, verifier default None):
   Configure process-wide exec slots from config.max_concurrent_executions.
@@ -50,7 +51,7 @@ create_clerk_mcp_server(config, verifier, api_docs_path default None,
   (token verify plus TOML [[users]] allowlist).
   Register /.well-known/oauth-authorization-server proxy for older clients.
   Register the clerk list/switch workspace tools, then the same core tools with
-  clerk resolvers, and give back the server.
+  clerk resolvers, attach_modern_http, and give back the server.
   Connector HTTP file routes authenticate Bearer and require workspace membership.
 
 _run_tool(work, on_error default None):
@@ -95,20 +96,20 @@ _register_core_tools(server, host):
 Clerk resolvers:
   _clerk_auth: authenticate Bearer via override or request headers; on auth
     failure give back an error result with a mode-appropriate repair hint.
-  _clerk_workspace: sticky-bind default_workspace once per Streamable HTTP
-    connection (mcp-session-id header), falling back to the Clerk user id when
-    no connection id is present (in-process tests). Unbound gets
-    UNBOUND_REPAIR_HINT; a stale bind must still be a membership.
+  _clerk_workspace: sticky-bind default_workspace once per Clerk user
+    (user:{clerk_user_id}). Unbound gets UNBOUND_REPAIR_HINT; a stale bind
+    must still be a membership.
   _clerk_resolve: auth then workspace; give back (workspace_id, user_id).
   _clerk_resolve_user: auth only; give back user_id.
 
 _register_clerk_workspace_tools(server, runtime):
   quail_list_workspaces returns memberships (or only default when locked) and
     active_workspace_id.
-  quail_switch_workspace binds an allowlisted workspace or errors when locked.
+  quail_switch_workspace binds an allowlisted workspace for this Clerk user
+    or errors when locked.
 
-_authorization_header, _mcp_session_id, _clerk_connection_key: read Bearer and
-the per-connection Streamable HTTP session id from the request context.
+_authorization_header: read Bearer from override or request headers.
+_clerk_connection_key: user:{clerk_user_id}. There is no transport session.
 _exec_repair_hint: prefer QuailRuntimeError.repair_hint over the generic exec
 failure hint.
 _build_setup_payload / _dataset_documentation: assemble the quail_setup payload

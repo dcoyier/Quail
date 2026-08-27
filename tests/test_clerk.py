@@ -458,27 +458,9 @@ def test_clerk_export_csv_writes_host_file(tmp_path: Path) -> None:
     asyncio.run(run())
 
 
-def test_mcp_session_id_reads_streamable_http_header() -> None:
-    from quail.mcp.server.server import _clerk_connection_key, _mcp_session_id
+def test_clerk_connection_key_is_clerk_user() -> None:
+    from quail.mcp.server.server import _clerk_connection_key
 
-    class _Request:
-        def __init__(self, headers: dict[str, str]) -> None:
-            self.headers = headers
-
-    class _RequestContext:
-        def __init__(self, headers: dict[str, str]) -> None:
-            self.request = _Request(headers)
-
-    class _Ctx:
-        def __init__(self, headers: dict[str, str]) -> None:
-            self.request_context = _RequestContext(headers)
-
-        @property
-        def session(self) -> object:
-            raise AttributeError("ServerSession has no id")
-
-    assert _mcp_session_id(_Ctx({"mcp-session-id": "conn-1"})) == "conn-1"
-    assert _mcp_session_id(_Ctx({})) is None
     principal = AllowlistedPrincipal(
         user=UserSpec(
             user_id="alice",
@@ -489,8 +471,7 @@ def test_mcp_session_id_reads_streamable_http_header() -> None:
         ),
         clerk_user_id="user_alice",
     )
-    assert _clerk_connection_key(principal, _Ctx({"mcp-session-id": "conn-1"})) == "sess:conn-1"
-    assert _clerk_connection_key(principal, _Ctx({})) == "user:user_alice"
+    assert _clerk_connection_key(principal) == "user:user_alice"
 
 
 def test_sticky_workspace_rejects_non_member_bind(

@@ -48,7 +48,8 @@ uv run quail process --config /absolute/path/to/quail.toml
 uv run quail run --config /absolute/path/to/quail.toml
 ```
 
-4. Connect an MCP client to `http://127.0.0.1:8000/mcp` (default bind/port).
+4. Connect an MCP 2026-07-28 client to `http://127.0.0.1:8000/mcp`
+   (default bind/port). The server does not speak the initialize handshake.
    If you do not have a native MCP client, use the thin Streamable HTTP helper:
 
 ```sh
