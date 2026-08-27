@@ -23,7 +23,7 @@ Pass arguments by name.
 
 **Success:** `{"printed_output": "<exactly what print() wrote>"}`.  
 **Failure:** a tool error with `execution_id: null` and a `diagnostic`.
-Nothing partial is kept if quail_exec fails — no tags, no bindings, no printed text.
+Nothing partial is kept if quail_exec fails — no mutations, no bindings, no printed text.
 
 Only `print(...)` leaves the sandbox. Return values of expressions do not.
 
@@ -104,12 +104,12 @@ compare `Expression` values with `==` `!=` `<` `<=` `>` `>=`. Python `and` /
 1. **One dataset per exec** — the active immutable version of `dataset_id`.
 2. **Source data is frozen** — only analysis fields/tags change, and only in-session.
 3. **Print-only output** — success returns the print buffer; failure returns none of it.
-4. **Atomic exec** — all tags/bindings/prints commit together or not at all.
+4. **Atomic exec** — all mutations, bindings, and prints commit together or not at all.
 5. **Later lines see earlier tags** in the same successful run; failed runs roll back.
 6. **No outside world** — no imports, files, network, DB handles, or env.
 
 The `time_window` ceilings are fixed product limits. Hitting any ceiling fails
-the whole exec atomically (no tags, bindings, or printed output).
+the whole exec atomically (no mutations, bindings, or printed output).
 
 ---
 
@@ -302,9 +302,8 @@ Called with `session_id` and `dataset_id`, it writes source columns plus this
 session’s analysis fields (including created-but-untagged) to a CSV path on
 the serve host (a filesystem path, not the file body) so the operator can
 process those fields as **source** columns later — the warm-path route to
-fast `Lexical` / `Semantic` over session analysis fields. Export itself does
-not reprocess. Do not overlap it with `quail_exec` on the same `session_id`
-(`session_busy`).
+fast `Lexical` / `Semantic` over session analysis fields. Export itself does not reprocess.
+Do not overlap it with `quail_exec` on the same `session_id` (`session_busy`).
 
 ---
 
