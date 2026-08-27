@@ -38,7 +38,7 @@ Only `print(...)` leaves the sandbox. Return values of expressions do not.
 | **Expression** | Recipe that reads/transforms one field’s value per entry. |
 | **Predicate** | True/false recipe per entry (usually from comparing expressions). |
 | **GroupExpr** | Symbolic set of entries or fields — not a Python list until you retrieve. |
-| **Unit** | What `retrieve`/`count` should return (entries, fields, values, …). |
+| **Unit** | What `retrieve` lists (`count` always returns `int`). |
 | **Ranking** | How to score and order entries. |
 | **Binding** | Top-level name that survives a successful exec in this session. |
 | **Mutation** | `create_field` / `tag` / `untag` — session overlay only. |
@@ -63,8 +63,8 @@ if len(samples) > 0:
         print(field.name, repr(samples[0].value(field)))
 ```
 
-Empty cells are `None`, not `""`. Imported CSV cells are stripped strings, not
-numbers — use `AsNumber()` for numeric compare.
+Imported blank cells are `None`. A tagged `""` stays `""`. Imported CSV cells
+are stripped strings, not numbers — use `AsNumber()` for numeric compare.
 
 From here, follow your question. The pieces below are designed for you to
 explore in any direction.
@@ -73,7 +73,9 @@ explore in any direction.
 
 ## What you can use (injected namespace)
 
-No imports. These names are injected and reserved.
+No imports. These names are injected. Callables, groups, units, types, ops,
+`re`, and error classes are reserved (cannot be assigned or deleted). Safe
+builtins are injected but not reserved.
 
 | Kind | Names |
 | --- | --- |
@@ -86,12 +88,14 @@ No imports. These names are injected and reserved.
 | Safe builtins | `abs`, `all`, `any`, `bool`, `dict`, `enumerate`, `float`, `int`, `len`, `list`, `max`, `min`, `range`, `repr`, `round`, `set`, `str`, `sum`, `tuple` |
 
 - **`G0`**: all entries (import order). **`G1`**: all fields (source then analysis).
-- **`entries` / `fields`**: default units for retrieve/count — not groups.
-  `retrieve(group=G1)` fails because the default unit is `entries`.
+- **`entries` / `fields`**: injected units, not groups. Omitted `unit` defaults
+  to `entries`. `retrieve(group=G1)` fails because of that.
 
-Compose symbolic values with `&` `|` `~` and comparisons. Do **not** use Python
-`and` / `or` / `not`, `if` on a Predicate, or chained comparisons on Expressions.
-Use `== None` / `!= None`, not `is None`.
+Compose `Predicate` and same-scope `GroupExpr` values with `&` `|` `~`, and
+compare `Expression` values with `==` `!=` `<` `<=` `>` `>=`. Python `and` /
+`or` / `not` work on materialized values. On an `Expression`, `Predicate`, or
+`GroupExpr`, use `&` `|` `~` — do not `if` them or chain comparisons
+(`a < expr < b`). Use `== None` / `!= None`, not `is None`.
 
 ---
 
@@ -141,8 +145,9 @@ entry.fields()                    # list[Field] present on this entry
 
 ### `Expression(input, operation, ...)`
 
-`input` is a `Field` or another `Expression`. Pipeline must start with `Value()`
-when reading a field as-is; nest to append ops.
+`input` is a `Field` or another `Expression`. Pipelines need at least one
+operation. `Value()` reads a field as-is and, if used, must be first; other
+ops may start the pipeline. Nest to append ops.
 
 Comparisons (`==`, `!=`, `<`, …) produce a **Predicate**.
 
@@ -150,7 +155,7 @@ Comparisons (`==`, `!=`, `<`, …) produce a **Predicate**.
 
 | Op | Role |
 | --- | --- |
-| `Value()` | Identity; first in pipeline when reading the field |
+| `Value()` | Identity; first in pipeline if used |
 | `AsText()` | Python `str(value)` (`None` → `""`) |
 | `AsNumber()` | Finite float from number or numeric string |
 | `RegexSearch(pattern, flags=0)` | First match substring, or `None` |
@@ -185,8 +190,9 @@ not_pred = ~pred
 ```
 
 `GroupExpr("entries", predicate=...)` or `members=[...]` (entries or fields,
-matching scope). Compose groups with `&` `|` `~`. Materialize with `retrieve` /
-`count` — do not iterate a GroupExpr directly.
+matching scope). Compose groups with `&` `|` `~`. `.where` is entry-scoped
+(`G0`, not `G1`). Materialize with `retrieve` / `count` — do not iterate a
+GroupExpr directly.
 
 ### `Ranking(expression=None)`
 
@@ -219,22 +225,24 @@ Pass `retrieve` / `count` by name — the first positional argument is `unit`,
 so `retrieve(matching)` fails.
 
 - `retrieve` always returns a **list** (possibly empty).
+- `count` always returns an **int**.
 - Omitted `limit` defaults to **1** (not the whole group).
 - `retrieve` `unit` may be a `Unit` or an `Expression` (one computed value per
   remaining entry).
 - `count` `unit` may be a `Unit` or an `Expression`. An Expression unit is the
   **group size** — the expression is not run. Match counts use
   `count(group=G0.where(score > 0))`.
-- `group` is a `GroupExpr` (`G0`, `G1`, `.where`, `&` `|` `~`, or
-  `GroupExpr("entries", members=hits)`). `tag` / `untag` also accept
-  `list[Entry]`; `retrieve` / `count` do not.
+- `group` is a `GroupExpr` (`G0`, `G1`, `G0.where(...)`, `&` `|` `~`, or
+  `GroupExpr("entries", members=hits)`). `.where` is entry-scoped (`G0`, not
+  `G1`). `tag` / `untag` also accept `list[Entry]`; `retrieve` / `count` do
+  not.
 - `rank` is a `Ranking` (wrap a score Expression). `+` / `*` already produce
   a Ranking.
 - `order`: `"top"` | `"middle"` | `"bottom"`.
 - Narrow with `.where` **before** expensive ranking when you can — ranking
   scores the whole candidate set before applying `limit`.
 
-| Unit | Group | Items | Can rank? |
+| Unit | Group | retrieve items | Can rank? |
 | --- | --- | --- | --- |
 | entries | entry group | `Entry` | yes |
 | fields | field group | `Field` | no |
@@ -247,13 +255,14 @@ so `retrieve(matching)` fails.
 ## Mutations
 
 ```python
-create_field("topic")           # or Field("topic") / Field("topic", "analysis")
-tag(group_or_entries, field, value)      # value: JSON-like, no None inside
-untag(group_or_entries, field)           # clear all selected
-untag(group_or_entries, field, value)    # clear exact matches only
+topic = create_field("topic")            # returns Field; or Field("topic") / Field("topic", "analysis")
+tag(group, topic, value)                 # group: GroupExpr | list[Entry]; field: Field; no None in value
+untag(group, topic)                      # clear all selected
+untag(group, topic, value)               # clear Python == matches
 ```
 
-Source fields cannot be created or overwritten. Empty selections are no-ops.
+Source fields cannot be created or overwritten. An empty group or list writes
+nothing; unknown or source `field` still errors.
 
 ---
 
@@ -269,16 +278,18 @@ A query is a **non-empty list of target texts**, spelled as a `str`,
 each entry’s expression root field). Aggregations: `"total"`, `"avg"`, or
 `None` (= total).
 
-- **Lexical:** FTS relevance; `score > 0` means “matched”, and scores are
-  corpus-relative. String queries use FTS syntax: unquoted spaces are OR (not
-  a phrase); `"quoted text"` is adjacent tokens; `term*` prefixes one clean
-  term; uppercase `AND` / `NOT` are operators and there is no `OR` keyword
-  (lowercase `and` / `not` / `or` are ordinary terms). Punctuation splits into
-  terms the same way indexing does. `list[str]` ORs each string as its own
-  query; entry-derived targets tokenize and quote their terms (OR).
+- **Lexical:** FTS relevance; `score > 0` means “matched”. Unmatched and
+  absent cells score `0.0` (not `None`). Scores are corpus-relative. String
+  queries use FTS syntax: unquoted spaces are OR (not a phrase); `"quoted
+  text"` is adjacent tokens; `term*` prefixes one clean term; uppercase
+  `AND` / `NOT` are operators and there is no `OR` keyword (lowercase `and` /
+  `not` / `or` are ordinary terms). Punctuation in one atom becomes OR of the
+  split tokens. `list[str]` scores each string as its own query, then sums
+  (`total` / `None`) or averages (`avg`) — that is not FTS OR. Entry-derived
+  targets tokenize and quote their terms (OR).
 - **Semantic:** exact cosine similarity under the dataset embedding profile
   (configured outside this API). Cosine is not a match bit — do not reuse
-  Lexical’s `score > 0` as “matched.” Empty cells score `None`.
+  Lexical’s `score > 0` as “matched.” Absent cells score `None`.
 
 Both run fastest on a bare source field (no ops before the search op) that was
 processed for search; transformed values and analysis fields load and score
@@ -313,9 +324,12 @@ That buffer is the only caller-visible analysis output.
 
 ## Python surface (bounded)
 
-Allowed in spirit: literals, assignment, `if`/`for`/`while` on **concrete**
-values, calls to the injected API, listed string methods (`lower`, `split`, …),
-`entry.value` / `entry.fields` / `group.where` / `re.escape`.
+Allowed in spirit: literals, simple `name = value` (not `+=`, annotated, item,
+or attribute assign), `if`/`for`/`while` on **concrete** values, calls to the
+injected API, these string methods (`startswith`, `endswith`, `lower`,
+`upper`, `casefold`, `strip`, `lstrip`, `rstrip`, `replace`, `split`,
+`rsplit`, `splitlines`, `count`, `find`, `rfind`, `removeprefix`,
+`removesuffix`), `entry.value` / `entry.fields` / `group.where` / `re.escape`.
 
 Not allowed: imports, `def`/`lambda`, comprehensions, f-strings, `try`/`except`,
 `is`, `open`/`eval`/`exec`, mutating methods on containers (rebind instead),
@@ -337,5 +351,5 @@ Failures are atomic. Typical categories:
 | `QuailFieldError` | Unknown field, kind mismatch, source mutation |
 | `QuailRuntimeError` | Bad data for an op, search down, timeout, resource limit |
 
-Tool errors include `stable_error_code`, `message`, optional `repair_hint`, and
-optional source location. Prefer fixing from that over guessing.
+Tool errors include `error_class`, `stable_error_code`, `message`, and
+optional `repair_hint`. Prefer fixing from that over guessing.
