@@ -29,7 +29,7 @@ how-to (`process` / `run`, lease, Clerk): [`README.md`](../README.md).
 | Analysis semantics / op pipeline rules | `docs/core.md`, then `OP_SPECS` in `quail/analysis/operations/` |
 | Analysis language / agent `quail_exec` contract | `docs/api.md` then `quail/analysis/` |
 | Deploy, auth mode, concurrency, warm | `README.md`, then `quail/config/`, `quail/run/`, `quail/mcp/` |
-| Shell fallback MCP client | `README.md` Run it, then `quail/mcp_client/` |
+| Shell fallback MCP client | `README.md` Running Quail, then `quail/mcp_client/` |
 | Connector author surface | `docs/connector-sdk.md` then `quail.connectors.sdk` only |
 | Tests | Prefer v0.11 tests under `tests/` |
 

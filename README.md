@@ -1,65 +1,85 @@
 # Quail v0.11
 
-Quail is an MCP environment for qualitative analysis of a text corpus. Agents
-write bounded Python against a compact analysis API. They do not chat over
-retrieved chunks.
+Quail is an MCP environment for qualitative analysis of a text corpus.
+Agents write bounded Python against a compact analysis API rather than
+chatting over retrieved chunks.
 
 Researchers hold text worth deciding from, and not enough time to read it.
 Chat and retrieval hide the operations that connect evidence to claims, and
-they cannot examine a corpus past what fits in context.
+they cannot examine a corpus past what fits in context. Following
+Cloudflare’s Code Mode, Quail composes those operations inside code rather
+than as a chain of discrete tool calls.
 
 Analysis happens inside `quail_exec`. You build inert descriptions, evaluate
-them with `retrieve` / `count` / `tag` / `untag`, and `print` what should leave
-the sandbox. Those names are not MCP tools. `Lexical` and `Semantic` are score
-ops in that language, not a chat retriever. A successful exec commits prints,
-tags, and bindings together; a failure keeps nothing.
+them with `retrieve`, `count`, `tag`, and `untag`, and `print` what should
+leave the sandbox. Those names belong to the analysis language, not the MCP
+tool list; `Lexical` and `Semantic` are score ops in that language, not a
+chat retriever. A successful exec commits prints, tags, and bindings
+together. A failure keeps nothing, so the session you reuse is either fully
+updated or untouched.
 
-If you are connected: call `quail_setup` once. It returns `documentation` (the
-analysis language), a dataset catalog, and `session_id`. Pick a `dataset_id`.
-Then `quail_exec(session_id, dataset_id, code)`. Reuse that `session_id`
-serially. Field names are not in the catalog — print them from exec. If
-`quail_list_workspaces` is in the tool list (Clerk), bind a workspace, then
-setup; do not reuse an old `session_id`.
+The language is the same whether you run locally as an ephemeral
+unrestricted server or remotely with Clerk identity and persistent
+workspaces.
 
-If you are bringing the server up: [Run it](#run-it).
+If you are already connected, call `quail_setup` once. It returns
+`documentation` (the analysis language), a dataset catalog, and a
+`session_id`. Pick a `dataset_id`, then call
+`quail_exec(session_id, dataset_id, code)` and reuse that `session_id`
+serially.
 
-- Analyze: [How to analyze](#how-to-analyze)
-- Local vs persistent: [Local or remote](#local-or-remote)
-- Bring the server up: [Run it](#run-it)
-- Shared host: [Clerk](#clerk)
-- Language: [`docs/api.md`](docs/api.md) · Semantics: [`docs/core.md`](docs/core.md)
+Field names are not in the catalog, so print them from exec. If
+`quail_list_workspaces` is in the tool list (Clerk), bind a workspace
+before setup, and do not reuse an old `session_id`.
 
-## How to analyze
+If you are bringing the server up, start at [Running Quail](#running-quail).
 
-`quail_setup` once at cold start. Prefer it over `quail_get_api_docs`,
-`quail_list_datasets`, and `quail_start_session`.
+This README covers [working with a corpus](#working-with-a-corpus),
+[the analysis model](#the-analysis-model), [local or remote](#local-or-remote)
+servers, [how to run Quail](#running-quail), and [Clerk](#clerk) for a
+shared host. The analysis language lives in [`docs/api.md`](docs/api.md);
+the load-bearing semantics are in [`docs/core.md`](docs/core.md).
 
-1. Pick `dataset_id` from setup’s `datasets`. `quail_get_dataset_info` is
-   corpus notes, not a field schema (skip if setup already inlined those docs).
-2. `quail_exec(session_id, dataset_id, code)`. Pass arguments by name.
-   Success is `{"printed_output": "..."}` — only `print()` leaves the sandbox.
-   Failure is a diagnostic; nothing partial is kept. Optional `time_window`:
-   `"standard"` (30s wall / 15s CPU) or `"extended"` (100s / 60s). Worker RSS
-   256 MiB. Hitting a ceiling fails the whole exec.
-3. Reuse the same `session_id` serially. One in-flight `quail_exec` per session
-   (`session_busy` if you overlap, including with `quail_export_csv`). Do not
-   use another user’s `session_id`. After `quail_switch_workspace`, setup (or
-   `quail_start_session`) again.
+## Working with a corpus
+
+At cold start, call `quail_setup` once rather than `quail_get_api_docs`,
+`quail_list_datasets`, and `quail_start_session` separately. Setup returns
+the documentation, the catalog, and a session in a single round trip.
+
+From there the loop is small:
+
+1. Pick a `dataset_id` from setup’s `datasets`.
+2. Call `quail_exec(session_id, dataset_id, code)`, passing arguments by name.
+3. Reuse that `session_id` serially for later execs.
+
+`quail_get_dataset_info` is corpus notes, not a field schema, so skip it when
+setup already inlined those docs. Success from exec is
+`{"printed_output": "..."}`: only `print()` leaves the sandbox, and a
+failure is a diagnostic with nothing partial kept. You can pass
+`time_window` as `"standard"` (30s wall / 15s CPU) or `"extended"`
+(100s / 60s). Worker RSS is 256 MiB, and hitting any ceiling fails the whole
+exec.
+
+Only one `quail_exec` may be in flight per session — overlap, including with
+`quail_export_csv`, returns `session_busy`. Do not use another user’s
+`session_id`. After `quail_switch_workspace`, call setup (or
+`quail_start_session`) again rather than reusing the old session.
 
 `provide_feedback` is for friction and improvements, not analysis results.
 `quail_export_csv` writes a host filesystem path on the machine running
-`quail run`, not a download — [Export and privacy](#export-and-privacy).
+`quail run`, not a download — see [Export and privacy](#export-and-privacy).
 
-Core tools: `quail_setup`, `quail_get_api_docs`, `quail_list_datasets`,
+The core tools are `quail_setup`, `quail_get_api_docs`, `quail_list_datasets`,
 `quail_start_session`, `quail_get_dataset_info`, `quail_exec`,
-`quail_export_csv`, `provide_feedback`. Clerk adds `quail_list_workspaces` and
-`quail_switch_workspace`. Connectors may add tools, resources, and MCP UI
-widgets for the active workspace.
+`quail_export_csv`, and `provide_feedback`. Clerk adds
+`quail_list_workspaces` and `quail_switch_workspace`. Connectors may add
+tools, resources, and MCP UI widgets for the active workspace.
 
-### What is true
+### The analysis model
 
-Canonical copy: [`docs/core.md`](docs/core.md). If this list and that file
-disagree, that file wins.
+These six statements are the spec. The canonical copy is
+[`docs/core.md`](docs/core.md); if this list and that file disagree, that
+file wins.
 
 1. **A dataset is an immutable grid.** Entries × fields, JSON-like values.
    Absence is `None`. Imported source data never changes.
@@ -78,16 +98,18 @@ disagree, that file wins.
 6. **Search is not special.** `Lexical` and `Semantic` are ordinary ops that
    produce a score. Warm paths are optimizations, never semantics.
 
-No imports; names are injected. Omitted `retrieve` `limit` defaults to **1**.
-Do not use Python `and` / `or` / `not` on Predicates; use `== None`, not
-`is None`. Overlay writes are `create_field` / `tag` / `untag` — see
-[`docs/api.md`](docs/api.md).
+The sandbox injects the names you need; there are no imports. Overlay writes
+are `create_field`, `tag`, and `untag`. An omitted `retrieve` `limit`
+defaults to **1**. Predicates compose with `&`, `|`, and `~` rather than
+Python `and` / `or` / `not`, and absence is `== None`, not `is None`. The
+rest of the language is in [`docs/api.md`](docs/api.md).
 
 ### First exec
 
-Field names differ per dataset. `G0` is all entries; `G1` is all fields;
-`fields` / `entries` are units (not groups). The CSV `id` column is `entry.id`,
-not `Field("id")`. Empty cells are `None`, not `""`.
+Field names differ per dataset, so print them before assuming a schema. `G0`
+is all entries and `G1` is all fields; `fields` and `entries` are units, not
+groups. The CSV `id` column is `entry.id`, not `Field("id")`, and empty
+cells are `None`, not `""`.
 
 ```python
 for field in retrieve(unit=fields, group=G1, limit=50):
@@ -104,27 +126,29 @@ follow the question.
 
 ## Local or remote
 
-Same analysis language. Two ways to instantiate the server.
+The analysis language is the same whether the server is local or remote.
 
 - **Local (unrestricted).** One fixed workspace, no sign-in, loopback by
-  default ([`examples/quail.toml`](examples/quail.toml)). A one-off server on
-  that machine. Fits a throwaway VM: run the task, discard the machine.
-- **Remote (Clerk).** One URL, Clerk identity, TOML `[[users]]` allowlist,
-  persistent workspaces, shared datasets
+  default ([`examples/quail.toml`](examples/quail.toml)). This is a one-off
+  server on that machine, and it fits a throwaway VM: run the task, then
+  discard the machine.
+- **Remote (Clerk).** One URL, Clerk identity, a TOML `[[users]]` allowlist,
+  persistent workspaces, and shared datasets
   ([`examples/quail.clerk.toml`](examples/quail.clerk.toml)). Sessions belong
   to the creating user. Setup is [Clerk](#clerk).
 
 Unauthenticated non-loopback MCP (including a wildcard bind) requires
-`hosting.allow_public_unrestricted = true` (fail-closed without it). Clerk
-public origins should be `https://` unless you set
+`hosting.allow_public_unrestricted = true`; without it, the server
+fail-closes. Clerk public origins should be `https://` unless you set
 `hosting.allow_insecure_http = true`.
 
-## Run it
+## Running Quail
 
-Requires Python 3.12–3.13. Hand-edit `quail.toml`. The CLI never writes it.
-`--config` must be absolute. Paths inside the TOML are relative to the
-manifest directory. Unknown keys fail closed. Template comments in
-[`examples/quail.toml`](examples/quail.toml) are the rest of the manifest.
+Quail requires Python 3.12–3.13. You hand-edit `quail.toml`; the CLI never
+writes it. `--config` must be absolute, and paths inside the TOML are
+relative to the manifest directory. Unknown keys fail closed. Template
+comments in [`examples/quail.toml`](examples/quail.toml) are the rest of the
+manifest.
 
 ```sh
 uv sync
@@ -146,6 +170,9 @@ uv run quail run --config /absolute/path/to/quail.toml
 
 ### process then run
 
+`process` prepares versions and `run` serves them. They cannot hold the
+same deployment lease at once, so stop `quail run` before `quail process`.
+
 - **`process`** — imports declared CSVs, warms Lexical FTS and any corpus
   embeddings when a search database is configured, then activates those
   versions. Pins embeddings when a dataset declares them. With no search
@@ -154,19 +181,20 @@ uv run quail run --config /absolute/path/to/quail.toml
   unless each imported version is already active (and, when a search database
   is set, warm receipts match the TOML), then serves MCP. Never activates.
 
-`process` and `run` cannot hold the same deployment lease at once. Stop
-`quail run` before `quail process`. If the lease is held, the CLI prints the
-error and a repair hint (`Stop the running Quail server…`).
+If the lease is held, the CLI prints the error and a repair hint
+(`Stop the running Quail server…`).
 
 Re-run `process` after changing the embedding profile (`provider`, `model`,
 `dimensions`, `revision`, or `fields`) or `[datasets.lexical]`. Keep the same
 dataset `id` when the CSV changes: embeddings for unchanged text are copied
-from any prior version of that `id` with the same embedding profile; only new
-strings are embedded. A new `id` rebuilds from scratch. Changing the embedding
-profile also rebuilds. `[search.warm]` batch/concurrency apply on the next
-`process`; they do not by themselves require a rebuild. `quail process --clear`
-requires a search database: it wipes search artifacts for versions being warmed
-and rebuilds them without copying; core CSV data is untouched.
+from any prior version of that `id` with the same embedding profile, and only
+new strings are embedded. A new `id` rebuilds from scratch. Changing the
+embedding profile also rebuilds.
+
+`[search.warm]` batch and concurrency settings apply on the next `process`;
+they do not by themselves require a rebuild. `quail process --clear` requires
+a search database: it wipes search artifacts for versions being warmed and
+rebuilds them without copying; core CSV data is untouched.
 
 `[hosting] max_concurrent_executions` (default `2`) caps simultaneous
 `quail_exec` work process-wide and sizes the search pool. Restart `quail run`
@@ -174,12 +202,12 @@ after changing it.
 
 ### Export and privacy
 
-`quail_export_csv` writes source columns plus this session's tags to a CSV on
-the machine running `quail run` (a host `path`, not a download) so those tag
-columns can be processed as **source**. That `quail process` step is the
-warm-path speedup (`Lexical` / `Semantic` skip cell load). Export itself does
-not reprocess. Remote clients can call the tool; the path and process stay on
-the host.
+`quail_export_csv` writes source columns plus this session's tags to a CSV
+on the machine running `quail run`. What you get back is a host `path`, not
+a download, so those tag columns can be processed as **source**. That
+`quail process` step is the warm-path speedup (`Lexical` / `Semantic` skip
+cell load). Export itself does not reprocess. Remote clients can call the
+tool; the path and process stay on the host.
 
 If a dataset pins `provider = "openrouter"`, warm and query embedding exports
 send full field text off-host. Prefer Ollama when text must stay local.
@@ -187,9 +215,9 @@ send full field text off-host. Prefer Ollama when text must stay local.
 ### Shell fallback
 
 If you do not have a native MCP client, use the thin Streamable HTTP helper.
-Default URL is `http://127.0.0.1:8000/mcp`. `--url` may sit before or after the
-subcommand (`list --url …` still works). Arguments are a JSON object,
-`@path.json`, or `-` (stdin). On `list` / `call`, stdout is JSON only.
+The default URL is `http://127.0.0.1:8000/mcp`. `--url` may sit before or
+after the subcommand (`list --url …` still works). Arguments are a JSON
+object, `@path.json`, or `-` (stdin). On `list` / `call`, stdout is JSON only.
 
 ```sh
 uv run python -m quail.mcp_client list
@@ -200,15 +228,19 @@ uv run python -m quail.mcp_client call quail_exec @exec.json
 
 ## Clerk
 
-Clerk proves identity (`sub`); `auth.clerk_authorized_parties` binds tokens to
-your Clerk app (`azp`/`aud`); TOML `[[users]]` gates MCP access (not only
-tool bodies). Advertised OAuth scopes are for client UX — Quail does not
-enforce them from the token. Sessions belong to the creating user.
+Clerk proves identity (`sub`). `auth.clerk_authorized_parties` binds tokens
+to your Clerk app (`azp`/`aud`), and TOML `[[users]]` gates MCP access — not
+only the bodies of individual tools. Advertised OAuth scopes are for client
+UX; Quail does not enforce them from the token. Sessions belong to the
+creating user.
 
-Template: [`examples/quail.clerk.toml`](examples/quail.clerk.toml). Bind a
-workspace before dataset, session, or exec tools. Omit `default_workspace` to
-stay unbound until `quail_switch_workspace`. `lock_workspace` pins that user
-to their default — list/switch will not change it.
+The template is [`examples/quail.clerk.toml`](examples/quail.clerk.toml).
+Bind a workspace before you call dataset, session, or exec tools. Omit
+`default_workspace` to stay unbound until `quail_switch_workspace`.
+`lock_workspace` pins that user to their default, and list/switch will not
+change it.
+
+Stand up a shared host in this order:
 
 1. In Clerk, enable **Dynamic client registration** and default scopes
    `openid`, `profile`, `email` (MCP client UX).
