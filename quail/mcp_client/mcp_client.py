@@ -181,12 +181,38 @@ def _client_error_message(error: BaseException) -> str:
 
 
 def _call_result_payload(result: CallToolResult) -> dict[str, Any]:
-    """Operator stdout: isError plus structuredContent for every tool."""
+    """Operator stdout: camelCase envelope without a cloned text content block."""
 
-    return {
+    content = [
+        block.model_dump(mode="json", by_alias=True, exclude_none=True)
+        for block in result.content
+    ]
+    payload: dict[str, Any] = {
         "isError": bool(result.is_error),
         "structuredContent": result.structured_content,
     }
+    if result.structured_content is not None and _content_is_payload_clone(
+        content, result.structured_content
+    ):
+        return payload
+    payload["content"] = content
+    return payload
+
+
+def _content_is_payload_clone(content: list[dict[str, Any]], payload: Any) -> bool:
+    if len(content) != 1:
+        return False
+    block = content[0]
+    if block.get("type") != "text":
+        return False
+    text = block.get("text")
+    if not isinstance(text, str):
+        return False
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return False
+    return parsed == payload
 
 
 def _print_json(payload: Any) -> None:

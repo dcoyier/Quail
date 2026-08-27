@@ -56,8 +56,14 @@ _build_parser:
   Subcommand call takes tool_name and arguments.
 
 _call_result_payload(result):
-  Give back isError and structuredContent for every tool (camelCase stdout
-  contract). Do not print content blocks.
+  Give back isError and structuredContent (camelCase stdout contract).
+  JSON-dump content blocks with wire aliases (mimeType stays camelCase) and
+  drop null fields.
+  If content is a single text block that JSON-equals structuredContent, omit
+  content so the payload is not printed twice.
+
+_content_is_payload_clone(content, payload):
+  True when content is one text block whose JSON text equals payload.
 
 _print_json(payload):
   Write indented JSON plus a trailing newline to stdout.
