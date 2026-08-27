@@ -257,6 +257,13 @@ uv run python -m quail.mcp_client call quail_setup '{}'
 uv run python -m quail.mcp_client call quail_exec @exec.json
 ```
 
+Setup’s stdout has `session_id` and `datasets` at the top level. Copy those
+into `exec.json` with the analysis `code`:
+
+```json
+{"session_id": "ses_…", "dataset_id": "notes", "code": "print(count())"}
+```
+
 ## Clerk
 
 Remote deployments use Clerk to prove who is calling (`sub`), then a TOML
