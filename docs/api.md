@@ -22,7 +22,7 @@ Pass arguments by name.
 | `time_window` | `"standard"` (30s wall / 15s CPU) or `"extended"` (100s wall / 60s CPU). Both are finite; extended is just longer. Worker RSS is always capped at 256 MiB. |
 
 **Success:** `{"printed_output": "<exactly what print() wrote>"}`.  
-**Failure:** a tool error with `execution_id` (or `null`) and a `diagnostic`.
+**Failure:** a tool error with `execution_id: null` and a `diagnostic`.
 Nothing partial is kept if quail_exec fails — no tags, no bindings, no printed text.
 
 Only `print(...)` leaves the sandbox. Return values of expressions do not.
@@ -37,15 +37,15 @@ Only `print(...)` leaves the sandbox. Return values of expressions do not.
 | **Field** | One source or analysis column. The CSV `id` column is `entry.id`, not `Field("id")`. |
 | **Expression** | Recipe that reads/transforms one field’s value per entry. |
 | **Predicate** | True/false recipe per entry (usually from comparing expressions). |
-| **Group** | Symbolic set of entries or fields — not a Python list until you retrieve. |
+| **GroupExpr** | Symbolic set of entries or fields — not a Python list until you retrieve. |
 | **Unit** | What `retrieve`/`count` should return (entries, fields, values, …). |
 | **Ranking** | How to score and order entries. |
 | **Binding** | Top-level name that survives a successful exec in this session. |
 | **Mutation** | `create_field` / `tag` / `untag` — session overlay only. |
 
 **Symbolic vs materialized:** building `Expression(...)` or `G0.where(...)`
-does not read the data. Quail evaluates when you `retrieve`, `count`,
-`entry.value`, `tag`, etc.
+does not read the data. Quail evaluates when you `retrieve`, `count`, `tag`,
+or `untag`. `entry.value` and `entry.fields` read through the same engine.
 
 ---
 
@@ -87,6 +87,7 @@ No imports. These names are injected and reserved.
 
 - **`G0`**: all entries (import order). **`G1`**: all fields (source then analysis).
 - **`entries` / `fields`**: default units for retrieve/count — not groups.
+  `retrieve(group=G1)` fails because the default unit is `entries`.
 
 Compose symbolic values with `&` `|` `~` and comparisons. Do **not** use Python
 `and` / `or` / `not`, `if` on a Predicate, or chained comparisons on Expressions.
@@ -150,7 +151,7 @@ Comparisons (`==`, `!=`, `<`, …) produce a **Predicate**.
 | Op | Role |
 | --- | --- |
 | `Value()` | Identity; first in pipeline when reading the field |
-| `AsText()` | Canonical text (`None` → `""`) |
+| `AsText()` | Python `str(value)` (`None` → `""`) |
 | `AsNumber()` | Finite float from number or numeric string |
 | `RegexSearch(pattern, flags=0)` | First match substring, or `None` |
 | `RegexFindAll(pattern, flags=0)` | `list[str]` of matches |
@@ -214,9 +215,21 @@ retrieve(unit=entries, group=G0, limit=1, order="top", rank=Ranking())
 count(unit=entries, group=G0)
 ```
 
+Pass `retrieve` / `count` by name — the first positional argument is `unit`,
+so `retrieve(matching)` fails.
+
 - `retrieve` always returns a **list** (possibly empty).
 - Omitted `limit` defaults to **1** (not the whole group).
-- `unit` may be a `Unit` or an `Expression` (expression → one value per entry).
+- `retrieve` `unit` may be a `Unit` or an `Expression` (one computed value per
+  remaining entry).
+- `count` `unit` may be a `Unit` or an `Expression`. An Expression unit is the
+  **group size** — the expression is not run. Match counts use
+  `count(group=G0.where(score > 0))`.
+- `group` is a `GroupExpr` (`G0`, `G1`, `.where`, `&` `|` `~`, or
+  `GroupExpr("entries", members=hits)`). `tag` / `untag` also accept
+  `list[Entry]`; `retrieve` / `count` do not.
+- `rank` is a `Ranking` (wrap a score Expression). `+` / `*` already produce
+  a Ranking.
 - `order`: `"top"` | `"middle"` | `"bottom"`.
 - Narrow with `.where` **before** expensive ranking when you can — ranking
   scores the whole candidate set before applying `limit`.
