@@ -4,17 +4,16 @@
 
 # Quail v0.11
 
-Quail is an environment for agents exploring a text corpus. The usual
-material is surveys, notes, transcripts, and other long-form collections:
-text that is worth deciding from, and too large to read exhaustively.
+Quail is an environment where agents explore a text corpus. Typically that
+means surveys, notes, transcripts, and other long-form collections: text
+that is worth deciding from, and too large to read exhaustively.
 
 Language models make it easy to start asking questions of that kind of data.
-They still do poorly, on their own, at examining a collection
-systematically, and at keeping the path from evidence to conclusion
-something you can inspect. Conventional chat and retrieval hide the
-operations that connect a claim to the rows behind it, and both struggle
-once the corpus no longer fits in context. Quail is built around those
-operations rather than around a retriever.
+On their own, they still struggle to examine a collection systematically,
+and to keep the path from evidence to a conclusion in view. Conventional
+chat and retrieval hide the operations that connect a claim to the rows
+behind it, and both struggle once the corpus no longer fits in context.
+Quail is built around those operations rather than around a retriever.
 
 The design follows Cloudflare’s [Code Mode](https://blog.cloudflare.com/code-mode/).
 Instead of a chain of discrete tool calls, the agent writes blocks of
@@ -26,7 +25,7 @@ the result of the call. A successful turn keeps session variables and
 dataset annotations for later work. A failed turn keeps nothing, so the
 session you reuse is either fully updated or untouched.
 
-Retrieval still grounds the agent in the corpus. It is one capability
+Retrieval still grounds the agent in the corpus; it is one capability
 inside the analysis language, not a chat retriever sitting in front of the
 data.
 
@@ -142,8 +141,8 @@ if len(samples) > 0:
         print(field.name, repr(samples[0].value(field)))
 ```
 
-From here, the next exec is whatever the question requires. Setup’s
-`documentation` is the rest of the language.
+From here, follow the question. Setup’s `documentation` is the rest of the
+language.
 
 ## Local and remote
 
