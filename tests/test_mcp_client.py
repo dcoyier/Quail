@@ -224,6 +224,45 @@ def test_main_list_and_call_exit_codes(mcp_url: str, capsys: pytest.CaptureFixtu
     )
     failed = json.loads(capsys.readouterr().out)
     assert failed["isError"] is True
+    assert "content" not in failed
+    assert failed["structuredContent"] is not None
+
+
+def test_call_stdout_omits_cloned_content(mcp_url: str, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["call", "quail_setup", "{}", "--url", mcp_url]) == 0
+    setup = json.loads(capsys.readouterr().out)
+    assert setup["isError"] is False
+    assert "content" not in setup
+    assert "session_id" in setup["structuredContent"]
+    assert setup["structuredContent"]["documentation"]
+
+    listed = asyncio.run(list_tools(mcp_url))
+    setup_tool = next(tool for tool in listed["tools"] if tool["name"] == "quail_setup")
+    assert setup_tool["description"] is not None
+    assert not str(setup_tool["description"]).startswith(" ")
+    assert "\n        " not in str(setup_tool["description"])
+
+
+def test_call_result_payload_keeps_non_clone_content() -> None:
+    from mcp.types import CallToolResult, ImageContent, TextContent
+
+    from quail.mcp_client.mcp_client import _call_result_payload
+
+    result = CallToolResult(
+        content=[
+            TextContent(type="text", text="hello"),
+            ImageContent(type="image", data="abc", mime_type="image/png"),
+        ],
+        structured_content={"ok": True},
+        is_error=False,
+    )
+    payload = _call_result_payload(result)
+    assert payload["isError"] is False
+    assert payload["structuredContent"] == {"ok": True}
+    assert payload["content"][0] == {"type": "text", "text": "hello"}
+    assert payload["content"][1]["mimeType"] == "image/png"
+    assert "_meta" not in payload["content"][0]
+    assert "annotations" not in payload["content"][0]
 
 
 class _FakeStdin:
