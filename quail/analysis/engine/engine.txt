@@ -127,4 +127,5 @@ before Lexical may only be Value().
 
 _corpus_by_entry:
   Materialize requested corpus values only for dynamic or unwarmed search.
-  Apply transforming prefix operations when present.
+  Apply prefix operations when present (identity Value() leaves the cell
+  unchanged).

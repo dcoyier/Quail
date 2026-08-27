@@ -12,7 +12,7 @@ from quail.analysis.exec_host import dispatch_call, exec_script, run_analysis
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
 from quail.analysis.group import G0
-from quail.analysis.operations import Lexical, Value
+from quail.analysis.operations import AsText, Lexical, Value
 from quail.analysis.ranking import Ranking
 from quail.datasets import import_csv_dataset, open_core_db
 from quail.search import LexicalService, open_search_db
@@ -224,6 +224,56 @@ def test_engine_uses_warmed_source_lexical_without_dynamic_corpus_or_counts(
             },
         )
         assert [entry.id for entry in ranked] == ["e2", "e1"]
+        assert dispatch_call(engine, "count", (), {"group": G0.where(score > 0)}) == 1
+
+    try:
+        run_analysis(
+            db,
+            session_id=session.id,
+            dataset_id="notes",
+            expected_revision=0,
+            driver=driver,
+            lexical=service,
+        )
+    finally:
+        search.close()
+        db.close()
+
+
+def test_astext_prefix_does_not_reuse_warm_source_lexical(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from quail.config.models import SearchWarmConfig
+    from quail.search.warm import warm_dataset
+
+    csv_path = tmp_path / "notes.csv"
+    csv_path.write_text(
+        "id,body\ne1,climate policy notes\ne2,hydrangea care tips\n",
+        encoding="utf-8",
+    )
+    db = open_core_db(tmp_path / "core.turso")
+    imported = import_csv_dataset(db, "ws", "notes", csv_path, activate=True)
+    search = open_search_db(tmp_path / "search.turso")
+    warm_dataset(
+        db,
+        search,
+        workspace_id="ws",
+        dataset_id="notes",
+        version_id=imported.version_id,
+        profile=None,
+        warm=SearchWarmConfig(),
+        embedder_factory=lambda _profile: (_ for _ in ()).throw(RuntimeError("no embed")),
+    )
+    service = LexicalService(search=search)
+    session = create_session(db, "ws")
+
+    def _reject_warm(*_args: object, **_kwargs: object) -> dict[str, float]:
+        raise AssertionError("AsText prefix must not reuse warmed source field")
+
+    monkeypatch.setattr(LexicalService, "lexical_scores_for_source_entries", _reject_warm)
+
+    def driver(engine: QueryEngine, _prints) -> None:
+        score = Expression(Field("body"), AsText(), Lexical("hydrangea"))
         assert dispatch_call(engine, "count", (), {"group": G0.where(score > 0)}) == 1
 
     try:

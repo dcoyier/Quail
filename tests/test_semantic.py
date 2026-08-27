@@ -13,7 +13,7 @@ from quail.analysis.exec_host import dispatch_call, exec_script, run_analysis
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
 from quail.analysis.group import G0
-from quail.analysis.operations import Semantic, Value
+from quail.analysis.operations import Lexical, Semantic, Value
 from quail.analysis.ranking import Ranking
 from quail.analysis.unit import Unit
 from quail.config import ConfigError, load_config
