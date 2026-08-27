@@ -14,7 +14,7 @@ contract is [`api.md`](api.md). Connector authors read
 | `quail/datasets/` | Core Turso, CSV import, catalog reads |
 | `quail/session/` | Sessions, overlays, revision commit |
 | `quail/search/` | Search Turso, FTS, vectors, warm, pool |
-| `quail/mcp/` | MCP tools, offload, feedback JSONL, Clerk sticky workspace, OAuth discovery |
+| `quail/mcp/` | MCP tools, offload, feedback JSONL, Clerk sticky workspace (per Clerk user), OAuth discovery |
 | `quail/mcp_client/` | Thin Streamable HTTP shell client (`python -m quail.mcp_client`) when no native MCP client is available |
 | `quail/config/` | Slim hand-edited TOML models and parse |
 | `quail/auth/` | Clerk JWT verification |

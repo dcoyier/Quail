@@ -4,18 +4,21 @@ There are handshake JSON-RPC methods initialize and notifications/initialized.
 attach_modern_http(server):
   Wrap MCPServer.streamable_http_app so every HTTP app is stateless_http,
   has no event_store, and runs _HandshakeRejectMiddleware on the MCP path
-  (streamable_http_path, default /mcp). Handshake-era requests cannot be
+  (streamable_http_path, default /mcp). Handshake-era HTTP cannot be
   represented on a Quail-built server.
 
 _HandshakeRejectMiddleware:
   Pure ASGI wrapper so SSE bodies are not buffered.
   On POST to the MCP path, buffer the request body, replay it, and if the
-  request is handshake-era give back JSON-RPC -32022 naming supported
-  PROTOCOL_VERSION. Otherwise call the inner app.
+  request is handshake-era give back JSON-RPC -32022 as HTTP 400 naming
+  supported PROTOCOL_VERSION. Allowed POSTs get mcp-protocol-version
+  stamped to PROTOCOL_VERSION so the SDK modern entry is used.
+  GET, DELETE, and other non-OPTIONS methods on the MCP path get HTTP 405
+  with Allow: POST. OPTIONS and non-MCP paths call the inner app.
 
-_buffer_http_body / _header:
-  Read the POST body once, replay it, then any leftover ASGI message, and
-  look up a header on the ASGI scope.
+_buffer_http_body / _header / _with_protocol_header:
+  Read the POST body once, replay it, then any leftover ASGI message.
+  Look up a header on the ASGI scope. Stamp PROTOCOL_VERSION when missing.
 
 _handshake_rejection(header_version, body):
   If method is initialize or notifications/initialized, reject (include
@@ -28,4 +31,4 @@ _handshake_rejection(header_version, body):
 
 _jsonrpc_parts / _jsonrpc_id / _has_modern_envelope / _unsupported_response:
   Classify the POST body and build the -32022 JSON response. JSON-RPC id
-  is string, int, or null.
+  is string, int, or null and stays on the wire even when null.

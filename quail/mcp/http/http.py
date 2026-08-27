@@ -15,7 +15,7 @@ from mcp_types import (
     JSONRPCError,
     UnsupportedProtocolVersionErrorData,
 )
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 PROTOCOL_VERSION = "2026-07-28"
@@ -38,7 +38,7 @@ def attach_modern_http(server: MCPServer) -> None:
 
 
 class _HandshakeRejectMiddleware:
-    """Reject initialize and other handshake-era JSON-RPC on POST to the MCP path.
+    """Refuse handshake-era HTTP on the MCP path.
 
     Pure ASGI so Streamable HTTP SSE responses are not buffered.
     """
@@ -49,19 +49,20 @@ class _HandshakeRejectMiddleware:
         self._paths = frozenset({base, f"{base}/"})
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if (
-            scope["type"] == "http"
-            and scope.get("method") == "POST"
-            and scope.get("path") in self._paths
-        ):
-            body, replay = await _buffer_http_body(receive)
-            header_version = _header(scope, MCP_PROTOCOL_VERSION_HEADER)
-            rejected = _handshake_rejection(header_version=header_version, body=body)
-            if rejected is not None:
-                await rejected(scope, replay, send)
+        if scope["type"] == "http" and scope.get("path") in self._paths:
+            method = scope.get("method")
+            if method == "POST":
+                body, replay = await _buffer_http_body(receive)
+                header_version = _header(scope, MCP_PROTOCOL_VERSION_HEADER)
+                rejected = _handshake_rejection(header_version=header_version, body=body)
+                if rejected is not None:
+                    await rejected(scope, replay, send)
+                    return
+                await self.app(_with_protocol_header(scope), replay, send)
                 return
-            await self.app(scope, replay, send)
-            return
+            if method != "OPTIONS":
+                await Response(status_code=405, headers={"allow": "POST"})(scope, receive, send)
+                return
         await self.app(scope, receive, send)
 
 
@@ -101,6 +102,21 @@ def _header(scope: Scope, name: str) -> str | None:
         if key == needle:
             return value.decode("latin-1")
     return None
+
+
+def _with_protocol_header(scope: Scope) -> Scope:
+    """Stamp mcp-protocol-version so the SDK cannot take the handshake entry."""
+
+    if _header(scope, MCP_PROTOCOL_VERSION_HEADER) == PROTOCOL_VERSION:
+        return scope
+    needle = MCP_PROTOCOL_VERSION_HEADER.lower().encode("latin-1")
+    headers = [
+        (key, value) for key, value in (scope.get("headers") or ()) if key != needle
+    ]
+    headers.append((needle, PROTOCOL_VERSION.encode("latin-1")))
+    updated = dict(scope)
+    updated["headers"] = headers
+    return updated
 
 
 def _handshake_rejection(*, header_version: str | None, body: bytes) -> JSONResponse | None:
@@ -175,6 +191,6 @@ def _unsupported_response(*, request_id: int | str | None, requested: str | None
         ),
     )
     return JSONResponse(
-        payload.model_dump(mode="json", by_alias=True, exclude_none=True),
+        payload.model_dump(mode="json", by_alias=True),
         status_code=400,
     )

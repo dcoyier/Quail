@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import pytest
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp_types import UNSUPPORTED_PROTOCOL_VERSION
 from starlette.testclient import TestClient
 
 from quail.auth import StaticTokenVerifier, UnauthorizedError
@@ -212,6 +213,38 @@ def test_protected_resource_metadata_and_mcp_401(tmp_path: Path) -> None:
         www = denied.headers.get("www-authenticate", "")
         assert "resource_metadata=" in www
         assert "oauth-protected-resource/mcp" in www
+
+
+def test_clerk_mcp_rejects_initialize(tmp_path: Path) -> None:
+    manifest = _write_clerk_manifest(
+        tmp_path,
+        hosting_extra='public_base_url = "https://acme.example"\n',
+    )
+    config = load_config(manifest)
+    apply_config(config)
+    server = create_mcp_server_from_config(
+        config,
+        verifier=StaticTokenVerifier({"alice-token": "user_alice"}),
+    ).server
+    app = _streamable_app(server)
+    with TestClient(app) as client:
+        handshake = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"protocolVersion": "2025-11-25", "capabilities": {}},
+            },
+        )
+        denied = client.post("/mcp")
+        get = client.get("/mcp")
+    assert handshake.status_code == 400
+    body = handshake.json()
+    assert body["error"]["code"] == UNSUPPORTED_PROTOCOL_VERSION
+    assert body["error"]["data"]["supported"] == ["2026-07-28"]
+    assert denied.status_code == 401
+    assert get.status_code == 405
 
 
 def test_mcp_rejects_valid_token_for_unknown_user(tmp_path: Path) -> None:

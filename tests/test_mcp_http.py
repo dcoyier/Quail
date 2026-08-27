@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
@@ -62,6 +63,8 @@ def test_initialized_notification_is_rejected() -> None:
             json={"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}},
         )
     _assert_unsupported(response)
+    assert "id" in response.json()
+    assert response.json()["id"] is None
 
 
 def test_handshake_protocol_header_is_rejected() -> None:
@@ -128,6 +131,7 @@ def test_modern_envelope_is_not_handshake_rejected() -> None:
         )
     if response.status_code == 400:
         assert response.json().get("error", {}).get("code") != UNSUPPORTED_PROTOCOL_VERSION
+    assert response.headers.get("mcp-session-id") is None
 
 
 def test_initialize_is_rejected_even_with_modern_header() -> None:
@@ -147,6 +151,39 @@ def test_custom_mcp_path_rejects_initialize() -> None:
             json={"jsonrpc": "2.0", "id": 7, "method": "initialize", "params": {}},
         )
     _assert_unsupported(response)
+
+
+def test_get_and_delete_mcp_are_method_not_allowed() -> None:
+    with TestClient(_app()) as client:
+        get = client.get("/mcp", headers={"mcp-protocol-version": "2025-11-25"})
+        delete = client.delete("/mcp")
+    assert get.status_code == 405
+    assert delete.status_code == 405
+    assert get.headers.get("allow") == "POST"
+    assert delete.headers.get("allow") == "POST"
+
+
+def test_create_mcp_server_rejects_initialize_and_get(tmp_path: Path) -> None:
+    from quail.mcp import create_mcp_server
+
+    server = create_mcp_server(tmp_path / "core.turso", tmp_path / "feedback.jsonl")
+    app = server.streamable_http_app(
+        json_response=True,
+        transport_security=_TEST_TRANSPORT_SECURITY,
+    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 8,
+                "method": "initialize",
+                "params": {"protocolVersion": "2025-11-25", "capabilities": {}},
+            },
+        )
+        get = client.get("/mcp")
+    _assert_unsupported(response, requested="2025-11-25")
+    assert get.status_code == 405
 
 
 def test_handshake_rejection_classifier() -> None:

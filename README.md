@@ -114,7 +114,8 @@ stay local.
 Clerk proves identity (`sub`); `auth.clerk_authorized_parties` binds tokens to
 your Clerk app (`azp`/`aud`); TOML `[[users]]` gates MCP access (not only
 tool bodies). Advertised OAuth scopes are for client UX — Quail does not
-enforce them from the token. Sessions belong to the creating user.
+enforce them from the token. Sessions belong to the creating user. Sticky
+workspace is per Clerk user for this process, not per MCP transport session.
 
 1. In Clerk, enable **Dynamic client registration** and default scopes
    `openid`, `profile`, `email`.

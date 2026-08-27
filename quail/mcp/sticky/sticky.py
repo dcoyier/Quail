@@ -1,4 +1,4 @@
-"""Process-local sticky workspace binding for Clerk MCP connections."""
+"""Process-local sticky workspace binding keyed by opaque caller ids."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from quail.config.models import UserSpec
 
 @dataclass
 class StickyWorkspaceStore:
-    """Map connection keys to bound workspace ids."""
+    """Map opaque keys to bound workspace ids."""
 
     _bound: dict[str, str] = field(default_factory=dict)
     _seen: set[str] = field(default_factory=set)
@@ -18,7 +18,7 @@ class StickyWorkspaceStore:
         return self._bound.get(connection_key)
 
     def ensure_initial_bind(self, connection_key: str, user: UserSpec) -> str | None:
-        """Apply default_workspace once per connection; leave unbound otherwise."""
+        """Apply default_workspace the first time a key is seen; leave unbound otherwise."""
 
         if connection_key not in self._seen:
             self._seen.add(connection_key)
