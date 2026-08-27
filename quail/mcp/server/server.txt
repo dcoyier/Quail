@@ -28,9 +28,8 @@ create_mcp_server(db_path, feedback_path, workspace_id default local, api_docs_p
                   include_dataset_docs_in_setup default false):
   Build a _ToolHost whose resolvers always give back the fixed workspace_id
   with user_id None.
-  Build MCPServer with unrestricted instructions, register the core tools,
-  attach_modern_http so Streamable HTTP is 2026-07-28 only, and give back
-  the server. Bind address is chosen later at serve run.
+  Build MCPServer with unrestricted instructions, register the core tools, and
+  give back the server. Bind address is chosen later at serve run.
 
 create_mcp_server_from_config(config, api_docs_path default None, verifier default None):
   Configure process-wide exec slots from config.max_concurrent_executions.
@@ -52,7 +51,7 @@ create_clerk_mcp_server(config, verifier, api_docs_path default None,
   Register /.well-known/oauth-authorization-server proxy for OAuth clients
   that look up AS metadata on the resource origin.
   Register the clerk list/switch workspace tools, then the same core tools with
-  clerk resolvers, attach_modern_http, and give back the server.
+  clerk resolvers, and give back the server.
   Connector HTTP file routes authenticate Bearer and require workspace membership.
 
 _run_tool(work, on_error default None):

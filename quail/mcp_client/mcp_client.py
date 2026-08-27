@@ -12,9 +12,8 @@ from typing import Any
 from mcp.client import Client
 from mcp.types import CallToolResult
 
-from quail.mcp.http import PROTOCOL_VERSION
-
 DEFAULT_URL = "http://127.0.0.1:8000/mcp"
+PROTOCOL_VERSION = "2026-07-28"
 # Cover Quail extended quail_exec wall time (100s) with queue/headroom budget.
 _READ_TIMEOUT_SECONDS = 300.0
 
@@ -152,7 +151,7 @@ def _mcp_url(args: argparse.Namespace) -> str:
 
 
 def _client(url: str) -> Client:
-    """MCP 2026-07-28 Streamable HTTP client; no initialize handshake."""
+    """MCP 2026-07-28 Streamable HTTP client."""
 
     return Client(
         url,

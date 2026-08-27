@@ -27,7 +27,6 @@ from quail.datasets import get_dataset, list_datasets, open_core_db
 from quail.mcp.api_docs import load_api_docs
 from quail.mcp.bearer import get_bearer_override
 from quail.mcp.feedback import append_feedback
-from quail.mcp.http import attach_modern_http
 from quail.mcp.instructions import (
     LOCK_REPAIR_HINT,
     UNBOUND_REPAIR_HINT,
@@ -163,7 +162,6 @@ def create_mcp_server(
             connector_catalog,
             resolve_workspace=lambda _ctx: (workspace_id, None),
         )
-    attach_modern_http(server)
     return server
 
 
@@ -275,7 +273,6 @@ def create_clerk_mcp_server(
                 runtime, request, workspace_id
             ),
         )
-    attach_modern_http(server)
     return server
 
 
@@ -798,7 +795,7 @@ def _authorization_header(ctx: Context | None) -> str | None:
 
 
 def _clerk_connection_key(principal: AllowlistedPrincipal) -> str:
-    """Sticky key is the Clerk user; 2026 has no transport session."""
+    """Sticky key is the Clerk user, not a transport session."""
 
     return f"user:{principal.clerk_user_id}"
 

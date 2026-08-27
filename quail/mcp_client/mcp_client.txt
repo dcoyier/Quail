@@ -1,5 +1,5 @@
 There is a default MCP URL called DEFAULT_URL: http://127.0.0.1:8000/mcp.
-There is PROTOCOL_VERSION 2026-07-28, the only MCP revision this client speaks.
+There is PROTOCOL_VERSION 2026-07-28, the MCP revision this client speaks.
 There is a private HTTP read timeout of 300 seconds, used for Client connect
 and for each tools/call round.
 

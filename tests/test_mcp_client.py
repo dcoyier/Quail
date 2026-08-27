@@ -128,36 +128,10 @@ def test_main_call_sdk_value_error_exits_1(
     assert "unexpected content type" in captured.err
 
 
-def test_legacy_client_cannot_connect(mcp_url: str) -> None:
-    from mcp.client import Client
-    from mcp.shared.exceptions import MCPError
-    from mcp_types import UNSUPPORTED_PROTOCOL_VERSION
-
-    from quail.mcp.http import PROTOCOL_VERSION
-    from quail.mcp_client.mcp_client import _client_error_message
-
-    async def _legacy() -> None:
-        async with Client(mcp_url, mode="legacy") as client:
-            await client.list_tools()
-
-    with pytest.raises(BaseExceptionGroup) as raised:
-        asyncio.run(_legacy())
-    assert _client_error_message(raised.value) == "Unsupported protocol version"
-    inner: BaseException = raised.value
-    while isinstance(inner, BaseExceptionGroup) and inner.exceptions:
-        inner = inner.exceptions[0]
-    assert isinstance(inner, MCPError)
-    assert inner.code == UNSUPPORTED_PROTOCOL_VERSION
-    assert inner.error.data == {
-        "supported": [PROTOCOL_VERSION],
-        "requested": "2025-11-25",
-    }
-
-
 def test_auto_client_speaks_2026(mcp_url: str) -> None:
     from mcp.client import Client
 
-    from quail.mcp.http import PROTOCOL_VERSION
+    from quail.mcp_client.mcp_client import PROTOCOL_VERSION
 
     async def _auto() -> str:
         async with Client(mcp_url, mode="auto") as client:
