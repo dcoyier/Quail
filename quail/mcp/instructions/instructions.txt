@@ -22,6 +22,8 @@ unrestricted_instructions(workspace_id):
 clerk_instructions(locked default false):
   Give back Clerk identity-mode bind-then-quail_setup instructions: token proves
   identity, TOML allowlist gates access, authorized parties bind the app; scopes
-  are advertised for clients but not enforced from the token. Include Clerk
-  session ownership rules, the dataset-docs note, and the export rules.
+  are advertised for clients but not enforced from the token. Sticky workspace
+  is per Clerk user on this process (every MCP connection as that user shares
+  quail_switch_workspace), not per connection. Include Clerk session ownership
+  rules, the dataset-docs note, and the export rules.
   When locked is true, append the locked-user addendum.

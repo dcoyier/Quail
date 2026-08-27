@@ -25,7 +25,11 @@ def serve(config: QuailConfig, *, verifier: TokenVerifier | None = None) -> None
             db.close()
         prepared = create_mcp_server_from_config(config, verifier=verifier)
         try:
-            prepared.server.run(transport="streamable-http")
+            prepared.server.run(
+                transport="streamable-http",
+                host=config.bind,
+                port=config.port,
+            )
         finally:
             prepared.close()
 

@@ -193,8 +193,8 @@ uv run quail process --config /absolute/path/to/quail.toml
 uv run quail run --config /absolute/path/to/quail.toml
 ```
 
-4. Connect an MCP client to `http://127.0.0.1:8000/mcp` (the default
-   bind/port).
+4. Connect an MCP 2026-07-28 client to `http://127.0.0.1:8000/mcp` (the
+   default bind/port).
 
 ### process then run
 
@@ -263,7 +263,9 @@ Remote deployments use Clerk to prove who is calling (`sub`), then a TOML
 not only whether individual tools succeed. Bind tokens to your Clerk
 application with `auth.clerk_authorized_parties` (`azp` / `aud`). Advertised
 OAuth scopes are for client UX; Quail does not enforce them from the token,
-and sessions belong to the creating user.
+and sessions belong to the creating user. Sticky workspace is per Clerk
+user for this process, not per MCP transport session:
+`quail_switch_workspace` applies to every connection as that user.
 
 The template is [`examples/quail.clerk.toml`](examples/quail.clerk.toml).
 Bind a workspace before you call dataset, session, or exec tools. If you

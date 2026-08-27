@@ -1,7 +1,7 @@
 There is a default MCP URL called DEFAULT_URL: http://127.0.0.1:8000/mcp.
-There is a private connect timeout of 30 seconds.
-There is a private HTTP read timeout of 300 seconds.
-There is a private tool read timeout of 300 seconds for call_tool (same budget).
+There is PROTOCOL_VERSION 2026-07-28, the MCP revision this client speaks.
+There is a private HTTP read timeout of 300 seconds, used for Client connect
+and for each tools/call round.
 
 main(optional argv):
   Parse list or call.
@@ -9,7 +9,7 @@ main(optional argv):
   If argparse raises SystemExit, give back that integer code, or 2 if the code is not an int.
   For list, call list_tools with the URL, print JSON, give back 0.
   For call, load_arguments, call_tool, print the CallToolResult JSON payload.
-  Give back 1 when the tool result isError is true.
+  Give back 1 when the tool result is_error is true.
   Give back 2 for bad usage, bad JSON arguments, or an unreadable @path file.
   Give back 1 for other connection or runtime failures.
   Catch ValueError only from load_arguments (usage); other failures use the generic handler.
@@ -19,6 +19,9 @@ main(optional argv):
 
 _mcp_url(args):
   Prefer --url after the subcommand, then --url before it, then DEFAULT_URL.
+
+_client(url):
+  Give back mcp.Client for url at PROTOCOL_VERSION with the private read timeout.
 
 _client_error_message(error):
   Walk ExceptionGroup to the first leaf. If the text is empty or a TaskGroup
@@ -34,14 +37,15 @@ load_arguments(spec):
   If JSON is invalid or not an object, raise ValueError.
 
 list_tools(url):
-  Open an initialized MCP session to url.
+  Open a 2026-07-28 mcp.Client against url with the private read timeout.
   List tools.
-  Give back a mapping with tools: name, description, inputSchema for each tool.
+  Give back a mapping with tools: name, description, inputSchema for each tool
+  (camelCase keys for the operator stdout contract).
 
 call_tool(url, name, optional arguments):
-  Open an initialized MCP session to url.
+  Open a 2026-07-28 mcp.Client against url with the private read timeout.
   Call the named tool with arguments (default {}).
-  Use the private tool read timeout.
+  Pass the same read timeout on the call.
   Give back the MCP CallToolResult.
 
 _build_parser:
@@ -50,15 +54,9 @@ _build_parser:
   list/call (after the subcommand).
   Subcommand call takes tool_name and arguments.
 
-_session(url):
-  Create an httpx AsyncClient with the private timeouts and follow_redirects false.
-  Enter streamable_http_client with that client.
-  Enter ClientSession on the read/write streams.
-  Initialize the session.
-  Yield the session, then close everything.
-
 _call_result_payload(result):
-  Give back isError, structuredContent, and content (JSON dumps of content blocks).
+  Give back isError, structuredContent, and content (JSON dumps of content
+  blocks with wire aliases so mimeType stays camelCase).
 
 _print_json(payload):
   Write indented JSON with sorted keys plus a trailing newline to stdout.

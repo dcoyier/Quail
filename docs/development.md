@@ -14,7 +14,7 @@ how-to (`process` / `run`, lease, Clerk): [`README.md`](../README.md).
 | `quail/datasets/` | Core Turso, CSV import, catalog reads |
 | `quail/session/` | Sessions, overlays, revision commit |
 | `quail/search/` | Search Turso, FTS, vectors, warm, pool |
-| `quail/mcp/` | MCP tools, offload, feedback JSONL, Clerk sticky workspace, OAuth discovery |
+| `quail/mcp/` | MCP tools, offload, feedback JSONL, Clerk sticky workspace (per Clerk user), OAuth discovery |
 | `quail/mcp_client/` | Thin Streamable HTTP shell client (`python -m quail.mcp_client`) when no native MCP client is available |
 | `quail/config/` | Slim hand-edited TOML models and parse |
 | `quail/auth/` | Clerk JWT verification |
@@ -46,5 +46,6 @@ Agents use the core MCP tools:
 plus Clerk workspace tools when `auth.mode = "clerk"`. Connected connectors may add
 tools, resources, and MCP UI widgets; connector tools are listed only for
 the active workspace. Connect to
-`http://127.0.0.1:8000/mcp`. If you do not have a native MCP client, use
+`http://127.0.0.1:8000/mcp` with MCP 2026-07-28.
+If you do not have a native MCP client, use
 `uv run python -m quail.mcp_client` (`list` / `call`) against that URL.

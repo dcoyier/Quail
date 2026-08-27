@@ -27,7 +27,8 @@ ClerkAccessTokenVerifier(verifier, users, scopes=MCP_OAUTH_SCOPES):
 
 register_clerk_oauth_discovery(server, clerk_domain):
   Register GET/OPTIONS /.well-known/oauth-authorization-server that proxies Clerk's
-  authorization-server metadata (for older MCP clients).
+  authorization-server metadata (OAuth clients that look up AS metadata on the
+  resource origin).
   Cache the fetched JSON for about 300 seconds inside this registration closure
   (keyed by the one clerk_domain for this server). Concurrent misses share one
   fetch under an anyio.Lock; the fetch itself runs via run_blocking.

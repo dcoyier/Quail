@@ -1,4 +1,4 @@
-"""Thin FastMCP adapter over host analysis APIs (unrestricted + Clerk)."""
+"""Thin MCPServer adapter over host analysis APIs (unrestricted + Clerk)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import CallToolResult
 
 from quail.analysis.errors import QuailRuntimeError, QuailScopeError
@@ -69,7 +69,6 @@ _DEFAULT_EXEC_REPAIR = (
     "Fix the diagnostic, keep the same session_id, and retry. "
     "Failed exec does not commit tags or bindings."
 )
-_MCP_SESSION_ID_HEADER = "mcp-session-id"
 
 DEFAULT_WORKSPACE_ID = "local"
 
@@ -104,17 +103,15 @@ class ClerkMcpRuntime:
     users: tuple[UserSpec, ...]
     verifier: TokenVerifier
     sticky: StickyWorkspaceStore
-    host: str
-    port: int
     search_runtime: SearchRuntime | None = None
     include_dataset_docs_in_setup: bool = False
 
 
 @dataclass(slots=True)
 class PreparedMcp:
-    """FastMCP server plus resources that must close when serve exits."""
+    """MCPServer plus resources that must close when serve exits."""
 
-    server: FastMCP
+    server: MCPServer
     search_runtime: SearchRuntime | None = None
     connector_catalog: Any | None = None
 
@@ -135,13 +132,11 @@ def create_mcp_server(
     *,
     workspace_id: str = DEFAULT_WORKSPACE_ID,
     api_docs_path: str | Path | None = None,
-    host: str = "127.0.0.1",
-    port: int = 8000,
     search_runtime: SearchRuntime | None = None,
     connector_catalog: Any | None = None,
     include_dataset_docs_in_setup: bool = False,
-) -> FastMCP:
-    """Build an unrestricted FastMCP app with the core tools."""
+) -> MCPServer:
+    """Build an unrestricted MCPServer app with the core tools."""
 
     docs_path = Path(api_docs_path).expanduser().resolve() if api_docs_path is not None else None
     tool_host = _ToolHost(
@@ -154,11 +149,9 @@ def create_mcp_server(
         resolve=lambda _ctx: (workspace_id, None),
         resolve_user=lambda _ctx: None,
     )
-    server = FastMCP(
+    server = MCPServer(
         "quail",
         instructions=unrestricted_instructions(workspace_id),
-        host=host,
-        port=port,
     )
     _register_core_tools(server, tool_host)
     if connector_catalog is not None:
@@ -195,8 +188,6 @@ def create_mcp_server_from_config(
             config.feedback,
             workspace_id=config.workspace_id,
             api_docs_path=api_docs_path,
-            host=config.bind,
-            port=config.port,
             search_runtime=runtime,
             connector_catalog=connector_catalog,
             include_dataset_docs_in_setup=config.include_dataset_docs_in_setup,
@@ -232,7 +223,7 @@ def create_clerk_mcp_server(
     api_docs_path: str | Path | None = None,
     search_runtime: SearchRuntime | None = None,
     connector_catalog: Any | None = None,
-) -> FastMCP:
+) -> MCPServer:
     """Build Clerk-authenticated MCP with list/switch workspace tools."""
 
     docs_path = Path(api_docs_path).expanduser().resolve() if api_docs_path is not None else None
@@ -245,17 +236,13 @@ def create_clerk_mcp_server(
         users=config.users,
         verifier=verifier,
         sticky=StickyWorkspaceStore(),
-        host=config.bind,
-        port=config.port,
         search_runtime=search_runtime,
         include_dataset_docs_in_setup=config.include_dataset_docs_in_setup,
     )
     assert config.clerk_domain is not None
-    server = FastMCP(
+    server = MCPServer(
         "quail",
         instructions=clerk_instructions(locked=False),
-        host=config.bind,
-        port=config.port,
         auth=build_clerk_auth_settings(
             clerk_domain=config.clerk_domain,
             public_base_url=config.public_base_url,
@@ -301,13 +288,13 @@ def _resolve_clerk_connector_workspace(
         users=runtime.users,
         verifier=runtime.verifier,
     )
-    connection_key = _clerk_connection_key(principal, ctx)
+    connection_key = _clerk_connection_key(principal)
     workspace_id = runtime.sticky.active(connection_key)
     if workspace_id is None:
         workspace_id = runtime.sticky.ensure_initial_bind(connection_key, principal.user)
     if workspace_id is None:
         raise QuailRuntimeError(
-            "No sticky workspace is bound for this connection.",
+            "No sticky workspace is bound for this user.",
             repair_hint=UNBOUND_REPAIR_HINT,
         )
     if workspace_id not in principal.user.workspaces:
@@ -386,7 +373,7 @@ def _export_csv_payload(
     }
 
 
-def _register_core_tools(server: FastMCP, host: _ToolHost) -> None:
+def _register_core_tools(server: MCPServer, host: _ToolHost) -> None:
     """Register the frozen core tool surface once; modes differ only in resolvers."""
 
     @server.tool(title="Set up Quail workspace")
@@ -686,13 +673,12 @@ def _clerk_auth(
 def _clerk_workspace(
     runtime: ClerkMcpRuntime,
     principal: AllowlistedPrincipal,
-    ctx: Context | None,
 ) -> str | CallToolResult:
-    key = _clerk_connection_key(principal, ctx)
+    key = _clerk_connection_key(principal)
     active = runtime.sticky.ensure_initial_bind(key, principal.user)
     if active is None:
         return error_result(
-            error=ValueError("No workspace bound for this connection"),
+            error=ValueError("No workspace bound for this user"),
             repair_hint=UNBOUND_REPAIR_HINT,
         )
     if active not in principal.user.workspaces:
@@ -710,7 +696,7 @@ def _clerk_resolve(runtime: ClerkMcpRuntime) -> _ResolveWorkspace:
         principal = _clerk_auth(runtime, ctx)
         if isinstance(principal, CallToolResult):
             return principal
-        workspace_id = _clerk_workspace(runtime, principal, ctx)
+        workspace_id = _clerk_workspace(runtime, principal)
         if isinstance(workspace_id, CallToolResult):
             return workspace_id
         return workspace_id, principal.user.user_id
@@ -730,7 +716,7 @@ def _clerk_resolve_user(runtime: ClerkMcpRuntime) -> _ResolveUser:
     return resolve
 
 
-def _register_clerk_workspace_tools(server: FastMCP, runtime: ClerkMcpRuntime) -> None:
+def _register_clerk_workspace_tools(server: MCPServer, runtime: ClerkMcpRuntime) -> None:
     @server.tool(title="List Quail workspaces")
     async def quail_list_workspaces(ctx: Context | None = None) -> CallToolResult:
         """List workspaces you may use and the active sticky workspace id.
@@ -744,7 +730,7 @@ def _register_clerk_workspace_tools(server: FastMCP, runtime: ClerkMcpRuntime) -
             principal = _clerk_auth(runtime, ctx)
             if isinstance(principal, CallToolResult):
                 return principal
-            key = _clerk_connection_key(principal, ctx)
+            key = _clerk_connection_key(principal)
             active = runtime.sticky.ensure_initial_bind(key, principal.user)
             if principal.user.lock_workspace:
                 assert principal.user.default_workspace is not None
@@ -761,9 +747,10 @@ def _register_clerk_workspace_tools(server: FastMCP, runtime: ClerkMcpRuntime) -
         workspace_id: str,
         ctx: Context | None = None,
     ) -> CallToolResult:
-        """Bind this MCP connection to one allowlisted workspace.
+        """Bind this Clerk user to one allowlisted workspace.
 
-        Sticky bind only: does not create a session. After switching, call
+        Sticky bind only: does not create a session. Every MCP connection as
+        this user on this process shares that bind. After switching, call
         quail_start_session again; do not reuse a prior session_id.
         Fails when the user is TOML-locked or the workspace is not in their
         memberships. Success returns active_workspace_id.
@@ -783,7 +770,7 @@ def _register_clerk_workspace_tools(server: FastMCP, runtime: ClerkMcpRuntime) -
                     error=ForbiddenError(f"Not allowlisted for workspace: {workspace_id}"),
                     repair_hint="Call quail_list_workspaces and pick an allowlisted id.",
                 )
-            key = _clerk_connection_key(principal, ctx)
+            key = _clerk_connection_key(principal)
             active = runtime.sticky.bind(key, workspace_id)
             return success_result({"active_workspace_id": active})
 
@@ -808,37 +795,9 @@ def _authorization_header(ctx: Context | None) -> str | None:
     return headers.get("authorization") or headers.get("Authorization")
 
 
-def _mcp_session_id(ctx: Context | None) -> str | None:
-    """Streamable HTTP mcp-session-id for this MCP connection, if present."""
+def _clerk_connection_key(principal: AllowlistedPrincipal) -> str:
+    """Sticky key is the Clerk user for this process, not a transport session."""
 
-    if ctx is None:
-        return None
-    try:
-        request = ctx.request_context.request
-    except (ValueError, AttributeError, LookupError):
-        request = None
-    if request is not None:
-        headers = getattr(request, "headers", None)
-        if headers is not None:
-            header_id = headers.get(_MCP_SESSION_ID_HEADER)
-            if header_id:
-                return str(header_id)
-    try:
-        session: Any = ctx.session
-    except (ValueError, AttributeError, LookupError):
-        return None
-    transport_id = getattr(session, "mcp_session_id", None)
-    if transport_id:
-        return str(transport_id)
-    return None
-
-
-def _clerk_connection_key(principal: AllowlistedPrincipal, ctx: Context | None) -> str:
-    """Prefer per-connection Streamable HTTP session; else Clerk user id."""
-
-    session_id = _mcp_session_id(ctx)
-    if session_id is not None:
-        return f"sess:{session_id}"
     return f"user:{principal.clerk_user_id}"
 
 

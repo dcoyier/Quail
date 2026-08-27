@@ -9,8 +9,9 @@ from collections.abc import Callable, Mapping
 from typing import Any
 from urllib.parse import unquote
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.types import CallToolResult, Tool, ToolAnnotations
+from mcp.server import ServerRequestContext
+from mcp.server.mcpserver import Context, MCPServer
+from mcp.types import CallToolResult, ListToolsResult, PaginatedRequestParams, Tool, ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import FileResponse as StarletteFileResponse
 from starlette.responses import Response
@@ -33,7 +34,7 @@ from quail.mcp.results import error_result, success_result
 
 _PARAM = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
-# Frozen host surface (unrestricted + Clerk). FastMCP overwrites duplicate
+# Frozen host surface (unrestricted + Clerk). MCPServer overwrites duplicate
 # add_tool names with a warning, so a connector must not claim these.
 CORE_MCP_TOOL_NAMES = frozenset(
     {
@@ -68,13 +69,13 @@ def _claim_resource_uri(
 
 
 def register_connectors(
-    server: FastMCP,
+    server: MCPServer,
     catalog: ConnectorCatalog,
     *,
     resolve_workspace: Callable[[Context | None], tuple[str, str | None]],
     authenticate_route: Callable[[Request, str], str | None] | None = None,
 ) -> None:
-    """Attach connector surfaces; resolver receives FastMCP Context or None.
+    """Attach connector surfaces; resolver receives MCPServer Context or None.
 
     authenticate_route, when set, receives the Starlette Request and URL
     workspace_id and gives back user_id (or None). Raise UnauthorizedError or
@@ -163,7 +164,7 @@ def register_connectors(
 
 
 def _install_workspace_scoped_list_tools(
-    server: FastMCP,
+    server: MCPServer,
     providers_by_tool: dict[str, list[tuple[str, ConnectedProvider]]],
     resolve_workspace: Callable[[Context | None], tuple[str, str | None]],
 ) -> None:
@@ -171,21 +172,38 @@ def _install_workspace_scoped_list_tools(
 
     Core (non-connector) tools stay listed. When resolve_workspace raises
     (unbound Clerk, missing auth), omit connector tools rather than the union.
+    In-process list_tools has no request context (bearer_token still works).
+    HTTP tools/list gets a Context built from ServerRequestContext so Clerk
+    Authorization and sticky keys are visible.
     """
 
     original_list_tools = server.list_tools
 
-    async def list_tools() -> list[Tool]:
+    async def visible_tools(ctx: Context | None) -> list[Tool]:
         tools = await original_list_tools()
         workspace_id: str | None = None
         try:
-            workspace_id, _user_id = resolve_workspace(server.get_context())
+            workspace_id, _user_id = resolve_workspace(ctx)
         except Exception:
             workspace_id = None
         return _tools_visible_in_workspace(tools, providers_by_tool, workspace_id)
 
+    async def list_tools() -> list[Tool]:
+        return await visible_tools(None)
+
+    async def handle_list_tools(
+        request_ctx: ServerRequestContext[Any],
+        _params: PaginatedRequestParams | None,
+    ) -> ListToolsResult:
+        context = Context(request_context=request_ctx, mcp_server=server)
+        return ListToolsResult(tools=await visible_tools(context))
+
     server.list_tools = list_tools  # type: ignore[method-assign]
-    server._mcp_server.list_tools()(list_tools)
+    server._lowlevel_server.add_request_handler(
+        "tools/list",
+        PaginatedRequestParams,
+        handle_list_tools,
+    )
 
 
 def _tools_visible_in_workspace(
@@ -205,7 +223,7 @@ def _tools_visible_in_workspace(
 
 
 def _register_resource(
-    server: FastMCP,
+    server: MCPServer,
     connected: ConnectedProvider,
     uri: str,
     title: str,
@@ -229,7 +247,7 @@ def _register_resource(
 
 
 def _register_tool(
-    server: FastMCP,
+    server: MCPServer,
     spec: ToolSpec,
     owners: list[tuple[str, ConnectedProvider]],
     resolve_workspace: Callable[[Context | None], tuple[str, str | None]],
@@ -322,33 +340,33 @@ def _register_tool(
         title=spec.title,
         description=spec.description,
         annotations=ToolAnnotations(
-            readOnlyHint=spec.read_only,
-            destructiveHint=spec.destructive,
-            idempotentHint=spec.idempotent,
-            openWorldHint=spec.open_world,
+            read_only_hint=spec.read_only,
+            destructive_hint=spec.destructive,
+            idempotent_hint=spec.idempotent,
+            open_world_hint=spec.open_world,
         ),
         meta=dict(spec.meta) if spec.meta else None,
     )
-    # FastMCP derives tools/list schema from the Python signature (Any → useless).
+    # MCPServer derives tools/list schema from the Python signature (Any → useless).
     # Publish ToolSpec.input_schema so agents see the real contract.
     registered = server._tool_manager.get_tool(spec.name)
     if registered is None:
         raise ConnectorError(
             "TOOL_REGISTRATION_FAILED",
-            f"FastMCP did not retain tool {spec.name!r} after add_tool.",
+            f"MCPServer did not retain tool {spec.name!r} after add_tool.",
             "Retry server startup; if it persists, report a Quail wire bug.",
         )
     registered.parameters = _published_input_schema(spec)
 
 
 def _published_input_schema(spec: ToolSpec) -> dict[str, Any]:
-    """Plain JSON-object copy of ToolSpec.input_schema for FastMCP Tool.parameters."""
+    """Plain JSON-object copy of ToolSpec.input_schema for MCPServer Tool.parameters."""
 
     return copy.deepcopy(dict(spec.input_schema))
 
 
 def _register_route(
-    server: FastMCP,
+    server: MCPServer,
     owners: list[tuple[str, ConnectedProvider, RouteSpec]],
     *,
     authenticate_route: Callable[[Request, str], str | None] | None = None,

@@ -128,6 +128,63 @@ def test_main_call_sdk_value_error_exits_1(
     assert "unexpected content type" in captured.err
 
 
+def test_auto_client_speaks_2026(mcp_url: str) -> None:
+    from mcp.client import Client
+
+    from quail.mcp_client.mcp_client import PROTOCOL_VERSION
+
+    async def _auto() -> str:
+        async with Client(mcp_url, mode="auto") as client:
+            tools = await client.list_tools()
+            assert any(tool.name == "quail_setup" for tool in tools.tools)
+            return client.protocol_version
+
+    assert asyncio.run(_auto()) == PROTOCOL_VERSION
+
+
+def test_legacy_client_can_list_tools(mcp_url: str) -> None:
+    from mcp.client import Client
+
+    async def _legacy() -> str:
+        async with Client(mcp_url, mode="legacy") as client:
+            tools = await client.list_tools()
+            assert any(tool.name == "quail_setup" for tool in tools.tools)
+            return client.protocol_version
+
+    assert asyncio.run(_legacy()) == "2025-11-25"
+
+
+def test_handshake_initialize_is_accepted(tmp_path: Path) -> None:
+    from mcp.server.transport_security import TransportSecuritySettings
+    from mcp_types import UNSUPPORTED_PROTOCOL_VERSION
+    from starlette.testclient import TestClient
+
+    server = create_mcp_server(tmp_path / "core.turso", tmp_path / "feedback.jsonl")
+    app = server.streamable_http_app(
+        json_response=True,
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-11-25",
+                    "capabilities": {},
+                    "clientInfo": {"name": "quail-test", "version": "0"},
+                },
+            },
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body.get("error", {}).get("code") != UNSUPPORTED_PROTOCOL_VERSION
+    assert "result" in body
+    assert body["result"]["protocolVersion"]
+
+
 def test_list_and_call_against_live_server(mcp_url: str) -> None:
     listed = asyncio.run(list_tools(mcp_url))
     names = {tool["name"] for tool in listed["tools"]}
@@ -135,23 +192,23 @@ def test_list_and_call_against_live_server(mcp_url: str) -> None:
     assert "quail_exec" in names
 
     setup = asyncio.run(call_tool(mcp_url, "quail_setup", {}))
-    assert setup.isError is False
-    assert setup.structuredContent is not None
-    assert "session_id" in setup.structuredContent
-    assert "datasets" in setup.structuredContent
+    assert setup.is_error is False
+    assert setup.structured_content is not None
+    assert "session_id" in setup.structured_content
+    assert "datasets" in setup.structured_content
 
-    session_id = setup.structuredContent["session_id"]
-    dataset_id = setup.structuredContent["datasets"][0]["dataset_id"]
+    session_id = setup.structured_content["session_id"]
+    dataset_id = setup.structured_content["datasets"][0]["dataset_id"]
     exec_args = {
         "session_id": session_id,
         "dataset_id": dataset_id,
         "code": "print(count())",
     }
     outcome = asyncio.run(call_tool(mcp_url, "quail_exec", exec_args))
-    assert outcome.isError is False
-    assert outcome.structuredContent is not None
-    assert "printed_output" in outcome.structuredContent
-    assert "2" in outcome.structuredContent["printed_output"]
+    assert outcome.is_error is False
+    assert outcome.structured_content is not None
+    assert "printed_output" in outcome.structured_content
+    assert "2" in outcome.structured_content["printed_output"]
 
 
 def test_main_list_and_call_exit_codes(mcp_url: str, capsys: pytest.CaptureFixture[str]) -> None:

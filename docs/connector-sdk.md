@@ -37,7 +37,7 @@ file paths in TOML. Hosting / ngrok stays outside the SDK
 
 Tool input schemas must be closed JSON Schema objects (`type: object`,
 `additionalProperties: false`) with Python-safe property names. Do not use
-`ctx` — the host injects FastMCP `Context` under that name.
+`ctx` — the host injects MCPServer `Context` under that name.
 
 `ToolResult` may attach up to eight `ToolImage` values (PNG/JPEG/WebP/GIF,
 ≤512 KiB each). The host maps them to MCP `ImageContent` blocks after any text
@@ -63,7 +63,7 @@ Tools may overlap on the same dataset; only competing **docs** are rejected.
 Tool names must not match the core MCP surface (`quail_exec`, `quail_setup`,
 `quail_export_csv`, `provide_feedback`, Clerk workspace tools, and the other
 frozen host tools).
-FastMCP would otherwise overwrite the core handler.
+MCPServer would otherwise overwrite the core handler.
 
 ## TOML shape
 

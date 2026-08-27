@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import socket
+import threading
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+import uvicorn
 from mcp.types import CallToolResult
 
 from quail.auth import AllowlistedPrincipal, ForbiddenError, StaticTokenVerifier, UnauthorizedError
@@ -17,15 +23,15 @@ from quail.run import apply_config
 
 def _as_dict(result: object) -> dict:
     if isinstance(result, CallToolResult):
-        assert result.structuredContent is not None
-        return dict(result.structuredContent)
+        assert result.structured_content is not None
+        return dict(result.structured_content)
     if isinstance(result, dict):
         return result
     raise AssertionError(f"Unexpected tool result type: {type(result)!r}")
 
 
 def _is_error(result: object) -> bool:
-    return isinstance(result, CallToolResult) and bool(result.isError)
+    return isinstance(result, CallToolResult) and bool(result.is_error)
 
 
 def _write_clerk_manifest(
@@ -458,27 +464,9 @@ def test_clerk_export_csv_writes_host_file(tmp_path: Path) -> None:
     asyncio.run(run())
 
 
-def test_mcp_session_id_reads_streamable_http_header() -> None:
-    from quail.mcp.server.server import _clerk_connection_key, _mcp_session_id
+def test_clerk_connection_key_is_clerk_user() -> None:
+    from quail.mcp.server.server import _clerk_connection_key
 
-    class _Request:
-        def __init__(self, headers: dict[str, str]) -> None:
-            self.headers = headers
-
-    class _RequestContext:
-        def __init__(self, headers: dict[str, str]) -> None:
-            self.request = _Request(headers)
-
-    class _Ctx:
-        def __init__(self, headers: dict[str, str]) -> None:
-            self.request_context = _RequestContext(headers)
-
-        @property
-        def session(self) -> object:
-            raise AttributeError("ServerSession has no id")
-
-    assert _mcp_session_id(_Ctx({"mcp-session-id": "conn-1"})) == "conn-1"
-    assert _mcp_session_id(_Ctx({})) is None
     principal = AllowlistedPrincipal(
         user=UserSpec(
             user_id="alice",
@@ -489,8 +477,39 @@ def test_mcp_session_id_reads_streamable_http_header() -> None:
         ),
         clerk_user_id="user_alice",
     )
-    assert _clerk_connection_key(principal, _Ctx({"mcp-session-id": "conn-1"})) == "sess:conn-1"
-    assert _clerk_connection_key(principal, _Ctx({})) == "user:user_alice"
+    assert _clerk_connection_key(principal) == "user:user_alice"
+
+
+def test_sticky_bind_is_shared_for_same_clerk_user() -> None:
+    from quail.mcp.server.server import _clerk_connection_key
+    from quail.mcp.sticky import StickyWorkspaceStore
+
+    alice = AllowlistedPrincipal(
+        user=UserSpec(
+            user_id="alice",
+            clerk_user_id="user_alice",
+            workspaces=("acme", "labs"),
+            default_workspace="acme",
+            lock_workspace=False,
+        ),
+        clerk_user_id="user_alice",
+    )
+    alice_again = AllowlistedPrincipal(user=alice.user, clerk_user_id="user_alice")
+    bob = AllowlistedPrincipal(
+        user=UserSpec(
+            user_id="bob",
+            clerk_user_id="user_bob",
+            workspaces=("acme",),
+            default_workspace="acme",
+            lock_workspace=False,
+        ),
+        clerk_user_id="user_bob",
+    )
+    store = StickyWorkspaceStore()
+    assert _clerk_connection_key(alice) == _clerk_connection_key(alice_again)
+    store.bind(_clerk_connection_key(alice), "labs")
+    assert store.active(_clerk_connection_key(alice_again)) == "labs"
+    assert store.active(_clerk_connection_key(bob)) is None
 
 
 def test_sticky_workspace_rejects_non_member_bind(
@@ -705,6 +724,40 @@ def test_clerk_tools_list_follows_sticky_workspace(tmp_path: Path) -> None:
     asyncio.run(run())
 
 
+def test_clerk_http_tools_list_sees_bearer(tmp_path: Path) -> None:
+    from mcp.client import Client
+    from mcp.client.streamable_http import streamable_http_client
+    from mcp.shared._httpx_utils import create_mcp_http_client
+
+    from quail.mcp.server import create_clerk_mcp_server
+    from quail.mcp_client.mcp_client import PROTOCOL_VERSION
+
+    catalog = _acme_ping_catalog()
+    manifest = _write_clerk_manifest(tmp_path)
+    config = load_config(manifest)
+    apply_config(config).close()
+    verifier = StaticTokenVerifier({"alice-token": "user_alice"})
+    server = create_clerk_mcp_server(config, verifier=verifier, connector_catalog=catalog)
+
+    async def run(url: str) -> None:
+        async with create_mcp_http_client(
+            headers={"Authorization": "Bearer alice-token"}
+        ) as http:
+            async with Client(
+                streamable_http_client(url, http_client=http),
+                mode=PROTOCOL_VERSION,
+            ) as client:
+                tools = await client.list_tools()
+                names = {tool.name for tool in tools.tools}
+                assert client.protocol_version == PROTOCOL_VERSION
+                assert "garden_ping" in names
+                assert "quail_setup" in names
+                assert "quail_switch_workspace" in names
+
+    with _serve_streamable_url(server.streamable_http_app()) as url:
+        asyncio.run(run(url))
+
+
 def test_clerk_tools_list_omits_connectors_when_unbound(tmp_path: Path) -> None:
     from quail.mcp.server import create_clerk_mcp_server
 
@@ -728,3 +781,32 @@ def test_clerk_tools_list_omits_connectors_when_unbound(tmp_path: Path) -> None:
             assert "garden_ping" in names
 
     asyncio.run(run())
+
+
+@contextmanager
+def _serve_streamable_url(app: object) -> Iterator[str]:
+    port = _free_port()
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        if server.started:
+            break
+        time.sleep(0.05)
+    else:
+        server.should_exit = True
+        thread.join(timeout=5)
+        raise RuntimeError("uvicorn MCP server failed to start")
+    try:
+        yield f"http://127.0.0.1:{port}/mcp"
+    finally:
+        server.should_exit = True
+        thread.join(timeout=5)
+
+
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])

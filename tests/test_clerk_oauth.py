@@ -8,6 +8,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.testclient import TestClient
 
 from quail.auth import StaticTokenVerifier, UnauthorizedError
@@ -28,6 +29,12 @@ from quail.mcp.oauth import (
     mcp_resource_url,
 )
 from quail.run import apply_config
+
+_TEST_TRANSPORT_SECURITY = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
+
+def _streamable_app(server: Any):
+    return server.streamable_http_app(transport_security=_TEST_TRANSPORT_SECURITY)
 
 
 def _write_clerk_manifest(
@@ -189,7 +196,7 @@ def test_protected_resource_metadata_and_mcp_401(tmp_path: Path) -> None:
         config,
         verifier=StaticTokenVerifier({"alice-token": "user_alice"}),
     ).server
-    app = server.streamable_http_app()
+    app = _streamable_app(server)
     with TestClient(app) as client:
         meta = client.get("/.well-known/oauth-protected-resource/mcp")
         assert meta.status_code == 200
@@ -218,11 +225,19 @@ def test_mcp_rejects_valid_token_for_unknown_user(tmp_path: Path) -> None:
         config,
         verifier=StaticTokenVerifier({"alice-token": "user_alice", "eve-token": "user_eve"}),
     ).server
-    app = server.streamable_http_app()
+    app = _streamable_app(server)
     with TestClient(app) as client:
         denied = client.post("/mcp", headers={"Authorization": "Bearer eve-token"})
         assert denied.status_code == 401
-        allowed = client.post("/mcp", headers={"Authorization": "Bearer alice-token"})
+        allowed = client.post(
+            "/mcp",
+            headers={
+                "Authorization": "Bearer alice-token",
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+            },
+            content=b"{}",
+        )
         assert allowed.status_code != 401
 
 
@@ -234,7 +249,7 @@ def test_authorization_server_metadata_proxy(tmp_path: Path) -> None:
         config,
         verifier=StaticTokenVerifier({"alice-token": "user_alice"}),
     ).server
-    app = server.streamable_http_app()
+    app = _streamable_app(server)
     payload = {
         "issuer": "https://example.clerk.accounts.dev",
         "authorization_endpoint": "https://example.clerk.accounts.dev/oauth/authorize",
@@ -272,7 +287,7 @@ def test_authorize_redirects_to_clerk(tmp_path: Path) -> None:
         config,
         verifier=StaticTokenVerifier({"alice-token": "user_alice"}),
     ).server
-    app = server.streamable_http_app()
+    app = _streamable_app(server)
     with TestClient(app, follow_redirects=False) as client:
         response = client.get(
             "/authorize",
@@ -470,7 +485,7 @@ def test_oauth_metadata_served_from_cache(tmp_path: Path) -> None:
             config,
             verifier=StaticTokenVerifier({"tok": "user_alice"}),
         ).server
-        app = server.streamable_http_app()
+        app = _streamable_app(server)
         with TestClient(app) as client:
             first = client.get("/.well-known/oauth-authorization-server")
             second = client.get("/.well-known/oauth-authorization-server")

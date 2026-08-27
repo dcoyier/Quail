@@ -18,8 +18,8 @@ from quail.run import apply_config
 
 def _as_dict(result: object) -> dict:
     if isinstance(result, CallToolResult):
-        assert result.structuredContent is not None
-        return dict(result.structuredContent)
+        assert result.structured_content is not None
+        return dict(result.structured_content)
     if isinstance(result, dict):
         return result
     raise AssertionError(f"Unexpected tool result type: {type(result)!r}")
@@ -140,8 +140,6 @@ def test_apply_then_mcp_list_datasets(tmp_path: Path) -> None:
         config.database,
         config.feedback,
         workspace_id=config.workspace_id,
-        host=config.bind,
-        port=config.port,
     )
 
     async def run() -> None:

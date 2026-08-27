@@ -1,10 +1,12 @@
-StickyWorkspaceStore maps connection keys to bound workspace ids.
+StickyWorkspaceStore maps opaque keys to bound workspace ids. Clerk MCP
+keys them as user:{clerk_user_id}: every MCP connection as that user on
+this process shares one bind. There is no transport session.
 
 active(connection_key):
   Give back the bound workspace id, or None.
 
 ensure_initial_bind(connection_key, user):
-  The first time a connection is seen, if the user has default_workspace, bind it.
+  The first time a key is seen, if the user has default_workspace, bind it.
   Give back the active workspace id, or None when unbound.
 
 bind(connection_key, workspace_id):

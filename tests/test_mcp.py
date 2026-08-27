@@ -34,18 +34,18 @@ async def _call(server, name: str, arguments: dict | None = None):
 
 def _as_dict(result) -> dict:
     if isinstance(result, CallToolResult):
-        assert result.structuredContent is not None
-        return dict(result.structuredContent)
+        assert result.structured_content is not None
+        return dict(result.structured_content)
     if isinstance(result, dict):
         return result
-    # FastMCP may unwrap structured content to a plain mapping-like object
+    # MCPServer may unwrap structured content to a plain mapping-like object
     if hasattr(result, "keys"):
         return dict(result)
     raise AssertionError(f"Unexpected tool result type: {type(result)!r}")
 
 
 def _is_error(result) -> bool:
-    return isinstance(result, CallToolResult) and bool(result.isError)
+    return isinstance(result, CallToolResult) and bool(result.is_error)
 
 
 def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
@@ -73,14 +73,14 @@ def test_server_instructions_and_tool_definitions(tmp_path: Path) -> None:
         }
         assert "cold-start" in (tools["quail_setup"].description or "").lower()
         assert "analysis-language" in (tools["quail_get_api_docs"].description or "").lower()
-        assert "dataset_id" in tools["quail_exec"].inputSchema["properties"]
-        assert "session_id" in tools["quail_export_csv"].inputSchema["properties"]
-        assert "dataset_id" in tools["quail_export_csv"].inputSchema["properties"]
+        assert "dataset_id" in tools["quail_exec"].input_schema["properties"]
+        assert "session_id" in tools["quail_export_csv"].input_schema["properties"]
+        assert "dataset_id" in tools["quail_export_csv"].input_schema["properties"]
         export_desc = (tools["quail_export_csv"].description or "").lower()
         assert "not a download" in export_desc
         assert "reprocess" in export_desc
         assert "warm-path" in export_desc
-        assert "message" in tools["provide_feedback"].inputSchema["properties"]
+        assert "message" in tools["provide_feedback"].input_schema["properties"]
 
     asyncio.run(run())
 
