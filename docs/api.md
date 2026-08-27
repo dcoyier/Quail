@@ -118,8 +118,8 @@ the whole exec atomically (no mutations, bindings, or printed output).
 ### `Field(name, kind=None)`
 
 `kind` is `"source"`, `"analysis"`, or `None` (resolve by name at use).
-An explicit kind must match the catalog when the Field is used or committed
-in a binding; the error tells you the registered kind — use it or omit kind.
+An explicit kind must match the catalog when the Field is used. Commit of a
+changed binding fails only if that name already exists with a different kind.
 A restored binding with a stale kind does not fail the exec; using the Field
 still raises, and `del name` recovers.
 Fields are names, not values: do not compare a Field to a value or order
