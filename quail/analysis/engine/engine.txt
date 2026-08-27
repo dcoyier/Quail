@@ -43,11 +43,9 @@ retrieve(plan):
 
 count(plan):
   Same candidate sets as retrieve, but give back the length.
-  Unit is always a Unit (Expression units are rejected at plan time).
   Values-unit counts use len(_distinct_present_values(...)).
 
 create_field(plan):
-  Reject the name id.
   Reject source-name collision.
   Stage FieldCreate when new and remember the analysis Field.
   Clear catalog and field-snapshot caches for that name.
@@ -60,8 +58,7 @@ tag(plan):
 
 untag(plan):
   Same scope checks as tag.
-  Clear overlay cells whose canonical_json matches the untag value (or all
-  present cells when value is None) and stage ValueDelete.
+  Clear matching overlay cells and stage ValueDelete.
   If any ValueDelete was staged, clear the per-exec Lexical/Semantic score cache.
 
 entry_value / entry_fields:
@@ -74,8 +71,7 @@ _require_entry_in_scope(entry):
 
 Helpers evaluate groups and predicates, run expression pipelines (Value, AsText,
 AsNumber, regex, Slice, Length; Lexical and Semantic score through
-_search_backend). Member groups keep first-seen entry ids or field names.
-Intersection also drops duplicate left-side ids/names.
+_search_backend). Member entry groups validate each member's scope.
 
 _search_backend(kind):
   For Semantic, require SimilarityService or raise QuailRuntimeError with
@@ -95,10 +91,7 @@ _apply_regex(operation, value):
 Field-scoped member groups resolve each member through resolve_field against the
 catalog (kind stamped; unknown or kind-mismatched names raise).
 Field reads bulk-load each referenced field once into an entry_id map; overlay
-wins. Ranking tie-breaks with a precomputed position map. Missing or non-finite
-scores are -inf. Weight 0 contributes 0 even when that term is missing.
-Non-finite + or * results become -inf. Identity Value() is dropped when an
-Expression is built, so Value() then Lexical(...) is a bare search op.
+wins. Ranking tie-breaks with a precomputed position map.
 
 _apply_limit(items, limit, order):
   Give back top, bottom, or middle slice of items by order.

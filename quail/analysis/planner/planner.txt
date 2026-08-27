@@ -1,6 +1,6 @@
 RetrievePlan remembers unit, group, limit, order, and ranking.
 
-CountPlan remembers unit (a Unit) and group.
+CountPlan remembers unit and group.
 
 CreateFieldPlan remembers a Field with kind analysis.
 
@@ -11,24 +11,20 @@ UntagPlan remembers group, field, and optional value.
 plan_retrieve(unit, group, limit, order, rank):
   Default group to G0 and rank to empty Ranking.
   Require unit is Unit or Expression.
-  Require group is GroupExpr or a list of Entry (wrap the list as an entries members group).
+  Require group is GroupExpr.
   Require positive limit and order in top, middle, bottom.
-  If rank is an Expression, wrap Ranking(expression=rank).
-  Require rank is then a Ranking.
   Require unit and group scopes match.
   Reject ranking for fields and values units.
   Give back a RetrievePlan.
 
 plan_count(unit, group):
-  Reject an Expression unit.
-  Same remaining unit and group rules as retrieve.
+  Same unit and group rules as retrieve.
   Give back a CountPlan.
 
 plan_create_field(field):
   Accept a string name or Field and normalize to analysis Field.
   Strip leading and trailing whitespace from the name.
   Raise QuailSyntaxError when the stripped name is empty.
-  Raise QuailSyntaxError when the name is id.
   Give back a CreateFieldPlan.
 
 plan_tag(group, field, value):

@@ -39,7 +39,6 @@ from quail.analysis.search_text import (
 from quail.analysis.unit import Unit
 from quail.datasets.catalog import source_entries, source_values
 from quail.datasets.db import CoreDb
-from quail.datasets.hashing import canonical_json
 from quail.search import LexicalService, SimilarityService
 from quail.session.models import FieldCreate, Scope, ValueDelete, ValueWrite
 from quail.session.overlay import analysis_fields, analysis_values, catalog_fields
@@ -145,10 +144,13 @@ class QueryEngine:
         raise QuailSyntaxError(f"Unsupported unit scope: {plan.unit.scope}")
 
     def count(self, plan: CountPlan) -> int:
-        if plan.unit.scope == "fields":
+        if isinstance(plan.unit, Unit) and plan.unit.scope == "fields":
             return len(self._evaluate_field_group(plan.group))
         search_scores = self._search_scores
         entry_ids = self._evaluate_entry_group(plan.group, search_scores=search_scores)
+        if isinstance(plan.unit, Expression):
+            return len(entry_ids)
+        assert isinstance(plan.unit, Unit)
         if plan.unit.scope == "entries":
             if plan.unit.field is None:
                 return len(entry_ids)
@@ -164,8 +166,6 @@ class QueryEngine:
 
     def create_field(self, plan: CreateFieldPlan) -> Field:
         name = plan.field.name
-        if name == "id":
-            raise QuailSyntaxError('create_field cannot use the name "id"')
         if any(field.name == name and field.kind == "source" for field in self._catalog()):
             raise QuailFieldError(f"Cannot create analysis field over source name: {name}")
         if name in self._created_fields or any(
@@ -197,7 +197,7 @@ class QueryEngine:
             current = self._read_field_value(field, entry_id)
             if current is None:
                 continue
-            if plan.value is not None and canonical_json(current) != canonical_json(plan.value):
+            if plan.value is not None and current != plan.value:
                 continue
             self._value_overlay[(field_name, entry_id)] = self._absent
             self._mutations.append(ValueDelete(field_name, entry_id, plan.value))
@@ -351,12 +351,8 @@ class QueryEngine:
             return self._all_entry_ids()
         if group.members is not None:
             ids: list[str] = []
-            seen: set[str] = set()
             for member in group.members:
                 self._require_entry_in_scope(member)
-                if member.id in seen:
-                    continue
-                seen.add(member.id)
                 ids.append(member.id)
             return ids
         if group.predicate is not None:
@@ -374,13 +370,11 @@ class QueryEngine:
         if group.operator == "and":
             assert group.left is not None and group.right is not None
             right_ids = set(self._evaluate_entry_group(group.right, search_scores=search_scores))
-            seen: set[str] = set()
-            result: list[str] = []
-            for entry_id in self._evaluate_entry_group(group.left, search_scores=search_scores):
-                if entry_id in right_ids and entry_id not in seen:
-                    seen.add(entry_id)
-                    result.append(entry_id)
-            return result
+            return [
+                entry_id
+                for entry_id in self._evaluate_entry_group(group.left, search_scores=search_scores)
+                if entry_id in right_ids
+            ]
         if group.operator == "or":
             assert group.left is not None and group.right is not None
             seen: set[str] = set()
@@ -405,25 +399,13 @@ class QueryEngine:
         if group.name == "G1":
             return [Field(field.name, kind=field.kind) for field in catalog]
         if group.members is not None:
-            seen: set[str] = set()
-            result: list[Field] = []
-            for field in group.members:
-                resolved = self.resolve_field(field)
-                if resolved.name in seen:
-                    continue
-                seen.add(resolved.name)
-                result.append(resolved)
-            return result
+            return [self.resolve_field(field) for field in group.members]
         if group.operator == "and":
             assert group.left is not None and group.right is not None
             right = {field.name for field in self._evaluate_field_group(group.right)}
-            seen_names: set[str] = set()
-            result: list[Field] = []
-            for field in self._evaluate_field_group(group.left):
-                if field.name in right and field.name not in seen_names:
-                    seen_names.add(field.name)
-                    result.append(field)
-            return result
+            return [
+                field for field in self._evaluate_field_group(group.left) if field.name in right
+            ]
         if group.operator == "or":
             assert group.left is not None and group.right is not None
             seen: set[str] = set()
@@ -950,19 +932,17 @@ class QueryEngine:
             if not math.isfinite(number):
                 return float("-inf")
             return number
-        if ranking.operator == "+" and ranking.left is not None and isinstance(
-            ranking.right, Ranking
+        if (
+            ranking.operator == "+"
+            and ranking.left is not None
+            and isinstance(ranking.right, Ranking)
         ):
-            total = self._score_ranking(
-                ranking.left, entry_id, search_scores
-            ) + self._score_ranking(ranking.right, entry_id, search_scores)
-            return total if math.isfinite(total) else float("-inf")
+            return self._score_ranking(ranking.left, entry_id, search_scores) + self._score_ranking(
+                ranking.right, entry_id, search_scores
+            )
         if ranking.operator == "*" and ranking.left is not None:
             weight = float(ranking.right)
-            if weight == 0.0:
-                return 0.0
-            product = self._score_ranking(ranking.left, entry_id, search_scores) * weight
-            return product if math.isfinite(product) else float("-inf")
+            return self._score_ranking(ranking.left, entry_id, search_scores) * weight
         raise QuailSyntaxError("Unsupported ranking form")
 
     def _apply_limit(self, items: list[Any], limit: int, order: str) -> list[Any]:

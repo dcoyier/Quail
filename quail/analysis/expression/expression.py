@@ -20,20 +20,17 @@ class Expression:
     def __init__(self, input: Field | Expression, *operations: Operation) -> None:
         if isinstance(input, Field):
             root = input
-            pipeline = list(operations)
+            pipeline = tuple(operations)
         elif isinstance(input, Expression):
             root = input.root
-            pipeline = list(input.operations) + list(operations)
+            pipeline = input.operations + tuple(operations)
         else:
             raise QuailSyntaxError("Expression input must be a Field or Expression")
         if not all(isinstance(operation, Operation) for operation in pipeline):
             raise QuailSyntaxError("Expression operations must be Operation objects")
-        while pipeline and pipeline[0].kind == "Value":
-            pipeline.pop(0)
-        pipeline_tuple = tuple(pipeline)
-        validate_operation_pipeline(pipeline_tuple)
+        validate_operation_pipeline(pipeline)
         object.__setattr__(self, "root", root)
-        object.__setattr__(self, "operations", pipeline_tuple)
+        object.__setattr__(self, "operations", pipeline)
 
     @property
     def input(self) -> Field | Expression:

@@ -33,7 +33,6 @@ _require_nonempty_name(name):
   If name is not a non-empty string, raise a syntax error that Field name must be a non-empty string.
 
 _require_allowed_kind(kind):
-  If kind is not None and not a string, raise a syntax error that Field kind must be source, analysis, or None.
   If kind is not in _ALLOWED_KINDS, raise a syntax error that Field kind must be source, analysis, or None.
 
 _reject_field_ordering(field_name):

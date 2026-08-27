@@ -17,7 +17,7 @@ from quail.analysis import (
     RegexFindAll,
     RegexSearch,
 )
-from quail.analysis.operations import OP_SPECS, Value, final_pipeline_kind
+from quail.analysis.operations import OP_SPECS, final_pipeline_kind
 from quail.analysis.worker.sandbox import validate_quail_code
 
 _DOCS = Path(__file__).resolve().parent.parent / "docs"
@@ -72,11 +72,6 @@ def test_final_pipeline_kind_walks_the_table() -> None:
         final_pipeline_kind(Expression(Field("body"), RegexFindAll("x")).operations)
         == "list_text"
     )
-    assert final_pipeline_kind(Expression(Field("body")).operations) == "any"
-    assert Expression(Field("body"), Value()).operations == ()
-    assert [op.kind for op in Expression(Field("body"), Value(), Length()).operations] == [
-        "Length"
-    ]
 
 
 def test_rankable_is_final_kind_number_or_score() -> None:

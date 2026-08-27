@@ -12,7 +12,7 @@ from quail.analysis.exec_host import dispatch_call, exec_script, run_analysis
 from quail.analysis.expression import Expression
 from quail.analysis.field import Field
 from quail.analysis.group import G0
-from quail.analysis.operations import Lexical, Value
+from quail.analysis.operations import Lexical
 from quail.analysis.ranking import Ranking
 from quail.datasets import import_csv_dataset, open_core_db
 from quail.search import LexicalService, open_search_db
@@ -207,7 +207,7 @@ def test_engine_uses_warmed_source_lexical_without_dynamic_corpus_or_counts(
     )
 
     def driver(engine: QueryEngine, _prints) -> None:
-        score = Expression(Field("body"), Value(), Lexical("hydrangea"))
+        score = Expression(Field("body"), Lexical("hydrangea"))
         ranked = dispatch_call(
             engine,
             "retrieve",

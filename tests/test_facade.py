@@ -75,7 +75,7 @@ def test_ranking_addition_and_weight() -> None:
 
 def test_pipeline_and_units() -> None:
     expr = Expression(Field("n"), Value(), AsNumber())
-    assert [op.kind for op in expr.operations] == ["AsNumber"]
+    assert [op.kind for op in expr.operations] == ["Value", "AsNumber"]
     assert entries.scope == "entries"
     assert fields.scope == "fields"
     assert Unit("values", Field("topic")).field is not None
