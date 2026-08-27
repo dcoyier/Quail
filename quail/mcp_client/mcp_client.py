@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"mcp_client: {error}", file=sys.stderr)
             return 2
         result = asyncio.run(call_tool(url, args.tool_name, arguments))
-        _print_json(_call_result_payload(result))
+        _print_json(_stdout_packet(result))
         return 1 if result.is_error else 0
     except Exception as error:
         print(f"mcp_client: {_client_error_message(error)}", file=sys.stderr)
@@ -176,14 +176,44 @@ def _client_error_message(error: BaseException) -> str:
     return text or type(current).__name__
 
 
-def _call_result_payload(result: CallToolResult) -> dict[str, Any]:
-    return {
-        "isError": bool(result.is_error),
-        "structuredContent": result.structured_content,
-        "content": [
-            block.model_dump(mode="json", by_alias=True) for block in result.content
-        ],
-    }
+def _stdout_packet(result: CallToolResult) -> dict[str, Any]:
+    """Give back the tool result JSON object for stdout."""
+
+    structured = result.structured_content
+    if isinstance(structured, dict):
+        return dict(structured)
+    packet = _text_content_packet(result.content)
+    if result.is_error and "diagnostic" not in packet:
+        message = packet["text"] if set(packet) == {"text"} else json.dumps(packet)
+        return {
+            "execution_id": None,
+            "diagnostic": {
+                "error_class": "QuailSyntaxError",
+                "stable_error_code": "quail_syntax_error",
+                "message": message,
+            },
+        }
+    return packet
+
+
+def _text_content_packet(content: list[Any]) -> dict[str, Any]:
+    """Build a JSON object from text content blocks."""
+
+    texts: list[str] = []
+    for block in content:
+        text = getattr(block, "text", None)
+        if isinstance(text, str) and text:
+            texts.append(text)
+    raw = "\n".join(texts).strip()
+    if not raw:
+        return {}
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return {"text": raw}
+    if isinstance(value, dict):
+        return value
+    return {"text": raw}
 
 
 def _print_json(payload: Any) -> None:
