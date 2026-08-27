@@ -119,11 +119,10 @@ Callables, groups, units, types, ops, `re`, and error classes are **reserved**
 
 Compose `Predicate` values and same-scope `GroupExpr` values with `&`, `|`,
 and `~`. Compare `Expression` values with `==`, `!=`, `<`, `<=`, `>`, `>=`.
-Python `and` / `or` / `not` work only on materialized values. On an
-`Expression`, `Predicate`, or `GroupExpr`, use `&` `|` `~`. Do not
-truth-test those symbolic values with `if`, `while`, or `bool(...)`. Do not
-chain comparisons (`a < expr < b`). `is` is rejected at parse — write
-`== None` / `!= None`.
+Python `and` / `or` / `not` work only on materialized values. Do not
+truth-test an `Expression`, `Predicate`, or `GroupExpr` with `if`, `while`,
+or `bool(...)`. Do not chain comparisons (`a < expr < b`). `is` is rejected
+at parse — write `== None` / `!= None`.
 
 `Operation` is the opaque value returned by operation factories such as
 `Length()`. It is not an injected constructor.
@@ -855,7 +854,7 @@ element.
 | Uppercase `AND` / `NOT` | Operators. `NOT` is infix and requires a positive left operand (`rose NOT soil`, not `NOT spam`). |
 | Uppercase `OR` | Error. Separate terms with spaces. |
 | Lowercase `and` / `not` / `or` | Ordinary terms |
-| Punctuation | Splits into terms the same way indexing does |
+| Punctuation | One unquoted atom with hyphens/punctuation becomes OR of the split tokens |
 
 A whitespace-only or punctuation-only string query raises `QuailRuntimeError`
 because it contains no FTS terms.
