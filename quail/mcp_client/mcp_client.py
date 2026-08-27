@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import inspect
 import json
 import sys
 from pathlib import Path
@@ -82,9 +81,7 @@ async def list_tools(url: str) -> dict[str, Any]:
         "tools": [
             {
                 "name": tool.name,
-                "description": inspect.cleandoc(tool.description)
-                if isinstance(tool.description, str)
-                else tool.description,
+                "description": tool.description,
                 "inputSchema": tool.input_schema,
             }
             for tool in result.tools
@@ -181,42 +178,17 @@ def _client_error_message(error: BaseException) -> str:
 
 
 def _call_result_payload(result: CallToolResult) -> dict[str, Any]:
-    """Operator stdout: camelCase envelope without a cloned text content block."""
-
-    content = [
-        block.model_dump(mode="json", by_alias=True, exclude_none=True)
-        for block in result.content
-    ]
-    payload: dict[str, Any] = {
+    return {
         "isError": bool(result.is_error),
         "structuredContent": result.structured_content,
+        "content": [
+            block.model_dump(mode="json", by_alias=True) for block in result.content
+        ],
     }
-    if result.structured_content is not None and _content_is_payload_clone(
-        content, result.structured_content
-    ):
-        return payload
-    payload["content"] = content
-    return payload
-
-
-def _content_is_payload_clone(content: list[dict[str, Any]], payload: Any) -> bool:
-    if len(content) != 1:
-        return False
-    block = content[0]
-    if block.get("type") != "text":
-        return False
-    text = block.get("text")
-    if not isinstance(text, str):
-        return False
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError:
-        return False
-    return parsed == payload
 
 
 def _print_json(payload: Any) -> None:
-    json.dump(payload, sys.stdout, indent=2)
+    json.dump(payload, sys.stdout, indent=2, sort_keys=True)
     sys.stdout.write("\n")
 
 

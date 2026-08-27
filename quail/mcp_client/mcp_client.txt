@@ -41,7 +41,6 @@ list_tools(url):
   List tools.
   Give back a mapping with tools: name, description, inputSchema for each tool
   (camelCase keys for the operator stdout contract).
-  Clean description indentation with inspect.cleandoc.
 
 call_tool(url, name, optional arguments):
   Open a 2026-07-28 mcp.Client against url with the private read timeout.
@@ -56,14 +55,8 @@ _build_parser:
   Subcommand call takes tool_name and arguments.
 
 _call_result_payload(result):
-  Give back isError and structuredContent (camelCase stdout contract).
-  JSON-dump content blocks with wire aliases (mimeType stays camelCase) and
-  drop null fields.
-  If content is a single text block that JSON-equals structuredContent, omit
-  content so the payload is not printed twice.
-
-_content_is_payload_clone(content, payload):
-  True when content is one text block whose JSON text equals payload.
+  Give back isError, structuredContent, and content (JSON dumps of content
+  blocks with wire aliases so mimeType stays camelCase).
 
 _print_json(payload):
-  Write indented JSON plus a trailing newline to stdout.
+  Write indented JSON with sorted keys plus a trailing newline to stdout.
