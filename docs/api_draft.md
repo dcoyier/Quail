@@ -250,8 +250,8 @@ entries: Unit  # Unit("entries")
 fields: Unit   # Unit("fields")
 ```
 
-What `retrieve` returns and what `count` measures. The population is `group=`,
-not the Unit.
+What `retrieve` lists and what `count` sizes. The population is `group=`,
+not the Unit. `count` always returns `int`.
 
 **Parameters**
 
