@@ -37,8 +37,8 @@ Only `print(...)` leaves the sandbox. Return values of expressions do not.
 | **Field** | One source or analysis column. The CSV `id` column is `entry.id`, not `Field("id")`. |
 | **Expression** | Recipe that reads/transforms one field’s value per entry. |
 | **Predicate** | True/false recipe per entry (usually from comparing expressions). |
-| **GroupExpr** | Symbolic set of entries or fields — not a Python list until you retrieve. |
-| **Unit** | What `retrieve` lists (`count` always returns `int`). |
+| **GroupExpr** | Symbolic set of entries or fields (not a Python list). |
+| **Unit** | What kind of item `retrieve` lists (`count` still returns `int`). |
 | **Ranking** | How to score and order entries. |
 | **Binding** | Top-level name that survives a successful exec in this session. |
 | **Mutation** | `create_field` / `tag` / `untag` — session overlay only. |
@@ -93,9 +93,9 @@ builtins are injected but not reserved.
 
 Compose `Predicate` and same-scope `GroupExpr` values with `&` `|` `~`, and
 compare `Expression` values with `==` `!=` `<` `<=` `>` `>=`. Python `and` /
-`or` / `not` work on materialized values. On an `Expression`, `Predicate`, or
-`GroupExpr`, use `&` `|` `~` — do not `if` them or chain comparisons
-(`a < expr < b`). Use `== None` / `!= None`, not `is None`.
+`or` / `not` work on materialized values. Do not `if` an `Expression`,
+`Predicate`, or `GroupExpr`, or chain comparisons (`a < expr < b`). Use
+`== None` / `!= None`, not `is None`.
 
 ---
 
@@ -236,8 +236,8 @@ so `retrieve(matching)` fails.
   `GroupExpr("entries", members=hits)`). `.where` is entry-scoped (`G0`, not
   `G1`). `tag` / `untag` also accept `list[Entry]`; `retrieve` / `count` do
   not.
-- `rank` is a `Ranking` (wrap a score Expression). `+` / `*` already produce
-  a Ranking.
+- `rank` must be a `Ranking`. `expr + expr` / `expr * weight` already are;
+  wrap a lone rankable Expression with `Ranking(expression=...)`.
 - `order`: `"top"` | `"middle"` | `"bottom"`.
 - Narrow with `.where` **before** expensive ranking when you can — ranking
   scores the whole candidate set before applying `limit`.
@@ -291,18 +291,20 @@ each entry’s expression root field). Aggregations: `"total"`, `"avg"`, or
   (configured outside this API). Cosine is not a match bit — do not reuse
   Lexical’s `score > 0` as “matched.” Absent cells score `None`.
 
-Both run fastest on a bare source field (no ops before the search op) that was
-processed for search; transformed values and analysis fields load and score
-cell values instead. If search is not configured, the diagnostic is
-repairable — fix the config and rerun the whole exec.
+Both run fastest on a bare source field (no ops before the search op,
+including identity `Value()`) that was processed for search; transformed
+values and analysis fields load and score cell values instead. If search is
+not configured, the diagnostic is repairable — fix the config and rerun the
+whole exec.
 
 `quail_export_csv` is a **host MCP tool**, not a name inside `quail_exec`.
 Called with `session_id` and `dataset_id`, it writes source columns plus this
-session’s tags to a CSV path on the serve host (a filesystem path, not the
-file body) so the operator can process those tags as **source** columns later
-— the warm-path route to fast `Lexical` / `Semantic` over session tags.
-Export itself does not reprocess. Do not overlap it with `quail_exec` on the
-same `session_id` (`session_busy`).
+session’s analysis fields (including created-but-untagged) to a CSV path on
+the serve host (a filesystem path, not the file body) so the operator can
+process those fields as **source** columns later — the warm-path route to
+fast `Lexical` / `Semantic` over session analysis fields. Export itself does
+not reprocess. Do not overlap it with `quail_exec` on the same `session_id`
+(`session_busy`).
 
 ---
 
@@ -310,9 +312,10 @@ same `session_id` (`session_busy`).
 
 After a **successful** exec, supported top-level names you assigned are
 restored next time in the **same session**. Delete with `del name`
-if it should not persist. Prefer JSON-like values and Quail symbolic objects;
-tuples/sets/callables and similar cannot persist. Analysis tags remain scoped
-to the session + dataset version; bindings are session-scoped.
+if it should not persist. An assigned name whose final value cannot persist
+(tuples, sets, callables, `range`, …) fails the whole exec — nothing
+commits. Prefer JSON-like values and Quail symbolic objects. Analysis tags
+remain scoped to the session + dataset version; bindings are session-scoped.
 
 ```python
 print(*values, sep=" ", end="\n")
@@ -351,5 +354,5 @@ Failures are atomic. Typical categories:
 | `QuailFieldError` | Unknown field, kind mismatch, source mutation |
 | `QuailRuntimeError` | Bad data for an op, search down, timeout, resource limit |
 
-Tool errors include `error_class`, `stable_error_code`, `message`, and
+The diagnostic includes `error_class`, `stable_error_code`, `message`, and
 optional `repair_hint`. Prefer fixing from that over guessing.
