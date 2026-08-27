@@ -22,8 +22,8 @@ Pass arguments by name.
 | `time_window` | `"standard"` (30s wall / 15s CPU) or `"extended"` (100s wall / 60s CPU). Both are finite; extended is just longer. Worker RSS is always capped at 256 MiB. |
 
 **Success:** `{"printed_output": "<exactly what print() wrote>"}`.  
-**Failure:** a tool error with `execution_id: null` and a `diagnostic`.
-Nothing partial is kept if quail_exec fails — no mutations, no bindings, no printed text.
+**Failure:** a tool error with `execution_id` (or `null`) and a `diagnostic`.
+Nothing partial is kept if quail_exec fails — no tags, no bindings, no printed text.
 
 Only `print(...)` leaves the sandbox. Return values of expressions do not.
 
@@ -37,15 +37,15 @@ Only `print(...)` leaves the sandbox. Return values of expressions do not.
 | **Field** | One source or analysis column. The CSV `id` column is `entry.id`, not `Field("id")`. |
 | **Expression** | Recipe that reads/transforms one field’s value per entry. |
 | **Predicate** | True/false recipe per entry (usually from comparing expressions). |
-| **GroupExpr** | Symbolic set of entries or fields (not a Python list). |
-| **Unit** | What kind of item `retrieve` lists (`count` still returns `int`). |
+| **Group** | Symbolic set of entries or fields — not a Python list until you retrieve. |
+| **Unit** | What `retrieve`/`count` should return (entries, fields, values, …). |
 | **Ranking** | How to score and order entries. |
 | **Binding** | Top-level name that survives a successful exec in this session. |
 | **Mutation** | `create_field` / `tag` / `untag` — session overlay only. |
 
 **Symbolic vs materialized:** building `Expression(...)` or `G0.where(...)`
-does not read the data. Quail evaluates when you `retrieve`, `count`, `tag`,
-or `untag`. `entry.value` and `entry.fields` read through the same engine.
+does not read the data. Quail evaluates when you `retrieve`, `count`,
+`entry.value`, `tag`, etc.
 
 ---
 
@@ -63,8 +63,7 @@ if len(samples) > 0:
         print(field.name, repr(samples[0].value(field)))
 ```
 
-Imported blank cells are `None`. A tagged `""` stays `""`. Imported CSV cells
-are stripped strings, not numbers — use `AsNumber()` for numeric compare.
+Empty cells are `None`, not `""`.
 
 From here, follow your question. The pieces below are designed for you to
 explore in any direction.
@@ -73,9 +72,7 @@ explore in any direction.
 
 ## What you can use (injected namespace)
 
-No imports. These names are injected. Callables, groups, units, types, ops,
-`re`, and error classes are reserved (cannot be assigned or deleted). Safe
-builtins are injected but not reserved.
+No imports. These names are injected and reserved.
 
 | Kind | Names |
 | --- | --- |
@@ -88,14 +85,11 @@ builtins are injected but not reserved.
 | Safe builtins | `abs`, `all`, `any`, `bool`, `dict`, `enumerate`, `float`, `int`, `len`, `list`, `max`, `min`, `range`, `repr`, `round`, `set`, `str`, `sum`, `tuple` |
 
 - **`G0`**: all entries (import order). **`G1`**: all fields (source then analysis).
-- **`entries` / `fields`**: injected units, not groups. Omitted `unit` defaults
-  to `entries`. `retrieve(group=G1)` fails because of that.
+- **`entries` / `fields`**: default units for retrieve/count — not groups.
 
-Compose `Predicate` and same-scope `GroupExpr` values with `&` `|` `~`, and
-compare `Expression` values with `==` `!=` `<` `<=` `>` `>=`. Python `and` /
-`or` / `not` work on materialized values. Do not `if` an `Expression`,
-`Predicate`, or `GroupExpr`, or chain comparisons (`a < expr < b`). Use
-`== None` / `!= None`, not `is None`.
+Compose symbolic values with `&` `|` `~` and comparisons. Do **not** use Python
+`and` / `or` / `not`, `if` on a Predicate, or chained comparisons on Expressions.
+Use `== None` / `!= None`, not `is None`.
 
 ---
 
@@ -104,12 +98,12 @@ compare `Expression` values with `==` `!=` `<` `<=` `>` `>=`. Python `and` /
 1. **One dataset per exec** — the active immutable version of `dataset_id`.
 2. **Source data is frozen** — only analysis fields/tags change, and only in-session.
 3. **Print-only output** — success returns the print buffer; failure returns none of it.
-4. **Atomic exec** — all mutations, bindings, and prints commit together or not at all.
+4. **Atomic exec** — all tags/bindings/prints commit together or not at all.
 5. **Later lines see earlier tags** in the same successful run; failed runs roll back.
 6. **No outside world** — no imports, files, network, DB handles, or env.
 
 The `time_window` ceilings are fixed product limits. Hitting any ceiling fails
-the whole exec atomically (no mutations, bindings, or printed output).
+the whole exec atomically (no tags, bindings, or printed output).
 
 ---
 
@@ -118,8 +112,8 @@ the whole exec atomically (no mutations, bindings, or printed output).
 ### `Field(name, kind=None)`
 
 `kind` is `"source"`, `"analysis"`, or `None` (resolve by name at use).
-An explicit kind must match the catalog when the Field is used. Commit of a
-changed binding fails only if that name already exists with a different kind.
+An explicit kind must match the catalog when the Field is used or committed
+in a binding; the error tells you the registered kind — use it or omit kind.
 A restored binding with a stale kind does not fail the exec; using the Field
 still raises, and `del name` recovers.
 Fields are names, not values: do not compare a Field to a value or order
@@ -145,9 +139,8 @@ entry.fields()                    # list[Field] present on this entry
 
 ### `Expression(input, operation, ...)`
 
-`input` is a `Field` or another `Expression`. Pipelines need at least one
-operation. `Value()` reads a field as-is and, if used, must be first; other
-ops may start the pipeline. Nest to append ops.
+`input` is a `Field` or another `Expression`. Pipeline must start with `Value()`
+when reading a field as-is; nest to append ops.
 
 Comparisons (`==`, `!=`, `<`, …) produce a **Predicate**.
 
@@ -155,8 +148,8 @@ Comparisons (`==`, `!=`, `<`, …) produce a **Predicate**.
 
 | Op | Role |
 | --- | --- |
-| `Value()` | Identity; first in pipeline if used |
-| `AsText()` | Python `str(value)` (`None` → `""`) |
+| `Value()` | Identity; first in pipeline when reading the field |
+| `AsText()` | Canonical text (`None` → `""`) |
 | `AsNumber()` | Finite float from number or numeric string |
 | `RegexSearch(pattern, flags=0)` | First match substring, or `None` |
 | `RegexFindAll(pattern, flags=0)` | `list[str]` of matches |
@@ -190,9 +183,8 @@ not_pred = ~pred
 ```
 
 `GroupExpr("entries", predicate=...)` or `members=[...]` (entries or fields,
-matching scope). Compose groups with `&` `|` `~`. `.where` is entry-scoped
-(`G0`, not `G1`). Materialize with `retrieve` / `count` — do not iterate a
-GroupExpr directly.
+matching scope). Compose groups with `&` `|` `~`. Materialize with `retrieve` /
+`count` — do not iterate a GroupExpr directly.
 
 ### `Ranking(expression=None)`
 
@@ -221,28 +213,14 @@ retrieve(unit=entries, group=G0, limit=1, order="top", rank=Ranking())
 count(unit=entries, group=G0)
 ```
 
-Pass `retrieve` / `count` by name — the first positional argument is `unit`,
-so `retrieve(matching)` fails.
-
 - `retrieve` always returns a **list** (possibly empty).
-- `count` always returns an **int**.
 - Omitted `limit` defaults to **1** (not the whole group).
-- `retrieve` `unit` may be a `Unit` or an `Expression` (one computed value per
-  remaining entry).
-- `count` `unit` may be a `Unit` or an `Expression`. An Expression unit is the
-  **group size** — the expression is not run. Match counts use
-  `count(group=G0.where(score > 0))`.
-- `group` is a `GroupExpr` (`G0`, `G1`, `G0.where(...)`, `&` `|` `~`, or
-  `GroupExpr("entries", members=hits)`). `.where` is entry-scoped (`G0`, not
-  `G1`). `tag` / `untag` also accept `list[Entry]`; `retrieve` / `count` do
-  not.
-- `rank` must be a `Ranking`. `expr + expr` / `expr * weight` already are;
-  wrap a lone rankable Expression with `Ranking(expression=...)`.
+- `unit` may be a `Unit` or an `Expression` (expression → one value per entry).
 - `order`: `"top"` | `"middle"` | `"bottom"`.
 - Narrow with `.where` **before** expensive ranking when you can — ranking
   scores the whole candidate set before applying `limit`.
 
-| Unit | Group | retrieve items | Can rank? |
+| Unit | Group | Items | Can rank? |
 | --- | --- | --- | --- |
 | entries | entry group | `Entry` | yes |
 | fields | field group | `Field` | no |
@@ -255,14 +233,13 @@ so `retrieve(matching)` fails.
 ## Mutations
 
 ```python
-topic = create_field("topic")            # returns Field; or Field("topic") / Field("topic", "analysis")
-tag(group, topic, value)                 # group: GroupExpr | list[Entry]; field: Field; no None in value
-untag(group, topic)                      # clear all selected
-untag(group, topic, value)               # clear Python == matches
+create_field("topic")           # or Field("topic") / Field("topic", "analysis")
+tag(group_or_entries, field, value)      # value: JSON-like, no None inside
+untag(group_or_entries, field)           # clear all selected
+untag(group_or_entries, field, value)    # clear exact matches only
 ```
 
-Source fields cannot be created or overwritten. An empty group or list writes
-nothing; unknown or source `field` still errors.
+Source fields cannot be created or overwritten. Empty selections are no-ops.
 
 ---
 
@@ -278,32 +255,29 @@ A query is a **non-empty list of target texts**, spelled as a `str`,
 each entry’s expression root field). Aggregations: `"total"`, `"avg"`, or
 `None` (= total).
 
-- **Lexical:** FTS relevance; `score > 0` means “matched”. Unmatched and
-  absent cells score `0.0` (not `None`). Scores are corpus-relative. String
-  queries use FTS syntax: unquoted spaces are OR (not a phrase); `"quoted
-  text"` is adjacent tokens; `term*` prefixes one clean term; uppercase
-  `AND` / `NOT` are operators and there is no `OR` keyword (lowercase `and` /
-  `not` / `or` are ordinary terms). Punctuation in one atom becomes OR of the
-  split tokens. `list[str]` scores each string as its own query, then sums
-  (`total` / `None`) or averages (`avg`) — that is not FTS OR. Entry-derived
-  targets tokenize and quote their terms (OR).
+- **Lexical:** FTS relevance; `score > 0` means “matched”, and scores are
+  corpus-relative. String queries use FTS syntax: unquoted spaces are OR (not
+  a phrase); `"quoted text"` is adjacent tokens; `term*` prefixes one clean
+  term; uppercase `AND` / `NOT` are operators and there is no `OR` keyword
+  (lowercase `and` / `not` / `or` are ordinary terms). Punctuation splits into
+  terms the same way indexing does. `list[str]` ORs each string as its own
+  query; entry-derived targets tokenize and quote their terms (OR).
 - **Semantic:** exact cosine similarity under the dataset embedding profile
   (configured outside this API). Cosine is not a match bit — do not reuse
-  Lexical’s `score > 0` as “matched.” Absent cells score `None`.
+  Lexical’s `score > 0` as “matched.” Empty cells score `None`.
 
-Both run fastest on a bare source field (no ops before the search op,
-including identity `Value()`) that was processed for search; transformed
-values and analysis fields load and score cell values instead. If search is
-not configured, the diagnostic is repairable — fix the config and rerun the
-whole exec.
+Both run fastest on a bare source field (no ops before the search op) that was
+processed for search; transformed values and analysis fields load and score
+cell values instead. If search is not configured, the diagnostic is
+repairable — fix the config and rerun the whole exec.
 
 `quail_export_csv` is a **host MCP tool**, not a name inside `quail_exec`.
 Called with `session_id` and `dataset_id`, it writes source columns plus this
-session’s analysis fields (including created-but-untagged) to a CSV path on
-the serve host (a filesystem path, not the file body) so the operator can
-process those fields as **source** columns later — the warm-path route to
-fast `Lexical` / `Semantic` over session analysis fields. Export itself does not reprocess.
-Do not overlap it with `quail_exec` on the same `session_id` (`session_busy`).
+session’s tags to a CSV path on the serve host (a filesystem path, not the
+file body) so the operator can process those tags as **source** columns later
+— the warm-path route to fast `Lexical` / `Semantic` over session tags.
+Export itself does not reprocess. Do not overlap it with `quail_exec` on the
+same `session_id` (`session_busy`).
 
 ---
 
@@ -311,10 +285,9 @@ Do not overlap it with `quail_exec` on the same `session_id` (`session_busy`).
 
 After a **successful** exec, supported top-level names you assigned are
 restored next time in the **same session**. Delete with `del name`
-if it should not persist. An assigned name whose final value cannot persist
-(tuples, sets, callables, `range`, …) fails the whole exec — nothing
-commits. Prefer JSON-like values and Quail symbolic objects. Analysis tags
-remain scoped to the session + dataset version; bindings are session-scoped.
+if it should not persist. Prefer JSON-like values and Quail symbolic objects;
+tuples/sets/callables and similar cannot persist. Analysis tags remain scoped
+to the session + dataset version; bindings are session-scoped.
 
 ```python
 print(*values, sep=" ", end="\n")
@@ -326,12 +299,9 @@ That buffer is the only caller-visible analysis output.
 
 ## Python surface (bounded)
 
-Allowed in spirit: literals, simple `name = value` (not `+=`, annotated, item,
-or attribute assign), `if`/`for`/`while` on **concrete** values, calls to the
-injected API, these string methods (`startswith`, `endswith`, `lower`,
-`upper`, `casefold`, `strip`, `lstrip`, `rstrip`, `replace`, `split`,
-`rsplit`, `splitlines`, `count`, `find`, `rfind`, `removeprefix`,
-`removesuffix`), `entry.value` / `entry.fields` / `group.where` / `re.escape`.
+Allowed in spirit: literals, assignment, `if`/`for`/`while` on **concrete**
+values, calls to the injected API, listed string methods (`lower`, `split`, …),
+`entry.value` / `entry.fields` / `group.where` / `re.escape`.
 
 Not allowed: imports, `def`/`lambda`, comprehensions, f-strings, `try`/`except`,
 `is`, `open`/`eval`/`exec`, mutating methods on containers (rebind instead),
@@ -353,5 +323,5 @@ Failures are atomic. Typical categories:
 | `QuailFieldError` | Unknown field, kind mismatch, source mutation |
 | `QuailRuntimeError` | Bad data for an op, search down, timeout, resource limit |
 
-The diagnostic includes `error_class`, `stable_error_code`, `message`, and
-optional `repair_hint`. Prefer fixing from that over guessing.
+Tool errors include `stable_error_code`, `message`, optional `repair_hint`, and
+optional source location. Prefer fixing from that over guessing.
