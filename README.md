@@ -264,7 +264,8 @@ not only whether individual tools succeed. Bind tokens to your Clerk
 application with `auth.clerk_authorized_parties` (`azp` / `aud`). Advertised
 OAuth scopes are for client UX; Quail does not enforce them from the token,
 and sessions belong to the creating user. Sticky workspace is per Clerk
-user for this process, not per MCP transport session.
+user for this process, not per MCP transport session:
+`quail_switch_workspace` applies to every connection as that user.
 
 The template is [`examples/quail.clerk.toml`](examples/quail.clerk.toml).
 Bind a workspace before you call dataset, session, or exec tools. If you

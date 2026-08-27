@@ -749,7 +749,8 @@ def _register_clerk_workspace_tools(server: MCPServer, runtime: ClerkMcpRuntime)
     ) -> CallToolResult:
         """Bind this Clerk user to one allowlisted workspace.
 
-        Sticky bind only: does not create a session. After switching, call
+        Sticky bind only: does not create a session. Every MCP connection as
+        this user on this process shares that bind. After switching, call
         quail_start_session again; do not reuse a prior session_id.
         Fails when the user is TOML-locked or the workspace is not in their
         memberships. Success returns active_workspace_id.
@@ -795,7 +796,7 @@ def _authorization_header(ctx: Context | None) -> str | None:
 
 
 def _clerk_connection_key(principal: AllowlistedPrincipal) -> str:
-    """Sticky key is the Clerk user, not a transport session."""
+    """Sticky key is the Clerk user for this process, not a transport session."""
 
     return f"user:{principal.clerk_user_id}"
 

@@ -1,5 +1,6 @@
 StickyWorkspaceStore maps opaque keys to bound workspace ids. Clerk MCP
-keys them as user:{clerk_user_id}; there is no transport session.
+keys them as user:{clerk_user_id}: every MCP connection as that user on
+this process shares one bind. There is no transport session.
 
 active(connection_key):
   Give back the bound workspace id, or None.

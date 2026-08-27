@@ -474,6 +474,38 @@ def test_clerk_connection_key_is_clerk_user() -> None:
     assert _clerk_connection_key(principal) == "user:user_alice"
 
 
+def test_sticky_bind_is_shared_for_same_clerk_user() -> None:
+    from quail.mcp.server.server import _clerk_connection_key
+    from quail.mcp.sticky import StickyWorkspaceStore
+
+    alice = AllowlistedPrincipal(
+        user=UserSpec(
+            user_id="alice",
+            clerk_user_id="user_alice",
+            workspaces=("acme", "labs"),
+            default_workspace="acme",
+            lock_workspace=False,
+        ),
+        clerk_user_id="user_alice",
+    )
+    alice_again = AllowlistedPrincipal(user=alice.user, clerk_user_id="user_alice")
+    bob = AllowlistedPrincipal(
+        user=UserSpec(
+            user_id="bob",
+            clerk_user_id="user_bob",
+            workspaces=("acme",),
+            default_workspace="acme",
+            lock_workspace=False,
+        ),
+        clerk_user_id="user_bob",
+    )
+    store = StickyWorkspaceStore()
+    assert _clerk_connection_key(alice) == _clerk_connection_key(alice_again)
+    store.bind(_clerk_connection_key(alice), "labs")
+    assert store.active(_clerk_connection_key(alice_again)) == "labs"
+    assert store.active(_clerk_connection_key(bob)) is None
+
+
 def test_sticky_workspace_rejects_non_member_bind(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

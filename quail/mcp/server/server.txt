@@ -106,10 +106,12 @@ _register_clerk_workspace_tools(server, runtime):
   quail_list_workspaces returns memberships (or only default when locked) and
     active_workspace_id.
   quail_switch_workspace binds an allowlisted workspace for this Clerk user
-    or errors when locked.
+    on this process (every MCP connection as that user shares the bind), or
+    errors when locked.
 
 _authorization_header: read Bearer from override or request headers.
-_clerk_connection_key: user:{clerk_user_id}. There is no transport session.
+_clerk_connection_key: user:{clerk_user_id}. Sticky is per Clerk user for
+  this process, not per transport session.
 _exec_repair_hint: prefer QuailRuntimeError.repair_hint over the generic exec
 failure hint.
 _build_setup_payload / _dataset_documentation: assemble the quail_setup payload

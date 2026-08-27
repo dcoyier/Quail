@@ -1,4 +1,8 @@
-"""Process-local sticky workspace binding keyed by opaque caller ids."""
+"""Process-local sticky workspace binding keyed by opaque caller ids.
+
+Clerk keys are user:{clerk_user_id}: every MCP connection as that user on
+this process shares one bind.
+"""
 
 from __future__ import annotations
 
