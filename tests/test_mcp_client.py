@@ -142,6 +142,49 @@ def test_auto_client_speaks_2026(mcp_url: str) -> None:
     assert asyncio.run(_auto()) == PROTOCOL_VERSION
 
 
+def test_legacy_client_can_list_tools(mcp_url: str) -> None:
+    from mcp.client import Client
+
+    async def _legacy() -> str:
+        async with Client(mcp_url, mode="legacy") as client:
+            tools = await client.list_tools()
+            assert any(tool.name == "quail_setup" for tool in tools.tools)
+            return client.protocol_version
+
+    assert asyncio.run(_legacy()) == "2025-11-25"
+
+
+def test_handshake_initialize_is_accepted(tmp_path: Path) -> None:
+    from mcp.server.transport_security import TransportSecuritySettings
+    from mcp_types import UNSUPPORTED_PROTOCOL_VERSION
+    from starlette.testclient import TestClient
+
+    server = create_mcp_server(tmp_path / "core.turso", tmp_path / "feedback.jsonl")
+    app = server.streamable_http_app(
+        json_response=True,
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-11-25",
+                    "capabilities": {},
+                    "clientInfo": {"name": "quail-test", "version": "0"},
+                },
+            },
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body.get("error", {}).get("code") != UNSUPPORTED_PROTOCOL_VERSION
+    assert "result" in body
+    assert body["result"]["protocolVersion"]
+
+
 def test_list_and_call_against_live_server(mcp_url: str) -> None:
     listed = asyncio.run(list_tools(mcp_url))
     names = {tool["name"] for tool in listed["tools"]}
