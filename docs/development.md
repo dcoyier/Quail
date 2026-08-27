@@ -3,8 +3,8 @@
 Architecture and change routing for Quail v0.11 from an existing checkout.
 Core semantics live in [`core.md`](core.md). The model-facing analysis
 contract is [`api.md`](api.md). Connector authors read
-[`connector-sdk.md`](connector-sdk.md). Operator how-to:
-[`README.md`](../README.md).
+[`connector-sdk.md`](connector-sdk.md). README is agent-first, then operator
+how-to (`process` / `run`, lease, Clerk): [`README.md`](../README.md).
 
 ## Package map
 
@@ -29,7 +29,7 @@ contract is [`api.md`](api.md). Connector authors read
 | Analysis semantics / op pipeline rules | `docs/core.md`, then `OP_SPECS` in `quail/analysis/operations/` |
 | Analysis language / agent `quail_exec` contract | `docs/api.md` then `quail/analysis/` |
 | Deploy, auth mode, concurrency, warm | `README.md`, then `quail/config/`, `quail/run/`, `quail/mcp/` |
-| Shell fallback MCP client | `README.md` Quick start, then `quail/mcp_client/` |
+| Shell fallback MCP client | `README.md` Running Quail, then `quail/mcp_client/` |
 | Connector author surface | `docs/connector-sdk.md` then `quail.connectors.sdk` only |
 | Tests | Prefer v0.11 tests under `tests/` |
 
