@@ -2,7 +2,7 @@
   <img src="quail.png" alt="Quail">
 </p>
 
-# Quail v0.11
+# Quail v0.12
 
 Quail is an environment where agents explore a text corpus. Typically that
 means surveys, notes, transcripts, and other long-form collections: text
