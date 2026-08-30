@@ -2,10 +2,21 @@
 
 > **Unpublished.** Not yet served by `quail_get_api_docs`.
 
-You analyze one dataset by writing Python. **Only `print` returns.** Recipes
-do not read the corpus until `retrieve`, `count`, `tag`, `untag`, `get`,
-`entry[...]`, `entry.value`, or `entry.fields()`. Source data never changes.
-The process has no network and no filesystem.
+Two questions:
+
+```python
+count(group=G0, *, of=None, distinct=False) -> int
+retrieve(group=G0, limit=1, *, order="top", rank=None, of=None, distinct=False) -> list
+```
+
+`group` is who. `rank` is order. `of` is what — omit it and the members
+themselves come back. Build those three in ordinary Python. **Only `print`
+returns.** Recipes do not read the corpus until `retrieve`, `count`, `tag`,
+`untag`, `get`, `entry[...]`, `entry.value`, or `entry.fields()`. Source data
+never changes. The process has no network and no filesystem.
+
+When a column method does not exist, write a `def` and `.map(fn)`. That is
+the extension point. Do not add verbs.
 
 ```text
 quail_exec(session_id, dataset_id, code, time_window="standard")
@@ -79,6 +90,104 @@ print(*values, sep=" ", end="\n")
 
 ---
 
+## `group` — who
+
+A group is a lazy set of entries or fields. `where` is entry-scoped and needs
+at least one predicate. Several predicates are AND. `&` `|` `~` combine groups
+of the same scope. Intersection keeps left-hand order; union is left then new
+right-hand members; complement is relative to `G0` or `G1`. A `members=` group
+keeps the given order; `[]` is empty.
+
+```python
+long = G0.where(F.body.length() >= 500)
+both = G0.where(F.body.length() >= 500, F.body.lexical("hydrangea") > 0)
+energy & climate
+energy | climate
+~energy
+GroupExpr("entries", members=retrieve(long, 20))
+GroupExpr("fields", members=[F.body, F.year])
+GroupExpr("entries", members=[])
+```
+
+```python
+class GroupExpr:
+    scope: "entries" | "fields"
+    def __init__(self, scope: str, *, members: list) -> None: ...
+    def where(self, predicate: Predicate, *more: Predicate) -> GroupExpr: ...
+```
+
+Comparisons on a column or recipe make a predicate. A missing cell is
+`expr == None`. Two columns on the same row: `F.body == F.title`. Two catalog
+handles: compare `.name`.
+
+```python
+(expr == != other) -> Predicate          # JSON-like value, Field, or Expression
+(expr < <= > >= other) -> Predicate      # finite number, Field, or Expression
+(pred & pred) -> Predicate
+(pred | pred) -> Predicate
+(~pred) -> Predicate
+```
+
+---
+
+## `rank` — order
+
+A number or score used with `+` `*` `-` is a ranking. `rank=` also accepts a
+rankable expression with no arithmetic. Omit `rank=` to keep group order.
+Higher first; ties break by import order.
+
+```python
+rank = F.body.lexical("hydrangea") - F.body.length() * 0.01
+retrieve(long, 10, rank=rank)
+retrieve(long, 10, of=rank, rank=rank)
+```
+
+Weight is a finite `int` or `float` `>= 0`, either side. Missing or non-finite
+scores sort last. `Length` and `Lexical` treat absence as `0`; `AsNumber` and
+`Semantic` treat it as `None`. A `-inf` term makes the total `-inf`.
+Comparisons on a ranking (`score > 0`) are predicates.
+
+`of=rank` with the same `group`, `rank`, `order`, and `limit` is the aligned
+scores.
+
+---
+
+## `of` — what
+
+Omit `of=` and `retrieve` / `count` talk about the group members. Pass a
+column or recipe to talk about cells or computed values instead. `distinct=True`
+uniquifies over the full group first (`None` dropped), then slices, and does
+not take `rank`. Distinctness is JSON-text identity (`1` and `1.0` are
+distinct), first-seen in group order.
+
+| Call | Items |
+| --- | --- |
+| `retrieve()` | one `Entry` from `G0` |
+| `retrieve(G1, 50)` | `Field` |
+| `retrieve(g, 20, of=F.body)` | present cells (absent dropped before rank) |
+| `retrieve(g, 20, of=F.body, distinct=True)` | unique present cells over the full group, then slice |
+| `retrieve(g, 20, of=F.body.length())` | computed values after rank and slice |
+| `retrieve(g, 20, of=F.year.map(decade), distinct=True)` | unique computed values over the full group (`None` dropped), then slice |
+| `retrieve(g, 10, of=rank, rank=rank)` | combined scores after the slice |
+
+A column (`F.body`) in `of=` is present cells. So is an identity
+`Expression` — `Expression(Field("body"))` or
+`Expression(Field("body"), Value())`. Any other recipe is computed values.
+
+`count(g)` is group size. `count(g, of=F.body)` is present cells.
+`count(g, of=F.body, distinct=True)` and `count(g, of=expr, distinct=True)`
+are unique values over the full group. A computed `of=` without `distinct`
+is retrieve-only. `count` takes a transforming `of=` only with `distinct=True`.
+`retrieve` / `count` reject `rank=` with `distinct=True`. `rank=` and `of=`
+are allowed on entry groups only.
+
+Omitted `limit` is **1**. If `limit` is at least the population, all items
+return. `order` is `"top"` (`items[:limit]`), `"bottom"`
+(`items[-limit:]`, not reversed), or `"middle"`
+(`start = (len(items) - limit) // 2`).
+
+---
+
 ## Columns
 
 ```python
@@ -87,20 +196,15 @@ F.body                 # Field("body")
 F["class year"]        # Field("class year")
 ```
 
-`F.body` is the column. Methods build a recipe. Comparisons build a filter.
-A missing cell is `expr == None`. Two columns on the same row: `F.body == F.title`.
-Two catalog handles: compare `.name`.
+`F.body` is the column. Methods build a recipe. Chain them. The constructor
+form is the same pipeline:
 
 ```python
-F.body.length()
-F.body.search(r"hydrangea", flags=0)
-F.body[0:200]
-F.body.lexical("climate")
-F.body == "open"
-F.year.number() >= 1990
-F.status.isin(["open", "closed"])
-F.year.number().between(1990, 2000)    # (expr >= lo) & (expr <= hi)
+Expression(Field("body"), Length())
+Expression(Field("body"), RegexFindAll(r"\w+"), Length())
 ```
+
+`Value()` is identity, and first if present. `Lexical` / `Semantic` are last.
 
 ```python
 class Field:
@@ -122,17 +226,26 @@ class Field:
     def isin(self, values: list) -> Predicate: ...   # OR of == against JSON-like values
 ```
 
-`Expression` has the same methods. Chain them. The constructor form is the
-same pipeline:
+`Expression` has the same methods.
 
 ```python
-Expression(Field("body"), Length())
-Expression(Field("body"), RegexFindAll(r"\w+"), Length())
+F.body.length()
+F.body.search(r"hydrangea", flags=0)
+F.body[0:200]
+F.body.lexical("climate")
+F.body == "open"
+F.year.number() >= 1990
+F.status.isin(["open", "closed"])
+F.year.number().between(1990, 2000)    # (expr >= lo) & (expr <= hi)
 ```
 
-`Value()` is identity, and first if present. `Lexical` / `Semantic` are last.
+---
 
-`.map(fn)` runs `fn(cell)` in Python per entry when the recipe is evaluated.
+## `.map(fn)`
+
+`.map(fn)` runs `fn(cell)` in Python per entry when `retrieve`, `count`,
+`tag`, or a row read evaluates the recipe. Use it for any filter, score, or
+`of=` the column methods do not cover. `fn` must persist — write a `def`.
 
 ```python
 def decade(value):
@@ -141,16 +254,15 @@ def decade(value):
 def mentions_policy(text):
     return isinstance(text, str) and "policy" in text.lower()
 
+def energy_bias(text):
+    if not isinstance(text, str):
+        return 0.0
+    t = text.lower()
+    return t.count("renewable") - t.count("coal")
+
 G0.where(F.body.map(mentions_policy) == True)
 retrieve(G0, 20, of=F.year.map(decade), distinct=True)
-```
-
-```python
-(expr == != other) -> Predicate          # JSON-like value, Field, or Expression
-(expr < <= > >= other) -> Predicate      # finite number, Field, or Expression
-(pred & pred) -> Predicate
-(pred | pred) -> Predicate
-(~pred) -> Predicate
+retrieve(G0, 10, rank=F.body.map(energy_bias))
 ```
 
 ---
@@ -190,96 +302,6 @@ F.body.sub(r"\s+", " ", re.S)[0:200].lexical("climate")
 
 ---
 
-## Groups
-
-```python
-long = G0.where(F.body.length() >= 500)
-both = G0.where(F.body.length() >= 500, F.body.lexical("hydrangea") > 0)
-energy & climate
-energy | climate
-~energy
-GroupExpr("entries", members=retrieve(long, 20))
-GroupExpr("fields", members=[F.body, F.year])
-GroupExpr("entries", members=[])
-```
-
-`where` is entry-scoped and needs at least one predicate. Several predicates
-are AND. `&` `|` `~` combine groups of the same scope. Intersection keeps
-left-hand order; union is left then new right-hand members; complement is
-relative to `G0` or `G1`. A `members=` group keeps the given order; `[]` is
-empty.
-
-```python
-class GroupExpr:
-    scope: "entries" | "fields"
-    def __init__(self, scope: str, *, members: list) -> None: ...
-    def where(self, predicate: Predicate, *more: Predicate) -> GroupExpr: ...
-```
-
----
-
-## Ranking
-
-A number or score used with `+` `*` `-` is a ranking. `rank=` also accepts a
-rankable expression with no arithmetic. Omit `rank=` to keep group order.
-Higher first; ties break by import order.
-
-```python
-rank = F.body.lexical("hydrangea") - F.body.length() * 0.01
-retrieve(long, 10, rank=rank)
-retrieve(long, 10, of=rank, rank=rank)
-```
-
-Weight is a finite `int` or `float` `>= 0`, either side. Missing or non-finite
-scores sort last. `Length` and `Lexical` treat absence as `0`; `AsNumber` and
-`Semantic` treat it as `None`. A `-inf` term makes the total `-inf`.
-Comparisons on a ranking (`score > 0`) are predicates.
-
-`of=rank` with the same `group`, `rank`, `order`, and `limit` is the aligned
-scores.
-
----
-
-## `retrieve` and `count`
-
-```python
-retrieve(group=G0, limit=1, *, order="top", rank=None, of=None, distinct=False) -> list
-count(group=G0, *, of=None, distinct=False) -> int
-# count: transforming of= only with distinct=True
-# retrieve/count: rank= not with distinct=True
-```
-
-`retrieve(G1, 50)` is fifty fields. `retrieve(both, 5, rank=score)` is five
-entries. Omitted `limit` is **1**. If `limit` is at least the population, all
-items return. `order` is `"top"` (`items[:limit]`), `"bottom"`
-(`items[-limit:]`, not reversed), or `"middle"`
-(`start = (len(items) - limit) // 2`). `rank=` and `of=` are allowed on
-entry groups only.
-
-| Call | Items |
-| --- | --- |
-| `retrieve()` | one `Entry` from `G0` |
-| `retrieve(G1, 50)` | `Field` |
-| `retrieve(g, 20, of=F.body)` | present cells (absent dropped before rank) |
-| `retrieve(g, 20, of=F.body, distinct=True)` | unique present cells over the full group, then slice |
-| `retrieve(g, 20, of=F.body.length())` | computed values after rank and slice |
-| `retrieve(g, 20, of=F.year.map(decade), distinct=True)` | unique computed values over the full group (`None` dropped), then slice |
-| `retrieve(g, 10, of=rank, rank=rank)` | combined scores after the slice |
-
-A column (`F.body`) in `of=` is present cells. So is an identity
-`Expression` — `Expression(Field("body"))` or
-`Expression(Field("body"), Value())`. Any other recipe is computed values. `distinct=True` uniquifies over the full group
-first (`None` dropped), then slices, and does not take `rank`. Distinctness
-is JSON-text identity (`1` and `1.0` are distinct), first-seen in group
-order.
-
-`count(g)` is group size. `count(g, of=F.body)` is present cells.
-`count(g, of=F.body, distinct=True)` and `count(g, of=expr, distinct=True)`
-are unique values over the full group. A computed `of=` without `distinct`
-is retrieve-only.
-
----
-
 ## Rows
 
 ```python
@@ -309,6 +331,9 @@ print(row.id, row["body"])
 ---
 
 ## Overlay
+
+`tag` writes so the next `count` / `retrieve` can use the column as `group` or
+`of`. It is not a third question.
 
 ```python
 create_field(field: str | Field) -> Field
@@ -346,10 +371,10 @@ not the same as unquoted spaces inside one string (FTS OR).
 
 **Lexical** is FTS. `score > 0` matched; absence and no match are `0.0`.
 Scores are corpus-relative. **Semantic** is cosine under the dataset embedding
-profile. Larger is more similar. Absence is `None`; empty string is embedded. Cosine is not a match
-bit. `"total"` sums (not a unit cosine). FTS syntax is Lexical only — Semantic
-embeds the string. Search that is not configured is a repairable
-`QuailRuntimeError` — configure search and retry the cell.
+profile. Larger is more similar. Absence is `None`; empty string is embedded.
+Cosine is not a match bit. `"total"` sums (not a unit cosine). FTS syntax is
+Lexical only — Semantic embeds the string. Search that is not configured is a
+repairable `QuailRuntimeError` — configure search and retry the cell.
 
 `input_aggregation` combines scores across this cell’s text segments
 (including `list[str]` / `.findall`). `target_aggregation` combines scores
