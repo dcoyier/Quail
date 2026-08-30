@@ -15,8 +15,13 @@ returns.** Recipes do not read the corpus until `retrieve`, `count`, `tag`,
 `untag`, `get`, `entry[...]`, `entry.value`, or `entry.fields()`. Source data
 never changes. The process has no network and no filesystem.
 
-When a column method does not exist, write a `def` and `.map(fn)`. That is
-the extension point. Do not add verbs.
+When a column method does not exist, in this order:
+
+1. Write a `def` and `.map(fn)` on a column. Use it in `group`, `rank`, or
+   `of`. The recipe stays lazy and bounded.
+2. `retrieve` the slice and write ordinary Python on the list.
+   `retrieve(g, count(g))` is all of `g`.
+
 
 ```text
 quail_exec(session_id, dataset_id, code, time_window="standard")
