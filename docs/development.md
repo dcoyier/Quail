@@ -27,7 +27,7 @@ how-to (`process` / `run`, lease, Clerk): [`README.md`](../README.md).
 | Change | Where to look |
 | --- | --- |
 | Analysis semantics / op pipeline rules | `docs/core.md`, then `OP_SPECS` in `quail/analysis/operations/` |
-| Analysis language / agent `quail_exec` contract | Served: `docs/api.md`. Next contract (unpublished): `docs/api_draft.md`. Then `quail/analysis/` |
+| Analysis language / agent `quail_exec` contract | Served today: `docs/api.md`. Rebuild spec (unpublished, standalone): `docs/api_draft.md`. |
 | Deploy, auth mode, concurrency, warm | `README.md`, then `quail/config/`, `quail/run/`, `quail/mcp/` |
 | Shell fallback MCP client | `README.md` Running Quail, then `quail/mcp_client/` |
 | Connector author surface | `docs/connector-sdk.md` then `quail.connectors.sdk` only |

@@ -1,60 +1,31 @@
 # Quail Analysis API
 
-> **Unpublished.** Next analysis contract. `quail_get_api_docs` still serves
-> [`api.md`](api.md) until the runtime matches this file.
+> **Unpublished.** Not yet served by `quail_get_api_docs`.
 
-Quail is a Python cell over one private dataset. You call `quail_exec` and
-write Python against an injected analysis library. **Only `print` returns.**
-The dataset is an immutable grid. The session overlay holds analysis fields
-and tags.
-
-You compose filters, scores, groups, and rankings as recipes — construction
-does not read cells — then evaluate them with `retrieve`, `count`, `tag`,
-`untag`, `get`, and `entry[...]`. Any corpus operation is a composition of
-those pieces, or a Python function attached with `.map`. The cell is ordinary
-Python. The process has no network and no filesystem.
-
----
-
-## `quail_exec`
-
-Host MCP tool, not a name inside the cell. Pass arguments by name.
+You analyze one dataset by writing Python. **Only `print` returns.** Recipes
+do not read the corpus until `retrieve`, `count`, `tag`, `untag`, `get`,
+`entry[...]`, `entry.value`, or `entry.fields()`. Source data never changes.
+The process has no network and no filesystem.
 
 ```text
 quail_exec(session_id, dataset_id, code, time_window="standard")
 ```
 
-| Argument | Meaning |
-| --- | --- |
-| `session_id` | Analysis context in one workspace. Namespace, analysis fields, and tags persist across successful cells. After `quail_switch_workspace`, start a new session. One in-flight `quail_exec` or `quail_export_csv` per session (`session_busy`); process-wide capacity exhausted (`server_busy`). Retry the same session. |
-| `dataset_id` | One dataset; its active immutable version. `entry.dataset_version_id` is which version you got. |
-| `code` | One Python cell. |
-| `time_window` | `"standard"` (30s wall / 15s CPU) or `"extended"` (100s wall / 60s CPU). Omitted = `"standard"`. Resident memory 256 MiB either way. |
+`session_id` is the durable namespace and overlay. `dataset_id` is one dataset.
+`time_window` is `"standard"` (30s wall / 15s CPU) or `"extended"` (100s / 60s);
+omitted is `"standard"`. Memory is 256 MiB. Success is
+`{"printed_output": "..."}`. An uncaught exception or resource limit restores
+the last successful cell (no prints, no overlay, no namespace change). A
+handled exception does not. Failure is a diagnostic with `error_class`,
+`message`, `stable_error_code`, and optional `repair_hint`.
 
-**Success:** `{"printed_output": "<print buffer>"}`.
-
-**Failure:**
-
-```text
-{"execution_id": null, "diagnostic": {
-    "error_class": str,
-    "stable_error_code": str,
-    "message": str,
-    "repair_hint": str   # omitted when absent
-}}
-```
-
-If the cell finishes without an uncaught exception, this cell's overlay writes
-and namespace commit — including writes before a handled exception. An
-uncaught exception or a resource limit restores overlay, namespace, and prints
-to the last successful cell. MCP argument-validation failures may use the
-client's native tool-error form.
+Pass arguments by name. One `quail_exec` or `quail_export_csv` at a time per
+session (`session_busy`). Process-wide capacity exhausted is `server_busy`.
+Retry the same session. After a workspace switch, start a new session.
 
 ---
 
 ## A session
-
-Field names differ per dataset. Inspect, then compose.
 
 ```python
 print(count(G1), "fields;", count(G0), "entries")
@@ -75,7 +46,7 @@ print("energy", count(energy), "both", count(both))
 
 score = F.body.lexical("clean energy") + F.body.semantic("climate policy") * 0.5
 for row in retrieve(both, 5, rank=score):
-    print(row.id, row["body"])
+    print(row.id, row["body"][:200])
 
 theme = create_field("theme")
 tag(both, theme, "energy-climate")
@@ -83,24 +54,24 @@ for y in retrieve(both, 20, of=F.year, distinct=True):
     print(y, count(both.where(F.year == y)))
 ```
 
-Imported blank cells are `None`. A stored `""` is an empty string. Imported
-CSV cells are stripped strings — `F.year.number()` for numeric compare. The
-CSV `id` column is `row.id` / `get(id)`.
+`G0` is every entry (import order). `G1` is every field (source, then
+analysis). Blank imported cells are `None`; a stored `""` is an empty string.
+Imported CSV cells are stripped strings — `F.year.number()` for numeric
+compare. Row identity is `row.id` / `get(id)`.
 
 ---
 
 ## The cell
 
-`code` is one Python module body: `def`, `class`, `import`, comprehensions,
-f-strings, `try`, mutation. Analysis names are already bound. `import` of the
-standard library works; anything that needs the network or filesystem does not.
+`code` is ordinary Python: `def`, `class`, `import`, comprehensions, f-strings,
+`try`, mutation. Analysis names are already bound. Standard-library imports
+work; network and filesystem do not.
 
-A successful cell's namespace is the next cell's starting namespace: recipes,
-JSON-like data, functions, classes, lists of those, imported modules. If a
+A successful cell’s namespace is the next cell’s starting namespace:
+`Field`, `Expression`, `Predicate`, `GroupExpr`, `Ranking`, `Entry`, `def` /
+`class`, imported modules, JSON-like values, and lists of those. If a
 top-level name cannot persist, the cell fails. `del name` drops a name.
 `.map(fn)` persists when `fn` does — write a `def`.
-
-Only `print(...)` is copied to `printed_output`.
 
 ```python
 print(*values, sep=" ", end="\n")
@@ -108,47 +79,33 @@ print(*values, sep=" ", end="\n")
 
 ---
 
-## Namespace
-
-| Kind | Names |
-| --- | --- |
-| Callables | `retrieve`, `count`, `create_field`, `tag`, `untag`, `get`, `print` |
-| Groups | `G0`, `G1` |
-| Field sugar | `F` — `F.body` is `Field("body")` |
-| Units | `entries`, `fields` |
-| Types | `Field`, `Unit`, `Expression`, `Predicate`, `GroupExpr`, `Ranking`, `Entry`, `Operation` |
-| Ops | `Value`, `AsText`, `AsNumber`, `RegexSearch`, `RegexFindAll`, `RegexSub`, `Slice`, `Length`, `Lexical`, `Semantic`, `Map` |
-| Errors | `QuailError`, `QuailSyntaxError`, `QuailScopeError`, `QuailFieldError`, `QuailRuntimeError` |
-
-- **`G0`**: all entries, import order. **`G1`**: all fields, source then analysis.
-- **`F`**: `F.body` and `F["class year"]` are `Field` handles (identity recipes). Methods return `Expression`.
-- Pipeline regex flags: `import re`, then `re.I` / `re.M` / `re.S`. Inline `(?i)` needs no import.
-
----
-
-## `Field` and `Expression`
+## Columns
 
 ```python
-Field(name: str, kind: "source" | "analysis" | None = None) -> Field
-F.body                             # Field("body")
-F["class year"]                    # Field("class year")
+Field(name: str, kind: "source" | "analysis" | None = None)
+F.body                 # Field("body")
+F["class year"]        # Field("class year")
 ```
 
-A `Field` is a column handle and the identity recipe for that column. `.name`
-and `.kind` (`"source"`, `"analysis"`, or `None` until resolved) are catalog
-facts. Compare two catalog handles by `.name`. Compare cells with
-`F.body == value` (a `Predicate`). `kind=` must match the catalog when the
-field is used; omit it unless you mean to check.
+`F.body` is the column. Methods build a recipe. Comparisons build a filter.
+A missing cell is `expr == None`. Two columns on the same row: `F.body == F.title`.
+Two catalog handles: compare `.name`.
 
 ```python
-Query = str | list[str] | GroupExpr | list[Entry]   # GroupExpr is entry-scoped
-Aggregation = "total" | "avg" | None     # None = "total"
+F.body.length()
+F.body.search(r"hydrangea", flags=0)
+F.body[0:200]
+F.body.lexical("climate")
+F.body == "open"
+F.year.number() >= 1990
+F.status.isin(["open", "closed"])
+F.year.number().between(1990, 2000)    # (expr >= lo) & (expr <= hi)
 ```
 
 ```python
 class Field:
     name: str
-    kind: str | None
+    kind: str | None          # "source" or "analysis" once known
 
     def text(self) -> Expression: ...
     def number(self) -> Expression: ...
@@ -157,43 +114,29 @@ class Field:
     def findall(self, pattern: str, flags: int = 0) -> Expression: ...
     def sub(self, pattern: str, replacement: str, flags: int = 0) -> Expression: ...
     def slice(self, start: int, end: int | None = None) -> Expression: ...
-    def __getitem__(self, item: slice) -> Expression: ...   # [start:end] → .slice
-    def lexical(self, query: Query, input_aggregation: Aggregation = None,
-                target_aggregation: Aggregation = None) -> Expression: ...
-    def semantic(self, query: Query, input_aggregation: Aggregation = None,
-                 target_aggregation: Aggregation = None) -> Expression: ...
+    def __getitem__(self, item: slice) -> Expression: ...
+    def lexical(self, query, input_aggregation=None, target_aggregation=None) -> Expression: ...
+    def semantic(self, query, input_aggregation=None, target_aggregation=None) -> Expression: ...
     def map(self, fn) -> Expression: ...
-    def between(self, lo, hi) -> Predicate: ...   # (self >= lo) & (self <= hi)
-    def isin(self, values: list) -> Predicate: ...  # OR of == against each JSON-like value
+    def between(self, lo, hi) -> Predicate: ...
+    def isin(self, values: list) -> Predicate: ...   # OR of == against JSON-like values
 ```
 
-`Expression` has the same methods, plus comparisons, ranking arithmetic, and
-`expr[start:end]` (same as `.slice`). Methods on a `Field` open a pipeline;
-methods on an `Expression` append to it.
-
-The constructor form still works — methods are sugar over the same ops:
+`Expression` has the same methods. Chain them. The constructor form is the
+same pipeline:
 
 ```python
-Expression(input: Field | Expression, *operations: Operation) -> Expression
-
-F.body.length()
-Field("body").length()
 Expression(Field("body"), Length())
-F.body.findall(r"\w+").length()
 Expression(Field("body"), RegexFindAll(r"\w+"), Length())
-F.body[0:200]
 ```
 
-`Value()` is identity and, if used, is first. `Lexical` / `Semantic` are last.
-Each op must accept the previous op's kind.
+`Value()` is identity, and first if present. `Lexical` / `Semantic` are last.
 
-`.map(fn)` runs `fn(cell)` in Python per entry at evaluation. Chain it, compare
-it, rank it, retrieve `of=` it.
+`.map(fn)` runs `fn(cell)` in Python per entry when the recipe is evaluated.
 
 ```python
 def decade(value):
-    n = int(value)
-    return f"{(n // 10) * 10}s"
+    return f"{(int(value) // 10) * 10}s"
 
 def mentions_policy(text):
     return isinstance(text, str) and "policy" in text.lower()
@@ -202,35 +145,21 @@ G0.where(F.body.map(mentions_policy) == True)
 retrieve(G0, 20, of=F.year.map(decade), distinct=True)
 ```
 
-A missing cell is `expr == None`.
-
 ```python
-(expr == other) -> Predicate     # JSON-like value, Field, or Expression
-(expr != other) -> Predicate
-(expr <  other) -> Predicate     # finite number, Field, or Expression
-(expr <= other) -> Predicate
-(expr >  other) -> Predicate
-(expr >= other) -> Predicate
-
+(expr == != other) -> Predicate          # JSON-like value, Field, or Expression
+(expr < <= > >= other) -> Predicate      # finite number, Field, or Expression
 (pred & pred) -> Predicate
 (pred | pred) -> Predicate
 (~pred) -> Predicate
-
-Predicate(left, operator: str, right=None)
-# operator: "==" "!=" "<" "<=" ">" ">=" "and" "or" "not"
 ```
-
-Expression-to-expression ordering is checked when both non-missing results
-are numeric.
 
 ---
 
 ## Ops
 
-Pipeline kinds describe non-`None` values. Absence may still propagate as
-`None` unless an op says otherwise. Rankable finals: `number`, `score`, and
-`.map` (finite number at evaluation; anything else sorts as missing). `score`
-ends the pipeline.
+Each op must accept what the previous op produced. `score` ends the pipeline.
+Rankable results: `number`, `score`, and `.map` when `fn` returns a finite
+number (anything else sorts as missing).
 
 | Method | Op | Accepts | Produces | Result |
 | --- | --- | --- | --- | --- |
@@ -246,12 +175,11 @@ ends the pipeline.
 | `.semantic(...)` | `Semantic(...)` | `any`, `text`, `list_text`, `text_or_list` | `score` | cosine (terminal) |
 | `.map(fn)` | `Map(fn)` | any non-score | `any` | `fn(cell)` |
 
-`.search` / `.findall` need `str` or `None` at evaluation. `.number()` wants
-an `int`, `float`, or numeric string.
-
 Pipeline regex is RE2 (no lookaround, no backreferences). Flags: `re.I`,
-`re.M`, `re.S`, combinable with `|`. Stdlib `re` on strings you already hold
-is Python.
+`re.M`, `re.S`, combinable with `|`. Inline `(?i)` needs no import.
+`.search` / `.findall` evaluate on `str` or `None`. `.number()` wants an
+`int`, `float`, or numeric string. Stdlib `re` applies to strings you already
+hold.
 
 ```python
 import re
@@ -265,70 +193,36 @@ F.body.sub(r"\s+", " ", re.S)[0:200].lexical("climate")
 ## Groups
 
 ```python
-class GroupExpr:
-    scope: "entries" | "fields"
-
-    def __init__(
-        self,
-        scope: str,
-        *,
-        predicate: Predicate | None = None,
-        members: list | None = None,
-        name: str | None = None,
-    ) -> None: ...
-    def where(self, *predicates: Predicate) -> GroupExpr: ...
-
-G0: GroupExpr   # entries
-G1: GroupExpr   # fields
-
-(group & group) -> GroupExpr
-(group | group) -> GroupExpr
-(~group) -> GroupExpr
-```
-
-Exactly one of `name=` (`"G0"` with `"entries"`, `"G1"` with `"fields"`),
-`predicate=` (entries only), or `members=` (`list[Entry]` or `list[Field]`
-matching `scope`; `[]` is empty). `&` `|` `~` combine finished groups of the
-same scope.
-
-`where` is entry-scoped and needs at least one predicate. Several predicates
-are AND. `group.where(*preds)` is `group & GroupExpr("entries", predicate=combined)`.
-
-Intersection keeps the left group's order. Union is the left group, then
-previously unseen right-side members. Complement is relative to `G0` or `G1`.
-Member groups keep the given order.
-
-```python
 long = G0.where(F.body.length() >= 500)
 both = G0.where(F.body.length() >= 500, F.body.lexical("hydrangea") > 0)
+energy & climate
+energy | climate
+~energy
 GroupExpr("entries", members=retrieve(long, 20))
+GroupExpr("fields", members=[F.body, F.year])
+GroupExpr("entries", members=[])
+```
+
+`where` is entry-scoped and needs at least one predicate. Several predicates
+are AND. `&` `|` `~` combine groups of the same scope. Intersection keeps
+left-hand order; union is left then new right-hand members; complement is
+relative to `G0` or `G1`. A `members=` group keeps the given order; `[]` is
+empty.
+
+```python
+class GroupExpr:
+    scope: "entries" | "fields"
+    def __init__(self, scope: str, *, members: list) -> None: ...
+    def where(self, predicate: Predicate, *more: Predicate) -> GroupExpr: ...
 ```
 
 ---
 
 ## Ranking
 
-```python
-Ranking(expression: Expression | None = None)
-```
-
-A rankable expression (final kind `number` or `score`) used with `+` `*` `-`
-is a ranking. `rank=` accepts a `Ranking` or a rankable `Expression`.
-Comparisons on a ranking (`score > 0`, `rank >= 0.2`) are predicates.
-
-```python
-(rankable + rankable) -> Ranking
-(rankable - rankable) -> Ranking
-(rankable * weight) -> Ranking      # finite int|float >= 0, either side
-(rankable < <= > >= == != other) -> Predicate
-```
-
-Empty ranking (`None` / `Ranking()`) keeps the group's order. Non-empty:
-higher first; ties break by import order. Missing (`None`) or non-finite
-scores sort last (`-inf`). `AsNumber` and `Semantic` produce `None` for an
-absent cell. `Length` and `Lexical` never go missing: absence is `0` / `0.0`.
-In a sum, any `-inf` term makes the total `-inf`. Adding an empty ranking is
-a no-op.
+A number or score used with `+` `*` `-` is a ranking. `rank=` also accepts a
+rankable expression with no arithmetic. Omit `rank=` to keep group order.
+Higher first; ties break by import order.
 
 ```python
 rank = F.body.lexical("hydrangea") - F.body.length() * 0.01
@@ -336,104 +230,57 @@ retrieve(long, 10, rank=rank)
 retrieve(long, 10, of=rank, rank=rank)
 ```
 
-`of=rank` evaluates the combined score after the slice, aligned with handles
-taken under the same `group`, `rank`, `order`, and `limit`.
+Weight is a finite `int` or `float` `>= 0`, either side. Missing or non-finite
+scores sort last. `Length` and `Lexical` treat absence as `0`; `AsNumber` and
+`Semantic` treat it as `None`. A `-inf` term makes the total `-inf`.
+Comparisons on a ranking (`score > 0`) are predicates.
+
+`of=rank` with the same `group`, `rank`, `order`, and `limit` is the aligned
+scores.
 
 ---
 
 ## `retrieve` and `count`
 
 ```python
-retrieve(
-    group: GroupExpr = G0,
-    limit: int = 1,
-    *,
-    order: "top" | "middle" | "bottom" = "top",
-    rank: Ranking | Expression | None = None,   # not with distinct=True
-    of: Field | Expression | Ranking | None = None,
-    distinct: bool = False,
-    unit: Unit | Expression | None = None,
-) -> list
-
-count(
-    group: GroupExpr = G0,
-    *,
-    of: Field | Expression | None = None,   # Expression only with distinct=True
-    distinct: bool = False,
-    unit: Unit | None = None,
-) -> int
+retrieve(group=G0, limit=1, *, order="top", rank=None, of=None, distinct=False) -> list
+count(group=G0, *, of=None, distinct=False) -> int
+# count: transforming of= only with distinct=True
+# retrieve/count: rank= not with distinct=True
 ```
 
-`retrieve(G1, 50)` and `retrieve(G1, limit=50)` are the same. `unit=` is the
-explicit form; do not pass both `unit=` and `of=`.
-
-**Infer the unit from the group.** Entry groups yield entries; field groups
-yield fields. `of=` switches to values:
+`retrieve(G1, 50)` is fifty fields. `retrieve(both, 5, rank=score)` is five
+entries. Omitted `limit` is **1**. If `limit` is at least the population, all
+items return. `order` is `"top"` (`items[:limit]`), `"bottom"`
+(`items[-limit:]`, not reversed), or `"middle"`
+(`start = (len(items) - limit) // 2`). `rank=` and `of=` are allowed on
+entry groups only.
 
 | Call | Items |
 | --- | --- |
-| `retrieve()` / `retrieve(G0)` | `Entry` (`limit` defaults to **1**) |
+| `retrieve()` | one `Entry` from `G0` |
 | `retrieve(G1, 50)` | `Field` |
-| `retrieve(g, 20, of=F.body)` | present `body` cells (absent dropped **before** rank) |
-| `retrieve(g, 20, of=F.body, distinct=True)` | distinct present `body` cells over the **full** group, then `limit` / `order` |
-| `retrieve(g, 20, of=F.body.length())` | computed values, **after** rank and `limit` |
-| `retrieve(g, 20, of=F.year.map(decade), distinct=True)` | unique computed values over the **full** group (`None` dropped), then `limit` / `order`; no `rank` |
-| `retrieve(g, 10, of=rank, rank=rank)` | combined ranking scores, after the slice |
-| `retrieve(unit=fields, group=G1, limit=50)` | same as `retrieve(G1, 50)` |
-| `retrieve(unit=Unit("entries", Field("body")), group=g)` | same as `of=F.body` |
-| `retrieve(unit=Unit("values", Field("body")), group=g)` | same as `of=F.body, distinct=True` |
-| `retrieve(unit=Expression(...), group=g)` | same as `of=Expression(...)` |
+| `retrieve(g, 20, of=F.body)` | present cells (absent dropped before rank) |
+| `retrieve(g, 20, of=F.body, distinct=True)` | unique present cells over the full group, then slice |
+| `retrieve(g, 20, of=F.body.length())` | computed values after rank and slice |
+| `retrieve(g, 20, of=F.year.map(decade), distinct=True)` | unique computed values over the full group (`None` dropped), then slice |
+| `retrieve(g, 10, of=rank, rank=rank)` | combined scores after the slice |
 
-A `Field` (including `F.body`) in `of=` is the present-cell path. An identity
-`Expression` (no ops, or only `Value()`) is the same path. Any other
-`Expression` is the computed path.
+A column (`F.body`) in `of=` is present cells. So is an identity
+`Expression` — `Expression(Field("body"))` or
+`Expression(Field("body"), Value())`. Any other recipe is computed values. `distinct=True` uniquifies over the full group
+first (`None` dropped), then slices, and does not take `rank`. Distinctness
+is JSON-text identity (`1` and `1.0` are distinct), first-seen in group
+order.
 
-`count` sizes that population (no `limit` / `order` / `rank`). `count(g)` is
-group size. `count(g, of=F.body)` is present cells; `distinct=True` counts
-distinct present values. `count(g, of=expr, distinct=True)` counts unique
-computed values over the full group (`None` dropped). Transforming `of=`
-without `distinct=True` is retrieve-only.
-
-**Order of work:** the group filters; present-value `of=` drops absence;
-`rank` scores remaining candidates; `order`+`limit` slice; transforming
-`of=` without `distinct` evaluates after the slice. `distinct=True` uniquifies
-over the full group first (`None` dropped), then slices — no `rank`.
-
-If `limit >= len(items)`, all items return.
-
-| `order` | Slice |
-| --- | --- |
-| `"top"` | `items[:limit]` |
-| `"bottom"` | `items[-limit:]` (order preserved) |
-| `"middle"` | centered window, `start = (len(items) - limit) // 2` |
-
-Distinctness is JSON-text identity (`1` and `1.0` are distinct), first-seen
-in the group's order.
-
-```python
-class Unit:
-    scope: "entries" | "fields" | "values"
-    field: Field | None
-    def __init__(self, scope: str, field: Field | None = None) -> None: ...
-
-entries: Unit   # Unit("entries")
-fields: Unit    # Unit("fields")
-```
-
-| `unit` | Group | Items | Rank? |
-| --- | --- | --- | --- |
-| `entries` / `Unit("entries")` | entries | `Entry` | yes |
-| `fields` / `Unit("fields")` | fields | `Field` | no |
-| `Unit("entries", field)` / `of=Field` | entries | present values | yes |
-| `Unit("values", field)` / `of=Field, distinct=True` | entries | distinct values | no |
-| `Expression` / transforming `of=` | entries | computed values | yes, unless `distinct=True` |
+`count(g)` is group size. `count(g, of=F.body)` is present cells.
+`count(g, of=F.body, distinct=True)` and `count(g, of=expr, distinct=True)`
+are unique values over the full group. A computed `of=` without `distinct`
+is retrieve-only.
 
 ---
 
-## `Entry`
-
-Issued by `retrieve` or `get`. No public constructor. Unknown `get(id)`
-raises `QuailFieldError`.
+## Rows
 
 ```python
 get(id: str) -> Entry
@@ -442,20 +289,17 @@ class Entry:
     id: str
     dataset_id: str
     dataset_version_id: str
-    dataset: str            # same as dataset_id on issued handles
-
     def __getitem__(self, field: Field | str) -> Any: ...
-    def value(self, field: Field | str, default: Any = None) -> Any: ...
+    def value(self, field: Field | str, default=None) -> Any: ...
     def fields(self) -> list[Field]: ...
 ```
 
-`get(id)` is the row with that CSV id. `entry["body"]` and `entry[F.body]`
-read the cell (`None` if absent). `entry.value(field, default=)` returns
-`default` when the stored value is `None`. Unknown names raise; they do not
-use `default`.
-
-`entry.fields()` is the present fields on that row (cell not `None`), catalog
-order: source then analysis.
+`get(id)` is that row (`QuailFieldError` if unknown). No public `Entry`
+constructor. The CSV `id` is `row.id` / `get(id)`, not `Field("id")`.
+`entry["body"]` and `entry[F.body]` are the cell (`None` if absent).
+`entry.value(..., default=)` uses `default` when the stored value is `None`;
+unknown names raise and ignore `default`. `entry.fields()` is the present
+fields on that row, source then analysis.
 
 ```python
 row = get("n1")
@@ -468,28 +312,25 @@ print(row.id, row["body"])
 
 ```python
 create_field(field: str | Field) -> Field
-tag(group: GroupExpr | list[Entry], field: Field, value: TagValue) -> None
-untag(group: GroupExpr | list[Entry], field: Field, value: TagValue | None = None) -> None
+tag(group, field, value) -> None
+untag(group, field, value=None) -> None
 ```
 
-`create_field` makes a session-only analysis column. The name is stripped; it
-returns a handle whose catalog kind is `"analysis"`. Existing analysis fields
-are returned as-is. Source names are not created or overwritten.
+`create_field` makes a session analysis column (name stripped). Existing
+analysis fields are returned as-is. Source names cannot be created or
+overwritten.
 
-`tag` writes `value` onto `field` for every selected entry, replacing what was
-there. An empty selection writes nothing; `field` is still resolved.
+`tag` writes `value` on every selected entry, replacing what was there.
+`group` is an entry group or a `list[Entry]`. Empty selection writes nothing;
+`field` is still resolved. `value` is JSON-like with no `None` anywhere:
+`bool`, `int`, finite `float`, `str`, list, or string-keyed dict.
 
-`TagValue` is JSON-like with no `None` at any depth: `bool`, `int`, finite
-`float`, `str`, list, or string-keyed dict.
-
-`untag(..., field)` clears present cells. `untag(..., field, value)` clears
-cells equal to `value` (Python `==`).
+`untag(..., field)` clears the selection. `untag(..., field, value)` with a
+non-`None` value clears cells equal to that value (Python `==`).
 
 ```python
 topic = create_field("topic")
 tag(interns, topic, "internship")
-untag(interns, topic, "internship")
-untag(interns, topic)
 print(count(G0.where(F.topic == "internship")))
 ```
 
@@ -497,44 +338,23 @@ print(count(G0.where(F.topic == "internship")))
 
 ## Lexical and Semantic
 
-Ordinary scores: predicates, ranking, `of=`.
+A query is one or more non-empty target texts: a `str`, `list[str]`,
+an entry group, or a `list[Entry]`. Entry targets read the surrounding
+recipe’s root field (a `list[str]` cell becomes one target per non-empty
+element) and quote their terms. `list[str]` queries are separate targets —
+not the same as unquoted spaces inside one string (FTS OR).
 
-Every query resolves to one or more non-empty target texts.
+**Lexical** is FTS. `score > 0` matched; absence and no match are `0.0`.
+Scores are corpus-relative. **Semantic** is cosine under the dataset embedding
+profile. Larger is more similar. Absence is `None`; empty string is embedded. Cosine is not a match
+bit. `"total"` sums (not a unit cosine). FTS syntax is Lexical only — Semantic
+embeds the string. Search that is not configured is a repairable
+`QuailRuntimeError` — configure search and retry the cell.
 
-| Spell as | Meaning |
-| --- | --- |
-| `str` | One target. Lexical: FTS syntax below. |
-| `list[str]` | Each string is its own query; `target_aggregation` sums (`None`/`"total"`) or means (`"avg"`). Unquoted spaces inside one string are FTS OR — a different thing. |
-| Entry-scoped `GroupExpr` | For each member, read the **root field of the surrounding expression** and use that cell as a target. |
-| `list[Entry]` | Same, from each listed `Entry`. |
-
-A `list[str]` cell on a target entry expands to one target per non-empty
-element. Entry-derived targets are tokenized and quoted so prose like `AND` is
-not FTS syntax. `input_aggregation` combines scores across input segments for
-one entry (`"avg"` divides by all segments, including unmatched).
-
-**Lexical** is FTS relevance. `score > 0` means matched. Unmatched and absent
-cells score `0.0`. Scores are corpus-relative.
-
-**Semantic** is exact cosine under the dataset embedding profile. Cosine is
-not a match bit. Absent input scores `None`. An empty string is embedded.
-Larger is more similar. `"total"` sums, so aggregated scores are not unit
-cosines. FTS parse rules are Lexical only — Semantic embeds the string.
-
-Search that is not configured is a repairable `QuailRuntimeError`: configure
-search, retry the whole cell.
-
-### FTS syntax (Lexical string queries)
-
-| Syntax | Meaning |
-| --- | --- |
-| Unquoted terms separated by spaces | OR (not a phrase) |
-| `"quoted text"` | Adjacent tokens. No quote-escape syntax. |
-| `term*` | Prefix of one punctuation-free term. `*` once, at the end. |
-| Uppercase `AND` / `NOT` | Operators. `NOT` is infix with a positive left operand (`rose NOT soil`). |
-| Uppercase `OR` | Not used. Separate terms with spaces. |
-| Lowercase `and` / `not` / `or` | Ordinary terms |
-| Punctuation | One unquoted atom with hyphens/punctuation becomes OR of the split tokens |
+`input_aggregation` combines scores across this cell’s text segments
+(including `list[str]` / `.findall`). `target_aggregation` combines scores
+across query targets. Each is `"total"` (default; `None` means `"total"`) or
+`"avg"` (`"avg"` divides by every segment, including unmatched).
 
 ```python
 F.body.lexical("career goals")
@@ -546,27 +366,30 @@ G0.where(F.body.lexical("hydrangea") > 0)
 retrieve(G0, 10, rank=F.body.semantic("climate policy"))
 ```
 
----
-
-## Errors
-
-```python
-class QuailError(Exception): ...
-class QuailSyntaxError(QuailError): ...      # bad shape or illegal combo
-class QuailScopeError(QuailError): ...       # group / unit / dataset / version pairing
-class QuailFieldError(QuailError): ...       # unknown field, unknown id, or source mutation
-class QuailRuntimeError(QuailError): ...     # bad cell data, search down, timeout, limit, session_busy, server_busy
-```
-
-Host failures follow `stable_error_code` and `repair_hint`.
+| FTS (Lexical strings) | Meaning |
+| --- | --- |
+| Unquoted terms separated by spaces | OR |
+| `"quoted text"` | Adjacent tokens (no quote-escape) |
+| `term*` | Prefix; `*` once, at the end |
+| Uppercase `AND` / `NOT` | Operators (`NOT` is infix: `rose NOT soil`) |
+| Uppercase `OR` | Not used; use spaces |
+| Lowercase `and` / `not` / `or` | Ordinary terms |
+| Punctuation | Split; unquoted hyphenated atoms become OR |
 
 ---
 
-## `quail_export_csv`
+## Names
 
-Host MCP tool: `quail_export_csv(session_id, dataset_id)`. Writes `"id"`,
-source columns, and this session's analysis fields to a CSV on the Quail
-server host. The tool result is metadata
-`{path, session_id, dataset_id, dataset_version_id, columns, row_count}` —
-not the file body. Overlap with `quail_exec` on the same session is
-`session_busy`.
+| Kind | Names |
+| --- | --- |
+| Callables | `retrieve`, `count`, `create_field`, `tag`, `untag`, `get`, `print` |
+| Groups | `G0`, `G1` |
+| Sugar | `F` |
+| Types | `Field`, `Expression`, `Predicate`, `GroupExpr`, `Ranking`, `Entry`, `Operation` |
+| Ops | `Value`, `AsText`, `AsNumber`, `RegexSearch`, `RegexFindAll`, `RegexSub`, `Slice`, `Length`, `Lexical`, `Semantic`, `Map` |
+| Errors | `QuailError`, `QuailSyntaxError`, `QuailScopeError`, `QuailFieldError`, `QuailRuntimeError` |
+
+`quail_export_csv(session_id, dataset_id)` is a host tool. It writes `"id"`,
+source columns, and this session’s analysis fields to a CSV on the server.
+The result is `{path, session_id, dataset_id, dataset_version_id, columns,
+row_count}` — a path, not the file body.
