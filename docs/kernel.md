@@ -141,7 +141,7 @@ quotas, or caches without changing the kernel.
 | Wall per cell | host timer → `SIGINT` (→ `KeyboardInterrupt`); after 5 s more, `SIGKILL` | 120 s |
 | Memory | `RLIMIT_AS` at spawn → `MemoryError` in the cell | 1024 MiB |
 | Output | truncation | 64 KiB |
-| `retrieve` / `values` | `limit` clamped to `max_limit` with a note in the output | 1000 |
+| `retrieve` | `limit` clamped to `max_limit` with a note in the output; `values` is not capped, since scalars stay inside the kernel | 1000 |
 
 The CPU and memory limits raise inside the cell, so they roll back like any
 error and the kernel continues. The wall limit interrupts a cell that is

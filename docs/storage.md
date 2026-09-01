@@ -306,7 +306,7 @@ no coercion is applied.
 | Verb | Shape |
 | --- | --- |
 | `count(where)` | `SELECT count(*) FROM entries e <joins> WHERE <pred>` |
-| `count(where, by)` | `values(by, where)` fetched into Python, list cells flattened, counted with `Counter`, most common first |
+| `count(where, by)` | `SELECT <by_1>, <by_2>, … FROM entries e <joins> WHERE <pred>` fetched into Python, list cells flattened, counted with `Counter`, most common first |
 | `values(expr, where, rank, limit)` | `SELECT <expr> FROM entries e <joins> WHERE <pred> ORDER BY <rank> DESC NULLS LAST, e.rowid LIMIT :n` |
 | `retrieve(where, rank, limit, offset)` | `SELECT e.rowid, <rank> … ORDER BY <rank> DESC NULLS LAST, e.rowid LIMIT :n OFFSET :o`, then one `SELECT` for the cells of those rows and one for their tags |
 | `tag(pred, f, literal)` | `SELECT e.rowid, e."id" … WHERE <pred>`, then `INSERT OR REPLACE INTO tags` per row; `None` deletes |

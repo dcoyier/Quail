@@ -12,8 +12,13 @@ Nothing you do changes the source.
 ## Cells
 
 ```text
-quail_exec(code, session="default", dataset=None)
+quail_exec(code, session="default", dataset=None, fork_from=None)
 ```
+
+`quail_setup` lists the sessions that already exist in this project.
+Continue one by passing its name. Start a new one by passing a new name,
+with `dataset` when the project has more than one. Pass `fork_from` on the
+first call to begin from a copy of another session's tags.
 
 The result is what a notebook would show: everything you `print`, then the
 value of the last expression if it is not `None`, then a traceback if the
