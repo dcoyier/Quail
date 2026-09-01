@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+dist/
+
+# Quail projects: the index is derived, the lock is per machine
+.quail/
+sessions/*/.lock
