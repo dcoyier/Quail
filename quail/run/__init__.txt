@@ -1,4 +1,0 @@
-This package re-exports apply_config, process_config, assert_search_warm,
-serve, and run_from_config.
-apply_config is the import helper: it activates declared CSVs and takes the
-deployment lease for that import.

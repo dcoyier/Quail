@@ -1,8 +1,0 @@
-acquire_session_lock(session_id):
-  Non-blocking in-process lock keyed by session_id.
-  Raise QuailSessionBusyError when another quail_exec or quail_export_csv
-  already holds the key.
-  Always release on exit.
-
-reset_session_locks_for_tests():
-  Clear the held set for tests.

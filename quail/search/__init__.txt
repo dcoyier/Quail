@@ -1,4 +1,0 @@
-This package re-exports SearchDb, SearchError, SearchServices, SimilarityService,
-LexicalService, delete_embedding_pin, get_embedding_pin, open_search_db,
-pin_embedding_profile, search_services_from_config, similarity_from_config, and
-lexical_from_config.

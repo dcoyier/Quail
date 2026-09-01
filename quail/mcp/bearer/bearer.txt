@@ -1,7 +1,0 @@
-There is a private context var for bearer override.
-
-get_bearer_override:
-  Give back the override Authorization value, or None.
-
-bearer_token(token):
-  Context manager that sets Bearer override for nested tool calls, then resets.
