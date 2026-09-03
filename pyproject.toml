@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quail"
+version = "0.0.0"
+description = "Analyze a text corpus from a persistent Python kernel."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest"]
+numpy = ["numpy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

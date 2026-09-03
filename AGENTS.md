@@ -37,4 +37,14 @@ it true.
   else from the package.
 - Tests are plain files under `tests/`. A test asserts that the public names
   in `prelude.py` and the names used in `docs/api.md` agree.
-- Dependencies: `google-re2`, `mcp`; `numpy` optional.
+- Dependencies: `google-re2`, `mcp`; `numpy` optional. They land with the
+  modules that need them.
+
+## Code
+
+Package layout is in `docs/kernel.md`. Implement one file at a time; do not
+stub the rest.
+
+| File | Now |
+| --- | --- |
+| `quail/project.py` | Load `quail.toml` and resolve project paths. Not yet: sessions, logs, replay, locks. |

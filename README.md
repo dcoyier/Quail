@@ -6,8 +6,8 @@ large to read exhaustively. The agent writes Python in a persistent kernel
 against a small analysis language, and every conclusion it reaches is
 backed by tags it can show and a log of the cells that produced them.
 
-This branch is the ground-up rebuild of Quail core. It contains the design
-and not yet the code. Three documents are the specification:
+This branch is the ground-up rebuild of Quail core. Three documents are the
+specification; code follows them one module at a time.
 
 | Document | Reader | Contents |
 | --- | --- | --- |
@@ -61,6 +61,7 @@ core. The seams hosted uses are listed at the end of `docs/kernel.md` and
 
 ## Status
 
-Design. The previous implementation is on `main`.
+Design, plus `quail.project` (load `quail.toml`). The previous
+implementation is on `main`.
 
 Apache-2.0 · Python 3.12+
