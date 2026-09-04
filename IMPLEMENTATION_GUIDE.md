@@ -17,6 +17,11 @@ document wins. When the documents disagree with each other, do not hide a
 choice in code or here; resolve the owning specification before implementing
 that slice.
 
+There is one intentional pending specification change in section 6: semantic
+indexing embeds each complete field value once. It does not split values into
+passages. The canonical documents still use passage/chunk language and must
+be aligned before the semantic slice is implemented.
+
 The implementation should be small because the boundaries are strong, not
 because behavior is duplicated or deferred.
 
@@ -42,7 +47,7 @@ placement; it does not replace Core storage, language, or query semantics.
 Four rules organize the implementation:
 
 1. **Text is truth.** The manifest, CSVs, and session logs are durable.
-   SQLite, FTS state, chunk mappings, and vectors are rebuildable.
+   SQLite, FTS state, value mappings, and vectors are rebuildable.
 2. **The kernel owns semantics.** Expressions, predicates, verbs, SQL
    compilation, and notebook-cell behavior exist only in `prelude.py`.
 3. **The host owns capabilities.** Paths, locks, spawning, embedding HTTP,
@@ -63,7 +68,7 @@ host dependency graph into kernel startup.
 | --- | --- | --- | --- |
 | `project.py` | Manifest, paths, session metadata, log parsing, replay map, locks | Standard library | SQLite, HTTP, MCP, expression logic |
 | `index.py` | CSV import/rebuild, SQLite schema, FTS build, warm-pack ingestion | `project.py`, SQLite | Provider HTTP, kernel lifecycle, MCP |
-| `embed.py` | Provider configuration, batching, retries, embedding request | `project.py`, HTTP client | Passage splitting, SQLite writes, MCP |
+| `embed.py` | Provider configuration, batching, retries, embedding request | `project.py`, HTTP client | Text segmentation, SQLite writes, MCP |
 | `prelude.py` | Kernel bootstrap, language, compiler, verbs, replay application, cell loop, confinement | Standard library, RE2, optional NumPy | Any `quail.*` import, HTTP, MCP, CSV import |
 | `kernel.py` | Session subprocess, control protocol, timers, restart, embedding forwarding | `project.py`, `embed.py` | SQL or language implementation |
 | `tools.py` | Reusable host service and warm orchestration | `project.py`, `index.py`, `embed.py`, `kernel.py` | MCP types, argparse, expression internals |
@@ -72,9 +77,9 @@ host dependency graph into kernel startup.
 
 `prelude.py` is deliberately self-contained. Organize it into ordinary
 private classes and functions, but do not split runtime behavior into modules
-that the confined process must import. Small rules duplicated between host
-and prelude—log replay ordering and passage splitting—must be checked against
-shared fixtures so they cannot drift.
+that the confined process must import. Log replay ordering is duplicated
+between host and prelude; check both implementations against the same fixtures
+so they cannot drift.
 
 ## 3. Build in vertical slices
 
@@ -228,9 +233,9 @@ Important implementation rules:
 - Build FTS for source fields except the canonical ID.
 - Keep tag values as JSON text and vectors as little-endian float32.
 - On rebuild, preserve compatible content-addressed vectors, reconstruct
-  source chunk mappings, replay every session, and report orphan IDs.
+  source-value mappings, replay every session, and report orphan IDs.
 - Ingest compatible warm packs before a kernel is spawned.
-- Enumerate deterministic source-passage work and read/write warm packs for
+- Enumerate deterministic source-value work and read/write warm packs for
   the host warming path.
 - Treat the entire file as disposable; schema-version mismatch rebuilds it
   rather than migrating user truth.
@@ -251,7 +256,7 @@ time, batches requests, retries only transient failures, and preserves input
 order. It validates that all values are finite and every returned vector has
 the same nonzero dimension, then returns that dimension to the kernel.
 
-It does not split text, hash passages, write SQLite, or know about fields.
+It does not segment text, hash values, write SQLite, or know about fields.
 Those are kernel/index concerns. Hosted may replace this call with its own
 provider callback.
 
@@ -321,7 +326,7 @@ turning them into tool failures. `reset` drops only the live Python
 process; committed tags remain.
 
 The same service has a CLI/host operation for `warm`. It asks `index.py`
-for source passages, calls `embed.py` in batches, and gives the vectors
+for source values, calls `embed.py` in batches, and gives the vectors
 back to `index.py` for validation, cache insertion, and optional pack
 writing. It does not start a session, execute a synthetic cell, or write a
 session log.
@@ -359,11 +364,20 @@ written. There is no provider call and no useful separate lexical warm step.
 
 Semantic search requires more work:
 
-1. Split each selected source cell into the passages defined by
-   `docs/storage.md`.
-2. Hash and deduplicate those passages.
-3. Embed hashes missing from the vector cache.
-4. Record the passage-to-entry mapping in `chunks`.
+1. Read each non-empty value from the selected source field or fields.
+2. Hash and deduplicate complete values.
+3. Embed values missing from the vector cache.
+4. Record which value hash belongs to each entry and field.
+
+One table cell—one field on one entry—is the atomic semantic unit. A value
+is never split into passages, inspected against a model-specific limit, or
+silently truncated. Quail sends the complete value to the configured
+provider. Any provider rejection is an ordinary embedding error; unsuitable
+value lengths are a dataset concern.
+
+A semantic query is embedded whole as well. Its score for an entry is the
+cosine similarity to that entry's one field-value vector; there is no
+passage-level maximum or other aggregation.
 
 Without an explicit warm, the first `.semantic()` performs that work.
 `quail warm DATASET [--field FIELD]` performs it ahead of time. Warming is
@@ -372,9 +386,9 @@ It prepares corpus vectors, not future query strings.
 
 Lazy warming belongs to `prelude.py`: a semantic query discovers a missing
 vector and asks the host to embed it. Explicit CLI warming is a host batch
-path: `tools.py` coordinates passage inventory and cache writes in
+path: `tools.py` coordinates value inventory and cache writes in
 `index.py` with provider calls in `embed.py`. It does not spawn a kernel.
-Both paths use the same passage-splitting fixtures and vector representation.
+Both paths use the same whole-value hashing and vector representation.
 
 ### Shareable warm shards
 
@@ -384,20 +398,20 @@ Add one optional argument:
 quail warm DATASET [--field FIELD] [--shard I/N]
 ```
 
-Without `--shard`, warm all selected source passages into the local
+Without `--shard`, warm all selected source values into the local
 gitignored SQLite cache, as already described by the specification.
 
 With `--shard I/N`:
 
 - `I` is one-based and `1 <= I <= N`.
-- Build the distinct passage set for the selected source field, or all
+- Build the distinct non-empty value set for the selected source field, or all
   non-ID source fields when `--field` is omitted.
-- Assign a passage to shard `I` when its SHA-256 integer modulo `N`
+- Assign a value to shard `I` when its text SHA-256 integer modulo `N`
   equals `I - 1`.
 - Embed only that shard.
 - Insert the vectors into the local cache.
 - Write a shareable warm pack under `warm/`.
-- Report selected, reused, and newly embedded passage counts plus the pack
+- Report selected, reused, and newly embedded value counts plus the pack
   path.
 
 Hash partitioning makes assignment deterministic without a coordinator.
@@ -414,8 +428,10 @@ warm/
         part-0001-of-0008.jsonl
 ```
 
-`plan-hash` is the SHA-256 of canonical JSON containing the embedding
-model string, sorted field names, chunker format version, and shard count.
+`plan-hash` is the SHA-256 of canonical JSON containing the warm-pack format
+version, embedding model string, sorted field names, and shard count. It
+prevents incompatible warm runs from choosing the same part filenames; it is
+not a separate manifest.
 The file begins with one header record:
 
 ```json
@@ -428,10 +444,9 @@ Each remaining line is sorted by text hash and contains one vector:
 {"text_hash":"sha256:…","vector":"<base64 little-endian float32>"}
 ```
 
-The passage text and entry rowids are not included. The CSV reconstructs
-passage-to-entry mappings cheaply and deterministically; only the expensive
-vectors need to travel. This also keeps packs reusable within every repeated
-passage in the selected corpus.
+The source text and entry rowids are not included. The CSV reconstructs
+value-to-entry mappings cheaply and deterministically; only the expensive
+vectors need to travel. Repeated identical values share the same vector.
 
 Warm packs are derived, shareable cache—not analysis truth. Quail writes the
 pack atomically and prints its path; it never commits or pushes it. Separate
@@ -439,21 +454,21 @@ workers write separate part files, so ordinary Git merges take their union
 without line-level conflicts. Choose enough shards to keep each file
 comfortably below the Git host's file-size limit.
 
-Write a header-only pack when a shard has no passages. File presence then
-records completed work without a separate manifest.
+If a shard contains no values, report that fact and do not write a pack.
+Warm packs are caches, not completion records.
 
 On dataset open, `index.py` scans packs for the current dataset and source
-hash. It accepts only matching embedding configuration, field plan, vector
-dimension, and format version, then inserts by `(model, text_hash)`.
-Identical duplicates are ignored; a duplicate hash with different bytes is
-an error. Missing parts are fine: the next semantic warm/query embeds only
-the hashes still absent.
+hash. It validates the format, model, and vector dimension, then inserts by
+`(model, text_hash)` with `INSERT OR IGNORE`. Fields and shard count describe
+how a pack was produced; they do not change whether one of its
+content-addressed vectors is reusable. Missing parts are fine: the next
+semantic warm/query embeds only the hashes still absent.
 
 Keep the first version deliberately narrow:
 
 - Source fields only. Session-specific tag fields continue to warm lazily
   inside their session.
-- One vector format and one chunker version.
+- One vector format and whole-value embedding only.
 - No coordinator, manifest of workers, remote cache service, Git API, or
   completeness database.
 - No automatic repartitioning. Start another plan with a different `N` if
@@ -503,18 +518,19 @@ internals.
 - SQL three-valued logic is reduced to the documented two-valued predicates.
 - Lexical tests distinguish absent, no-match, and positive score.
 - Warm and cold semantic queries return the same result.
-- Passage splitting is identical in `index.py` and `prelude.py`.
+- Each non-empty field value maps to exactly one semantic vector, and long
+  values are passed through whole without special handling.
 - Limits roll back tags and report whether the kernel restarted.
 
 ### Warm-shard tests
 
-- Shards are disjoint and their union equals the full distinct passage set.
+- Shards are disjoint and their union equals the full distinct value set.
 - Assignment is independent of CSV row order and worker.
-- Packs are byte-stable for identical deterministic provider output.
+- Pack records are sorted by text hash.
 - Partial pack sets import successfully and missing hashes embed lazily.
 - Merging pack directories requires no content merge.
 - Wrong source/model/dimensions/version is rejected.
-- Duplicate identical vectors are ignored; conflicting vectors fail.
+- Duplicate vector keys are ignored.
 
 Keep performance checks coarse and representative: project open, count,
 retrieve, lexical search, warm semantic search, and bulk tag commit on a
@@ -557,6 +573,10 @@ slice begins; do not let the guide silently become authoritative:
    require host-side embedding HTTP, while the broad statement “Core never
    contacts a remote” appears elsewhere. Distinguish the networkless kernel
    from the Core host supervisor.
+10. **Whole-value semantic indexing.** `api.md` and `storage.md` still
+    describe passages and best-passage scoring. The approved direction is
+    one complete field value, one vector, and one similarity score. Align
+    both documents before implementing semantic search.
 
 Everything else should be implemented directly from the three specification
 documents. Avoid adding extension points, registries, alternate backends, or
