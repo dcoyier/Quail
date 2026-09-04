@@ -9,7 +9,7 @@ It is not a fourth specification:
 - `docs/api.md` owns agent-visible behavior.
 - `docs/storage.md` owns durable files, the derived index, replay, and
   expression-to-SQL semantics.
-- `docs/kernel.md` owns process behavior, limits, tools, CLI, and Hosted
+- `docs/kernel.md` owns process behavior, limits, the CLI, and Hosted
   seams.
 
 When this guide appears to disagree with one of those documents, the
@@ -17,10 +17,16 @@ document wins. When the documents disagree with each other, do not hide a
 choice in code or here; resolve the owning specification before implementing
 that slice.
 
-There is one intentional pending specification change in section 6: semantic
-indexing embeds each complete field value once. It does not split values into
-passages. The canonical documents still use passage/chunk language and must
-be aligned before the semantic slice is implemented.
+There are two intentional pending specification changes in this guide:
+
+- Semantic indexing embeds each complete field value once. It does not split
+  values into passages. The canonical documents still use passage/chunk
+  language and must be aligned before the semantic slice is implemented.
+- Core has one local user-facing interface: the `quail` CLI. A foreground streaming
+  `quail exec` process holds the persistent kernel. MCP belongs to the future
+  Hosted repository. The canonical documents still describe Core MCP and a
+  fresh kernel per CLI call; they must be aligned before the interface slice
+  is implemented.
 
 The implementation should be small because the boundaries are strong, not
 because behavior is duplicated or deferred.
@@ -31,19 +37,19 @@ Quail has two processes and one durable project:
 
 ```mermaid
 flowchart TD
-    A["External agent"] --> B["stdio MCP or CLI"]
-    B --> C["Core host supervisor"]
-    C --> D["Project files and derived index"]
-    C --> E["Session kernel"]
-    E --> D
-    E --> F["prelude.py cell runtime"]
+    A["External agent"] --> B["quail CLI host"]
+    B --> C["Project files and derived index"]
+    B --> D["Session kernel"]
+    D --> C
+    D --> E["prelude.py cell runtime"]
 ```
 
-The host supervisor may read project files and contact the configured
-embedding provider. During privileged bootstrap the kernel opens its index
-and run log; it then loses filesystem and network access. Hosted replaces
-host policy and process placement; it does not replace Core storage,
-language, or query semantics.
+The foreground CLI process may read project files and contact the configured
+embedding provider. For a streaming execution it owns one kernel for the
+life of the command. During privileged bootstrap the kernel opens its index
+and run log; it then loses filesystem and network access. Hosted imports the
+same Core operations and adds MCP, server lifecycle, and policy; it does not
+replace Core storage, language, or query semantics.
 
 Four rules organize the implementation:
 
@@ -51,13 +57,13 @@ Four rules organize the implementation:
    SQLite, FTS state, value mappings, and vectors are rebuildable.
 2. **The kernel owns semantics.** Expressions, predicates, verbs, SQL
    compilation, and notebook-cell behavior exist only in `prelude.py`.
-3. **The host owns capabilities.** Paths, locks, spawning, embedding HTTP,
-   and external adapters stay outside the kernel.
-4. **Adapters contain no product logic.** MCP and CLI translate arguments
-   into the same host service and translate its result back.
+3. **The host owns capabilities.** Paths, locks, spawning, and embedding HTTP
+   stay outside the kernel.
+4. **The CLI contains no product logic.** It translates arguments and stream
+   records into calls to transport-neutral Core operations.
 
 Core is an environment, not an agent harness. It does not call a model,
-spawn subagents, expose shell/file tools inside cells, or run Git.
+spawn subagents, expose shell/file tools inside cells, run Git, or serve MCP.
 
 ## 2. Source layout and dependency direction
 
@@ -67,14 +73,13 @@ host dependency graph into kernel startup.
 
 | Module | Owns | May depend on | Must not contain |
 | --- | --- | --- | --- |
-| `project.py` | Manifest, paths, session metadata, log parsing, replay map, locks | Standard library | SQLite, HTTP, MCP, expression logic |
-| `index.py` | CSV import/rebuild, SQLite schema, FTS build, warm-pack ingestion | `project.py`, SQLite | Provider HTTP, kernel lifecycle, MCP |
-| `embed.py` | Provider configuration, batching, retries, embedding request | `project.py`, HTTP client | Text segmentation, SQLite writes, MCP |
-| `prelude.py` | Kernel bootstrap, language, compiler, verbs, replay application, cell loop, confinement | Standard library, RE2, optional NumPy | Any `quail.*` import, HTTP, MCP, CSV import |
+| `project.py` | Manifest, paths, session metadata, log parsing, replay map, locks | Standard library | SQLite, HTTP, CLI, expression logic |
+| `index.py` | CSV import/rebuild, SQLite schema, FTS build, warm-pack ingestion | `project.py`, SQLite | Provider HTTP, kernel lifecycle, CLI |
+| `embed.py` | Provider configuration, batching, retries, embedding request | `project.py`, HTTP client | Text segmentation, SQLite writes, CLI |
+| `prelude.py` | Kernel bootstrap, language, compiler, verbs, replay application, cell loop, confinement | Standard library, RE2, optional NumPy | Any `quail.*` import, HTTP, CLI, CSV import |
 | `kernel.py` | Session subprocess, control protocol, timers, restart, embedding forwarding | `project.py`, `embed.py` | SQL or language implementation |
-| `tools.py` | Reusable host service and warm orchestration | `project.py`, `index.py`, `embed.py`, `kernel.py` | MCP types, argparse, expression internals |
-| `mcp.py` | Stdio MCP adapter | `tools.py`, MCP SDK | A second copy of tool behavior |
-| `cli.py` | Command parsing and presentation | Host modules | In-process evaluation of agent code |
+| `service.py` | Transport-neutral Core operations and warm orchestration | `project.py`, `index.py`, `embed.py`, `kernel.py` | Argparse, process-global kernels, expression internals |
+| `cli.py` | Command parsing, presentation, and the foreground exec stream | `project.py`, `service.py`, `kernel.py` | SQL, provider wire formats, in-process evaluation of agent code |
 
 `prelude.py` is deliberately self-contained. Organize it into ordinary
 private classes and functions, but do not split runtime behavior into modules
@@ -97,7 +102,7 @@ facades for later steps and do not implement a temporary second engine.
 | 6 | Host kernel lifecycle and embedding control path | A process can run, time out, restart, and request embeddings |
 | 7 | Semantic search and local warming | First use embeds; later use reuses vectors |
 | 8 | Shareable warm shards | Independent workers produce mergeable vector packs |
-| 9 | Host service, stdio MCP, and CLI | Every surface exercises the same implementation |
+| 9 | Core operations and the CLI | One-shot commands and a persistent exec stream exercise the same implementation |
 
 Lexical search belongs in the index/compiler slices: FTS is built during CSV
 import. Semantic search belongs after the host/kernel embedding channel
@@ -105,21 +110,25 @@ exists.
 
 ## 4. Cross-cutting flows
 
-### Opening a dataset
+### Opening data and a session
 
-There is one host entry path for opening work:
+Every host operation that needs derived data uses one dataset path:
 
-1. Load and validate the project.
-2. Ensure the dataset index exists and matches the CSV hash.
-3. Rebuild the index when required.
-4. Ingest compatible shareable warm packs into the derived vector table.
-5. Acquire the session lock.
-6. Spawn or reuse the session kernel.
-7. Let the kernel compare the session log digest with `applied` and replay
-   when needed.
+1. Load and validate the project and dataset.
+2. Ensure the index exists and matches the CSV hash.
+3. Rebuild it when required.
+4. Ingest compatible shareable warm packs.
 
-`setup`, `exec`, CLI commands that need the index, and Hosted must use
-this path rather than reproducing pieces of it.
+Opening a live session continues from there:
+
+1. Resolve, create, or fork the session.
+2. Acquire its lock.
+3. Spawn the kernel and let it replay when its log digest differs from
+   `applied`.
+
+`service.py` owns both sequences. Setup, fields, export, and warm stop after
+the work they need; `open_session` performs the full sequence. The CLI and
+future Hosted never reproduce either sequence.
 
 Build a replacement index in a temporary path and publish it only after the
 build succeeds. Re-import reapplies every session's replay map and records
@@ -177,7 +186,8 @@ Keep the boundary simple:
 - A project, session-lock, spawn, or protocol failure is a host
   `QuailError`.
 - Both serialize as `{type, message, hint}`.
-- MCP and CLI format the same host result; neither interprets cell code.
+- The CLI returns Core results without interpreting cell code. Hosted may map
+  the same results onto MCP later.
 
 ### Confinement
 
@@ -192,9 +202,13 @@ Do not add a Python-syntax allow-list.
 
 ### Concurrency
 
-- One live kernel owns one session lock.
-- Calls into one kernel are serialized.
-- Different sessions use separate connections to the same WAL database.
+- One foreground exec stream owns one kernel and one session lock.
+- A stream accepts one request at a time, so its cells are naturally
+  serialized.
+- Different sessions run in different CLI/kernel process pairs with separate
+  connections to the same WAL database.
+- A second stream for an already-open session gets the ordinary session-lock
+  error; Core has no daemon in which to queue it.
 - SQLite still has one writer; busy failures must become a clear, bounded
   host or cell error rather than an unhandled SQLite exception.
 - Derived cache work may be repeated, but it must be idempotent.
@@ -255,7 +269,7 @@ embed(project, dataset, texts) -> list[list[float]]
 It resolves the configured provider, reads the referenced credential at call
 time, batches requests, retries only transient failures, and preserves input
 order. It validates that all values are finite and every returned vector has
-the same nonzero dimension, then returns that dimension to the kernel.
+the same nonzero dimension, then returns those vectors to the caller.
 
 It does not segment text, hash values, write SQLite, or know about fields.
 Those are kernel/index concerns. Hosted may replace this call with its own
@@ -293,7 +307,7 @@ boundary.
 
 ### `quail/kernel.py`
 
-`Kernel(project, session, spawn=...)` owns:
+`Kernel(project, session, spawn=..., embed_fn=...)` owns:
 
 - The session lock and subprocess lifetime.
 - Startup arguments and ready handshake.
@@ -306,54 +320,65 @@ The local spawn starts `python -m quail.prelude`. Hosted may substitute a
 container/microVM spawn that speaks the same protocol. `kernel.py` never
 imports prelude as a library.
 
-The host process needs one service instance that owns its active
-`session -> Kernel` map. Do not hide live kernels in module globals.
+The caller owns the returned `Kernel`. Core has no active-kernel registry,
+daemon, socket, or background supervisor. The foreground streaming CLI owns
+one; future Hosted may own many. `Kernel.reset()` keeps the same session lock,
+replaces only the subprocess, and starts a new run.
 
-### `quail/tools.py`
+### `quail/service.py`
 
-Provide the four agent-facing operations described in `docs/kernel.md`:
+This module is a set of transport-neutral host operations, not a service
+object. It provides project initialization/import, `setup`, `open_session`,
+session listing/forking, fields, export, and warm.
 
-- `setup`
-- `exec`
-- `export`
-- `reset`
+`open_session` performs the shared dataset-open path, creates or forks the
+session when required, and returns one `Kernel`. Its caller is responsible
+for closing that kernel. Cell execution and reset are methods on the returned
+kernel because that is where the live state exists.
 
-They share one process-local service instance and the dataset-open path from
-section 4. This is the reusable boundary for MCP, CLI, and Hosted.
+`warm` asks `index.py` for source values, calls `embed.py` in batches, and
+gives the vectors back to `index.py` for validation, cache insertion, and
+optional pack writing. It does not start a session, execute a synthetic cell,
+or write a session log.
 
-`exec` is the only operation that evaluates a cell. It creates/forks a
-session when required, reuses its kernel, and returns cell failures without
-turning them into tool failures. `reset` drops only the live Python
-process; committed tags remain.
-
-The same service has a CLI/host operation for `warm`. It asks `index.py`
-for source values, calls `embed.py` in batches, and gives the vectors
-back to `index.py` for validation, cache insertion, and optional pack
-writing. It does not start a session, execute a synthetic cell, or write a
-session log. The remaining CLI-only project operations delegate through this
-service to `project.py` or `index.py`; they do not create a second host API.
-
-### `quail/mcp.py`
-
-Register the four stdio tools and delegate immediately to the host service.
-No authentication, SQL, session rules, or error reinterpretation belongs
-here.
-
-Package `docs/api.md` as data and return that exact text from setup; never
-resolve it relative to the caller's working directory.
+Package `docs/api.md` as data and return that exact text from `setup`; never
+resolve it relative to the caller's working directory. This module contains
+orchestration only: no argparse, SQL, provider wire formats, or expression
+logic.
 
 ### `quail/cli.py`
 
-Implement the command list in `docs/kernel.md`. Commands shared with MCP call
-the same service methods; CLI-only project commands delegate to the same host
-modules through that service.
+The CLI is Core's only local user-facing interface. Its one-shot commands
+delegate to `service.py`; they do not implement project or query behavior.
 
-`quail exec` creates a transient service/kernel, runs one cell, prints the
-result, and closes it. Tags persist through the log; Python variables do not
-persist between separate CLI invocations.
+`quail exec SESSION --stream` is the notebook-shaped path. It opens one
+kernel and keeps it for the lifetime of the foreground command. Standard
+input and output use a minimal JSON-lines exchange:
 
-`quail warm` calls the host service's warm operation. It does not evaluate
-agent code.
+```json
+{"op":"exec","code":"x = 10"}
+{"op":"exec","code":"x + 1"}
+{"op":"reset"}
+```
+
+The command writes one ready record at startup and exactly one result record
+per request. Requests are sequential; there are no request IDs, concurrent
+cells, or multiplexing. Cell stdout and stderr stay inside the cell result,
+so the CLI's stdout remains valid JSONL. Human diagnostics go to stderr.
+
+An `exec` request calls the same `Kernel.exec` on the same kernel, so Python
+variables and imports persist. A `reset` request replaces that kernel and
+clears working memory while leaving tags and logs intact. EOF or interruption
+closes the kernel and releases the session lock.
+
+`quail exec SESSION FILE.py` remains a convenient one-cell form. It opens a
+kernel, executes the file as one cell, prints the result, and closes. Tags
+persist; Python variables naturally do not survive that process. The file
+form and `--stream` are mutually exclusive.
+
+There is no local `quail mcp`, standalone cross-process reset, daemon,
+Unix socket, PID file, or namespace serialization. `quail warm` calls the
+service warm operation and never evaluates agent code.
 
 ## 6. Warming
 
@@ -389,7 +414,7 @@ It prepares corpus vectors, not future query strings.
 
 Lazy warming belongs to `prelude.py`: a semantic query discovers a missing
 vector and asks the host to embed it. Explicit CLI warming is a host batch
-path: `tools.py` coordinates value inventory and cache writes in
+path: `service.py` coordinates value inventory and cache writes in
 `index.py` with provider calls in `embed.py`. It does not spawn a kernel.
 Both paths use the same whole-value hashing and vector representation.
 
@@ -502,7 +527,7 @@ internals.
   name exists.
 - Every expression method accepts and produces exactly the documented
   pipeline type.
-- MCP and CLI are thin adapters over the same host service.
+- One-shot and streaming CLI paths delegate to the same Core operations.
 - `quail/__init__.py` does not import the host graph during prelude startup.
 
 ### Durable-state tests
@@ -575,11 +600,16 @@ slice begins; do not let the guide silently become authoritative:
 9. **Who may contact the embedding provider.** The manifest and kernel
    require host-side embedding HTTP, while the broad statement “Core never
    contacts a remote” appears elsewhere. Distinguish the networkless kernel
-   from the Core host supervisor.
+   from the Core host layer that serves its embedding requests.
 10. **Whole-value semantic indexing.** `api.md` and `storage.md` still
     describe passages and best-passage scoring. The approved direction is
     one complete field value, one vector, and one similarity score. Align
     both documents before implementing semantic search.
+11. **CLI-only Core.** `api.md`, `storage.md`, `kernel.md`, `README.md`, and
+    `AGENTS.md` still describe local MCP calls, and `kernel.md` says each CLI
+    exec starts a fresh kernel. The approved direction is a foreground
+    streaming CLI with a persistent kernel; MCP exists only in Hosted. Align
+    those documents before implementing the interface slice.
 
 Everything else should be implemented directly from the three specification
 documents. Avoid adding extension points, registries, alternate backends, or
@@ -613,8 +643,7 @@ backends.
 │   ├── embed.py
 │   ├── prelude.py
 │   ├── kernel.py
-│   ├── tools.py
-│   ├── mcp.py
+│   ├── service.py
 │   └── cli.py
 ├── tests/
 │   ├── conftest.py
@@ -626,8 +655,8 @@ backends.
 │   ├── test_kernel.py
 │   ├── test_semantic.py
 │   ├── test_warm.py
-│   ├── test_tools.py
-│   └── test_surfaces.py
+│   ├── test_service.py
+│   └── test_cli.py
 ├── .gitignore
 ├── AGENTS.md
 ├── IMPLEMENTATION_GUIDE.md
@@ -637,10 +666,11 @@ backends.
 └── uv.lock
 ```
 
-There is no `src/` directory, `quail/__main__.py`, migrations directory,
-provider package, protocol package, ORM layer, or checked-in copy of
-`docs/api.md`. Hatch includes that canonical file as `quail/data/api.md` in
-the built wheel; the copy is a build artifact, not another source file.
+There is no `src/` directory, `quail/__main__.py`, `quail/mcp.py`, migrations
+directory, provider package, protocol package, ORM layer, or checked-in copy
+of `docs/api.md`. Hatch includes that canonical file as
+`quail/data/api.md` in the built wheel; the copy is a build artifact, not
+another source file.
 
 ### Creation order
 
@@ -655,8 +685,8 @@ listed as “extend” already exist and gain only the behavior for that slice.
 | 4 | Extend `prelude.py`; create `tests/test_cell.py` | Notebook display, persistent variables, transactional tags, logs, errors, and limits satisfy the cell contract. |
 | 5 | `quail/embed.py`, `tests/test_embed.py`, `quail/kernel.py`, `tests/test_kernel.py` | A host can run and restart one confined kernel and service an embedding request over the control channel. |
 | 6 | Extend `prelude.py` and `index.py`; create `tests/test_semantic.py` | Whole-value semantic search is identical cold and warm and never splits a value. |
-| 7 | `quail/tools.py`, `tests/test_tools.py`; extend `index.py` with local and shareable warming; create `tests/test_warm.py` | One host service owns its kernels, all host operations use it, and independently produced shard files combine by directory union. |
-| 8 | `quail/mcp.py`, `quail/cli.py`, `tests/test_surfaces.py`; finish the console entry point in `pyproject.toml` | MCP and CLI are thin, tested adapters over the same service. |
+| 7 | `quail/service.py`, `tests/test_service.py`; extend `index.py` with local and shareable warming; create `tests/test_warm.py` | Plain Core operations share one dataset-open path, and independently produced shard files combine by directory union. |
+| 8 | `quail/cli.py`, `tests/test_cli.py`; finish the console entry point in `pyproject.toml` | One-shot commands delegate, while one foreground stream preserves a kernel across cells and closes it on EOF. |
 | 9 | Update only the status and usage portions of `README.md`; add the installed-wheel smoke test to `ci.yml` | A clean clone installs, checks, tests, builds a wheel, and runs the installed `quail` command. |
 
 Resolve only the specification gates needed by the current row. In
@@ -670,7 +700,7 @@ replaced passage wording in both canonical documents.
 Use PEP 621 with Hatchling and a single package, `quail`. It contains:
 
 - Python 3.12 or newer and the Apache-2.0 project metadata.
-- Direct runtime dependencies only: `google-re2` and `mcp`.
+- One direct runtime dependency: `google-re2`.
 - NumPy as an optional performance dependency; the standard-library scoring
   path remains functional.
 - A development group containing `pytest`, `ruff`, and `mypy`.
@@ -726,8 +756,8 @@ not import any other Quail module. This guarantees that
 `python -m quail.prelude` does not load host code before confinement.
 
 Host callers import the explicit seams from their owning modules:
-`Project`, `Kernel`, and `QuailService`. Do not re-export the agent language;
-it exists only inside the kernel.
+`Project`, `Kernel`, and the functions in `service.py`. Do not re-export the
+agent language; it exists only inside the kernel.
 
 #### `quail/project.py`
 
@@ -759,7 +789,7 @@ Build the file in this order:
 4. Full index construction at a temporary path and atomic publication.
 5. Session replay into a rebuilt index, applied digests, and orphan counts.
 6. `ensure_index(project, dataset)` and small read helpers needed by setup,
-   fields, and export. SQL does not leak into `tools.py`.
+   fields, and export. SQL does not leak into `service.py`.
 7. Whole-value hashing and source-cell-to-vector mapping used by semantic
    search and warming.
 8. Warm-value inventory, vector-cache writes, and warm-pack read, write,
@@ -771,7 +801,7 @@ Its Core-facing operations are `ensure_index`, dataset/session summaries,
 field catalog, session export, warm-value inventory, vector insertion, and
 warm-pack writing. Warm-pack ingestion stays inside `ensure_index`; schema
 helpers remain private. This file never contacts an embedding provider. For
-explicit warming, `tools.py` obtains the value inventory here, calls
+explicit warming, `service.py` obtains the value inventory here, calls
 `embed.py`, then returns validated vectors here for cache and optional pack
 writes.
 
@@ -830,66 +860,104 @@ listed in `docs/api.md` to the cell namespace.
 Build the file in this order:
 
 1. Control-message encoding/decoding and subprocess-start helpers.
-2. The injectable spawn callable used by local Core and Hosted.
-3. `Kernel(project, session, spawn=...)` lifecycle.
+2. The injectable spawn and embedding callables used by local Core and
+   Hosted.
+3. `Kernel(project, session, spawn=..., embed_fn=...)` lifecycle.
 4. One serialized execution loop that pauses the cell's wall deadline, answers
    kernel embedding requests, then resumes it before returning the final cell
    result.
 5. Interrupt, wall-time expiry, kill, restart reporting, and clean close.
 
 `Kernel` owns one session lock and one subprocess. It does not own a pool,
-compile SQL, parse logs, or expose MCP types. The local spawn is exactly
-`python -m quail.prelude`; Hosted substitutes only the spawn callable and the
-embedding service behind the same control protocol.
+compile SQL, parse logs, or know about CLI/MCP types. The local spawn is
+exactly `python -m quail.prelude`; Hosted substitutes only the spawn callable
+and the embedding service behind the same control protocol.
 
-#### `quail/tools.py`
+#### `quail/service.py`
 
-Define one `QuailService` that owns a `Project`, the embedding callable, and a
-private `session name -> Kernel` dictionary. It is the only live-kernel owner
-in a host process; there is no module-global service or separate kernel-pool
-class.
+This module contains plain functions and no long-lived object. Lay it out in
+this order:
 
-Lay out its operations in this order:
+1. Agent-document loading from packaged data, with the repository copy as the
+   development fallback.
+2. The one shared dataset-open operation.
+3. Project initialization and dataset import.
+4. `setup(project) -> dict`.
+5. `open_session(project, session, dataset=None, fork_from=None, *,
+   spawn=None, embed_fn=None) -> Kernel`.
+6. Session listing/forking, field catalog, and export.
+7. `warm`, coordinating value inventory, `embed.py`, cache insertion, and an
+   optional shard pack.
 
-1. Construction, context-manager support, and `close()`.
-2. The shared dataset-open path.
-3. `setup`, `exec`, `export`, and `reset` with the exact tool results from
-   `docs/kernel.md`.
-4. CLI-only project operations: import, sessions, fork, and fields, delegating
-   filesystem work to `Project` and SQL work to `index.py`.
-5. `warm`, which supplies `index.py` with the batch callback from `embed.py`.
+`open_session` creates or forks a session when required, ensures its index,
+and returns a ready `Kernel`. The caller owns and closes it. There is no
+service class, kernel dictionary, singleton, daemon, or process-global state.
+Future Hosted may keep returned kernels in its own authenticated session
+registry; that policy does not enter Core.
 
-Project initialization may be one small module-level function because no
-loaded `Project` exists yet. Every other operation runs through a service
-instance. `tools.py` contains orchestration only: no SQL, MCP decorators,
-argument parsing, embedding wire formats, or expression logic.
+Load agent documentation from packaged `quail/data/api.md`, with canonical
+`docs/api.md` as the development-tree fallback. Do not accept an arbitrary
+runtime override or resolve it from the caller's working directory.
 
-Load the agent documentation from the packaged `quail/data/api.md`, with the
-repository's canonical `docs/api.md` as the development-tree fallback. Do not
-accept an arbitrary runtime override and do not resolve it from the caller's
-working directory.
-
-#### `quail/mcp.py`
-
-Expose one runner that receives a `QuailService`, registers exactly
-`quail_setup`, `quail_exec`, `quail_export`, and `quail_reset`, and serves
-stdio. Each handler validates MCP arguments, calls the matching service
-method, and returns its result unchanged.
-
-This file has no project discovery beyond the path passed by `cli.py`, no
-authentication, HTTP server, SQL, kernel map, or alternative error model.
+The module contains orchestration only: no SQL, argparse, provider wire
+formats, expression logic, or transport-specific results.
 
 #### `quail/cli.py`
 
 Use `argparse`; do not add a CLI framework. Build the parser, one function per
-documented command, and `main(argv=None) -> int`. `main` discovers the project,
-constructs one `QuailService`, dispatches, prints the result, and closes it.
-The `mcp` command keeps that service alive for the server lifetime.
+documented command, the exec-stream loop, and `main(argv=None) -> int`.
 
-Commands only translate arguments and format output. They call
-`project.py`/`tools.py` for `init`, the service for host operations, and
-`mcp.py` for stdio serving. No command opens SQLite directly, edits TOML
-directly, evaluates code in-process, or runs Git.
+The final command set is:
+
+```text
+quail init [DIR]
+quail import CSV [--name N] [--id COL] [--embed PROVIDER/MODEL]
+quail setup [--json]
+quail exec SESSION FILE.py [--dataset D] [--fork-from S] [--json]
+quail exec SESSION --stream [--dataset D] [--fork-from S]
+quail sessions [--json]
+quail fork SRC DST
+quail fields DATASET [--session S] [--json]
+quail export SESSION [--out PATH] [--json]
+quail warm DATASET [--field F] [--shard I/N] [--json]
+```
+
+For `--stream`, open one kernel before reading requests. Write this ready
+record first:
+
+```json
+{"ready":true,"session":"billing-coding","run":"20260901T210000Z-a1b2c3"}
+```
+
+If opening fails, write
+`{"ready":false,"error":{"type":"...","message":"...","hint":"..."}}`
+and exit nonzero.
+
+Then read exactly two request shapes, one compact JSON object per line:
+
+```json
+{"op":"exec","code":"x = 10\nx + 1"}
+{"op":"reset"}
+```
+
+An exec response is the ordinary cell-result object. A reset response is
+`{"reset":true,"session":"...","run":"<new run id>"}` after the
+replacement kernel is ready. A malformed record returns one serialized
+error as `{"error":{"type":"...","message":"...","hint":"..."}}`
+and leaves the stream open. Process one line completely before reading the
+next; do not add IDs, batching, negotiation, or asynchronous messages.
+
+Stream stdout is JSONL only. Cell output is captured inside its response and
+CLI diagnostics use stderr. Encode records as UTF-8 and flush after every
+line. On EOF, `SIGINT`, or a broken output pipe, close the kernel in `finally`
+and exit. The file form performs the same open/exec/close sequence once. A
+cell error remains a normal result and does not close the stream; in file
+mode it exits zero after printing that result. Failures outside a cell exit
+nonzero.
+
+Every command delegates to `service.py` or to the returned `Kernel`. No
+command opens SQLite directly, edits TOML directly, evaluates code in-process,
+runs Git, starts a daemon, or serves MCP.
 
 ### Test files
 
@@ -908,8 +976,8 @@ behavior under test requires it.
 | `tests/test_kernel.py` | Spawn/ready, serialization, embedding forwarding, lock lifetime, filesystem/network confinement, CPU/wall/memory recovery, close, and protocol failure. |
 | `tests/test_semantic.py` | One vector per complete non-empty value, deduplication, query caching, cosine scores, cold/warm equivalence, NumPy/fallback equivalence, and tag invalidation. |
 | `tests/test_warm.py` | Local warm, shard union/disjointness, stable assignment, pack validation/import, partial availability, duplicates, and Git-conflict-free filenames. |
-| `tests/test_tools.py` | Dataset-open flow and exact setup/exec/export/reset results, including cell errors as results and service cleanup. |
-| `tests/test_surfaces.py` | Installed CLI smoke tests and the four stdio MCP tools delegating to the same service without changing results. |
+| `tests/test_service.py` | Shared dataset-open flow, project/import/setup/session/list/fork/fields/export/warm operations, and caller ownership of returned kernels. |
+| `tests/test_cli.py` | Installed one-shot commands plus stream ready, multi-cell variable persistence, reset, malformed input recovery, stdout purity, and cleanup on EOF/interruption. |
 
 Do not mirror implementation modules mechanically. The files above are
 behavioral boundaries; add a new test file only when a genuinely new product
