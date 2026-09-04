@@ -40,9 +40,10 @@ flowchart TD
 ```
 
 The host supervisor may read project files and contact the configured
-embedding provider. The kernel receives already-open handles, then loses
-filesystem and network access. Hosted replaces host policy and process
-placement; it does not replace Core storage, language, or query semantics.
+embedding provider. During privileged bootstrap the kernel opens its index
+and run log; it then loses filesystem and network access. Hosted replaces
+host policy and process placement; it does not replace Core storage,
+language, or query semantics.
 
 Four rules organize the implementation:
 
@@ -182,8 +183,8 @@ Keep the boundary simple:
 
 The kernel opens everything it needs before installing the audit hook and
 network isolation. The host passes only project/session identifiers, limits,
-and already-open control/data handles. Provider credentials remain in the
-host.
+and the control channel; the prelude opens the index and run log during
+bootstrap. Provider credentials remain in the host.
 
 Confinement in Core prevents ordinary accidental access; it is not a
 multi-tenant security boundary. Hosted supplies the container or microVM.
@@ -310,7 +311,7 @@ The host process needs one service instance that owns its active
 
 ### `quail/tools.py`
 
-Provide the four operations described in `docs/kernel.md`:
+Provide the four agent-facing operations described in `docs/kernel.md`:
 
 - `setup`
 - `exec`
@@ -329,7 +330,8 @@ The same service has a CLI/host operation for `warm`. It asks `index.py`
 for source values, calls `embed.py` in batches, and gives the vectors
 back to `index.py` for validation, cache insertion, and optional pack
 writing. It does not start a session, execute a synthetic cell, or write a
-session log.
+session log. The remaining CLI-only project operations delegate through this
+service to `project.py` or `index.py`; they do not create a second host API.
 
 ### `quail/mcp.py`
 
@@ -342,8 +344,9 @@ resolve it relative to the caller's working directory.
 
 ### `quail/cli.py`
 
-Implement the command list in `docs/kernel.md`. Commands call the same host
-operations as MCP.
+Implement the command list in `docs/kernel.md`. Commands shared with MCP call
+the same service methods; CLI-only project commands delegate to the same host
+modules through that service.
 
 `quail exec` creates a transient service/kernel, runs one cell, prints the
 result, and closes it. Tags persist through the log; Python variables do not
@@ -415,7 +418,7 @@ With `--shard I/N`:
   path.
 
 Hash partitioning makes assignment deterministic without a coordinator.
-Workers only need the same Git revision, embedding configuration, field
+Workers only need the same source contents, embedding configuration, field
 selection, and shard count.
 
 Use this layout:
@@ -581,3 +584,341 @@ slice begins; do not let the guide silently become authoritative:
 Everything else should be implemented directly from the three specification
 documents. Avoid adding extension points, registries, alternate backends, or
 abstraction layers until a second real implementation needs them.
+
+## 9. File-by-file construction blueprint
+
+This is the executable form of the build order in section 3. It fixes the
+repository shape, the order in which files become real, and the responsibility
+of each file. It does not restate the language or storage specification.
+
+Create a file only when its slice is being implemented. Do not add placeholder
+modules, empty tests, compatibility layers, or interfaces for hypothetical
+backends.
+
+### Final checked-in layout
+
+```text
+.
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+├── docs/
+│   ├── api.md
+│   ├── kernel.md
+│   └── storage.md
+├── quail/
+│   ├── __init__.py
+│   ├── project.py
+│   ├── index.py
+│   ├── embed.py
+│   ├── prelude.py
+│   ├── kernel.py
+│   ├── tools.py
+│   ├── mcp.py
+│   └── cli.py
+├── tests/
+│   ├── conftest.py
+│   ├── test_project.py
+│   ├── test_index.py
+│   ├── test_language.py
+│   ├── test_cell.py
+│   ├── test_embed.py
+│   ├── test_kernel.py
+│   ├── test_semantic.py
+│   ├── test_warm.py
+│   ├── test_tools.py
+│   └── test_surfaces.py
+├── .gitignore
+├── AGENTS.md
+├── IMPLEMENTATION_GUIDE.md
+├── LICENSE
+├── README.md
+├── pyproject.toml
+└── uv.lock
+```
+
+There is no `src/` directory, `quail/__main__.py`, migrations directory,
+provider package, protocol package, ORM layer, or checked-in copy of
+`docs/api.md`. Hatch includes that canonical file as `quail/data/api.md` in
+the built wheel; the copy is a build artifact, not another source file.
+
+### Creation order
+
+Each row is one coherent change and must pass before the next begins. Files
+listed as “extend” already exist and gain only the behavior for that slice.
+
+| Order | Create or extend | Slice is complete when |
+| --- | --- | --- |
+| 1 | `pyproject.toml`, `uv.lock`, `.github/workflows/ci.yml`, `quail/__init__.py`, `tests/conftest.py`, `quail/project.py`, `tests/test_project.py` | A project can be initialized, loaded, validated, locked, forked, and replayed without SQLite, and the slice passes in CI. |
+| 2 | `quail/index.py`, `tests/test_index.py` | A valid CSV builds the complete disposable index, and deleting it then reopening produces the same source and tag state. |
+| 3 | `quail/prelude.py`, `tests/test_language.py` | Expressions, predicates, compilation, lexical search, and read-only verbs execute against the real index. |
+| 4 | Extend `prelude.py`; create `tests/test_cell.py` | Notebook display, persistent variables, transactional tags, logs, errors, and limits satisfy the cell contract. |
+| 5 | `quail/embed.py`, `tests/test_embed.py`, `quail/kernel.py`, `tests/test_kernel.py` | A host can run and restart one confined kernel and service an embedding request over the control channel. |
+| 6 | Extend `prelude.py` and `index.py`; create `tests/test_semantic.py` | Whole-value semantic search is identical cold and warm and never splits a value. |
+| 7 | `quail/tools.py`, `tests/test_tools.py`; extend `index.py` with local and shareable warming; create `tests/test_warm.py` | One host service owns its kernels, all host operations use it, and independently produced shard files combine by directory union. |
+| 8 | `quail/mcp.py`, `quail/cli.py`, `tests/test_surfaces.py`; finish the console entry point in `pyproject.toml` | MCP and CLI are thin, tested adapters over the same service. |
+| 9 | Update only the status and usage portions of `README.md`; add the installed-wheel smoke test to `ci.yml` | A clean clone installs, checks, tests, builds a wheel, and runs the installed `quail` command. |
+
+Resolve only the specification gates needed by the current row. In
+particular, do not begin row 6 until the whole-value semantic wording has
+replaced passage wording in both canonical documents.
+
+### Root and support files
+
+#### `pyproject.toml`
+
+Use PEP 621 with Hatchling and a single package, `quail`. It contains:
+
+- Python 3.12 or newer and the Apache-2.0 project metadata.
+- Direct runtime dependencies only: `google-re2` and `mcp`.
+- NumPy as an optional performance dependency; the standard-library scoring
+  path remains functional.
+- A development group containing `pytest`, `ruff`, and `mypy`.
+- `quail = "quail.cli:main"` as the sole console script.
+- Pytest, Ruff, and mypy configuration kept to the few project-wide settings
+  actually used.
+- A Hatch wheel `force-include` from `docs/api.md` to
+  `quail/data/api.md`, so the canonical agent document ships without a
+  checked-in mirror.
+
+Do not put project manifest defaults, provider URLs, or kernel limits here.
+Do not add a plugin system or optional database/backend groups.
+
+#### `uv.lock`
+
+Generate it from `pyproject.toml` and commit it. Never edit it by hand.
+Regenerate it whenever declared dependencies change.
+
+#### `.gitignore`
+
+Ignore Python/build caches, `.venv/`, `.quail/`, and
+`sessions/*/.lock`. Do not ignore `data/`, `sessions/`, `exports/`, or
+`warm/`; those are durable or intentionally shareable project files.
+
+#### `README.md`, `AGENTS.md`, `docs/`, and `LICENSE`
+
+Keep their current ownership:
+
+- `README.md` explains the product and the shortest successful local path.
+- `AGENTS.md` contains repository rules, not implementation detail.
+- The three files under `docs/` remain the specification owners described at
+  the top of this guide.
+- `LICENSE` remains unchanged.
+
+Do not duplicate sections from this guide into those files. Update a
+canonical document only when behavior changes, and update README examples
+only after the corresponding command works.
+
+#### `.github/workflows/ci.yml`
+
+Use one small Linux job on Python 3.12. From the first slice it installs from
+`uv.lock`, runs Ruff, mypy, and pytest, and builds the wheel. Once the CLI
+exists, it also installs that wheel into a clean environment and smoke-tests
+`quail --help`. Add no version matrix, release workflow, service containers,
+or coverage gate until there is a concrete need.
+
+### Package files
+
+#### `quail/__init__.py`
+
+Keep this file inert: one package docstring and an empty `__all__`. It must
+not import any other Quail module. This guarantees that
+`python -m quail.prelude` does not load host code before confinement.
+
+Host callers import the explicit seams from their owning modules:
+`Project`, `Kernel`, and `QuailService`. Do not re-export the agent language;
+it exists only inside the kernel.
+
+#### `quail/project.py`
+
+Build the file from top to bottom in this order:
+
+1. Constants and the host `QuailError` exception (`type`, `message`, `hint`).
+2. Small immutable records for validated dataset, session, and kernel
+   configuration.
+3. Name, path, timestamp, TOML, and atomic-text-write helpers.
+4. `Project(path)`: manifest discovery, strict parsing, and resolved paths.
+5. Project initialization and manifest updates used by `quail init` and
+   `quail import`.
+6. Session create, list, fork, and metadata operations.
+7. Run-log parsing, digesting, and replay-map construction.
+8. The advisory session-lock context manager.
+
+Only `Project` and `QuailError` are promised external host seams.
+Configuration records are Core-internal even when another Core module imports
+them. This file performs no SQL, HTTP, cell evaluation, or Git operation, and
+it never appends a run log.
+
+#### `quail/index.py`
+
+Build the file in this order:
+
+1. Schema/version constants and the literal schema SQL.
+2. SQLite connection setup: foreign keys, WAL, busy timeout, and row factory.
+3. CSV header/row/ID validation, source hashing, and identifier quoting.
+4. Full index construction at a temporary path and atomic publication.
+5. Session replay into a rebuilt index, applied digests, and orphan counts.
+6. `ensure_index(project, dataset)` and small read helpers needed by setup,
+   fields, and export. SQL does not leak into `tools.py`.
+7. Whole-value hashing and source-cell-to-vector mapping used by semantic
+   search and warming.
+8. Warm-value inventory, vector-cache writes, and warm-pack read, write,
+   validation, ingestion, and shard selection from section 6.
+
+Use functions and small records, not an ORM or repository class. Keep schema
+creation in this file rather than creating migrations for a disposable cache.
+Its Core-facing operations are `ensure_index`, dataset/session summaries,
+field catalog, session export, warm-value inventory, vector insertion, and
+warm-pack writing. Warm-pack ingestion stays inside `ensure_index`; schema
+helpers remain private. This file never contacts an embedding provider. For
+explicit warming, `tools.py` obtains the value inventory here, calls
+`embed.py`, then returns validated vectors here for cache and optional pack
+writes.
+
+#### `quail/embed.py`
+
+This is one operation and its private helpers:
+
+```python
+embed(project, dataset, texts) -> list[list[float]]
+```
+
+Lay it out as provider/configuration resolution, bounded HTTP request helper,
+the two supported wire shapes (Ollama and OpenAI-compatible), response
+validation, then `embed`. Use the standard library HTTP stack unless it proves
+insufficient; do not introduce provider classes or a registry for two request
+formats.
+
+Preserve input order. Retry only transient transport, rate-limit, and server
+failures with a small fixed bound. Validate count, nonzero consistent
+dimension, and finite numbers. Send each complete input value unchanged. This
+file does not hash text, inspect model context limits, access SQLite, or cache
+anything.
+
+#### `quail/prelude.py`
+
+This is intentionally the largest file because it is the sealed Cell 0
+runtime. Organize definitions in exactly this order:
+
+1. Standard-library, RE2, and optional NumPy imports.
+2. Wire records, `QuailError`, JSON-safe display values, and private runtime
+   state.
+3. Immutable expression/predicate node types and operator construction.
+4. Pipeline-method produce checks and the public `Field` and `Random`
+   constructors.
+5. Registered `q_*` SQLite functions and the expression-to-SQL compiler.
+6. `Entry`, `count`, `retrieve`, `values`, `tag`, and `fields`.
+7. Lexical preparation and whole-value semantic preparation/scoring.
+8. Replay application and append-only run-log writing.
+9. Cell parsing, final-expression display, output capture, transaction,
+   traceback cleanup, and limit handling.
+10. Bootstrap, confinement, ready handshake, and the JSON-lines control loop.
+
+Within bootstrap, do privileged work first: parse startup arguments, open and
+configure SQLite, apply replay, open the run log, import the free modules, and
+construct the user namespace. Install the SQLite authorizer while configuring
+the connection; install the audit hook and network isolation only after every
+needed file is open. Signal ready last.
+
+There is one execution engine: verbs compile expression nodes to parameterized
+SQL and decode results. Do not add a row-by-row Python evaluator. The module
+imports no `quail.*` file, performs no provider HTTP, and exposes only names
+listed in `docs/api.md` to the cell namespace.
+
+#### `quail/kernel.py`
+
+Build the file in this order:
+
+1. Control-message encoding/decoding and subprocess-start helpers.
+2. The injectable spawn callable used by local Core and Hosted.
+3. `Kernel(project, session, spawn=...)` lifecycle.
+4. One serialized execution loop that pauses the cell's wall deadline, answers
+   kernel embedding requests, then resumes it before returning the final cell
+   result.
+5. Interrupt, wall-time expiry, kill, restart reporting, and clean close.
+
+`Kernel` owns one session lock and one subprocess. It does not own a pool,
+compile SQL, parse logs, or expose MCP types. The local spawn is exactly
+`python -m quail.prelude`; Hosted substitutes only the spawn callable and the
+embedding service behind the same control protocol.
+
+#### `quail/tools.py`
+
+Define one `QuailService` that owns a `Project`, the embedding callable, and a
+private `session name -> Kernel` dictionary. It is the only live-kernel owner
+in a host process; there is no module-global service or separate kernel-pool
+class.
+
+Lay out its operations in this order:
+
+1. Construction, context-manager support, and `close()`.
+2. The shared dataset-open path.
+3. `setup`, `exec`, `export`, and `reset` with the exact tool results from
+   `docs/kernel.md`.
+4. CLI-only project operations: import, sessions, fork, and fields, delegating
+   filesystem work to `Project` and SQL work to `index.py`.
+5. `warm`, which supplies `index.py` with the batch callback from `embed.py`.
+
+Project initialization may be one small module-level function because no
+loaded `Project` exists yet. Every other operation runs through a service
+instance. `tools.py` contains orchestration only: no SQL, MCP decorators,
+argument parsing, embedding wire formats, or expression logic.
+
+Load the agent documentation from the packaged `quail/data/api.md`, with the
+repository's canonical `docs/api.md` as the development-tree fallback. Do not
+accept an arbitrary runtime override and do not resolve it from the caller's
+working directory.
+
+#### `quail/mcp.py`
+
+Expose one runner that receives a `QuailService`, registers exactly
+`quail_setup`, `quail_exec`, `quail_export`, and `quail_reset`, and serves
+stdio. Each handler validates MCP arguments, calls the matching service
+method, and returns its result unchanged.
+
+This file has no project discovery beyond the path passed by `cli.py`, no
+authentication, HTTP server, SQL, kernel map, or alternative error model.
+
+#### `quail/cli.py`
+
+Use `argparse`; do not add a CLI framework. Build the parser, one function per
+documented command, and `main(argv=None) -> int`. `main` discovers the project,
+constructs one `QuailService`, dispatches, prints the result, and closes it.
+The `mcp` command keeps that service alive for the server lifetime.
+
+Commands only translate arguments and format output. They call
+`project.py`/`tools.py` for `init`, the service for host operations, and
+`mcp.py` for stdio serving. No command opens SQLite directly, edits TOML
+directly, evaluates code in-process, or runs Git.
+
+### Test files
+
+Tests use temporary project directories and the real SQLite engine. Mock only
+the embedding HTTP boundary, time, signals, and subprocess placement when the
+behavior under test requires it.
+
+| File | Owns |
+| --- | --- |
+| `tests/conftest.py` | Minimal temporary-project builders, sample CSVs, and a deterministic fake embedding callback shared across files. |
+| `tests/test_project.py` | Manifest strictness, safe names/paths, sessions, forks, locks, log parsing, digests, replay, and malformed lines. |
+| `tests/test_index.py` | CSV validation, text preservation, schema, FTS import, rebuild, vector preservation, replay, and atomic failure behavior. |
+| `tests/test_language.py` | Public namespace, every documented method/produce pair, compiler cases, predicates, lexical behavior, verbs, and stable ordering. |
+| `tests/test_cell.py` | Last-expression display, stdout/stderr, namespace persistence, tag visibility/commit/rollback, failed logs, traceback cleanup, and truncation. |
+| `tests/test_embed.py` | Ollama and OpenAI-compatible requests, batching, ordering, retry boundary, credential resolution, and response validation. |
+| `tests/test_kernel.py` | Spawn/ready, serialization, embedding forwarding, lock lifetime, filesystem/network confinement, CPU/wall/memory recovery, close, and protocol failure. |
+| `tests/test_semantic.py` | One vector per complete non-empty value, deduplication, query caching, cosine scores, cold/warm equivalence, NumPy/fallback equivalence, and tag invalidation. |
+| `tests/test_warm.py` | Local warm, shard union/disjointness, stable assignment, pack validation/import, partial availability, duplicates, and Git-conflict-free filenames. |
+| `tests/test_tools.py` | Dataset-open flow and exact setup/exec/export/reset results, including cell errors as results and service cleanup. |
+| `tests/test_surfaces.py` | Installed CLI smoke tests and the four stdio MCP tools delegating to the same service without changing results. |
+
+Do not mirror implementation modules mechanically. The files above are
+behavioral boundaries; add a new test file only when a genuinely new product
+concern appears.
+
+### The stopping rule
+
+The layout is complete when the files above implement the canonical behavior
+and pass their boundary tests. File size alone is not a reason to split a
+module—especially `prelude.py`. Add another production file only when one
+existing file has acquired a second independent concern that can be named,
+tested, and used without creating a new framework around it.
