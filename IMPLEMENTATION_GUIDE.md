@@ -434,17 +434,19 @@ With `--shard I/N`:
 - `I` is one-based and `1 <= I <= N`.
 - Build the distinct non-empty value set for the selected source field, or all
   non-ID source fields when `--field` is omitted.
-- Assign a value to shard `I` when its text SHA-256 integer modulo `N`
-  equals `I - 1`.
+- Sort the values by text hash. For `M` values, shard `I/N` takes indices
+  `start <= j < stop`, where `start = ((I - 1) * M) // N` and
+  `stop = (I * M) // N`.
 - Embed only that shard.
 - Insert the vectors into the local cache.
 - Write a shareable warm pack under `warm/`.
 - Report selected, reused, and newly embedded value counts plus the pack
   path.
 
-Hash partitioning makes assignment deterministic without a coordinator.
-Workers only need the same source contents, embedding configuration, field
-selection, and shard count.
+This divides the deterministic work list into contiguous sections whose sizes
+differ by at most one. Workers need only the same source contents, embedding
+configuration, and field selection. Different shard counts may be combined:
+for example, `1/4`, `2/4`, and `2/2` cover the complete list without overlap.
 
 Use this layout:
 
@@ -554,6 +556,8 @@ internals.
 
 - Shards are disjoint and their union equals the full distinct value set.
 - Assignment is independent of CSV row order and worker.
+- Compatible fractional ranges compose across shard counts; `1/4 + 2/4 +
+  2/2` equals one complete warm.
 - Pack records are sorted by text hash.
 - Partial pack sets import successfully and missing hashes embed lazily.
 - Merging pack directories requires no content merge.
