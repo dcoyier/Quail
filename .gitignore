@@ -4,7 +4,6 @@ __pycache__/
 .venv/
 .pytest_cache/
 dist/
-*.egg-info/
 
 # Quail projects: the index is derived, the lock is per machine
 .quail/
