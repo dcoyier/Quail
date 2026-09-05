@@ -4,6 +4,19 @@ How a cell runs. The agent's view is [`api.md`](api.md); the files it reads
 and writes are in [`storage.md`](storage.md). This document is the process
 between them.
 
+> **Superseded in part by [`IMPLEMENTATION_GUIDE.md`](../IMPLEMENTATION_GUIDE.md).**
+> Where the two differ, the guide is right. The shape (one host, one child
+> kernel per open session, a subtractive sandbox) stands. What changed: core
+> has no MCP server; the agent drives `quail exec SESSION --stream`, a JSONL
+> stream on stdin/stdout, and `quail setup --json` replaces `quail_setup`
+> (guide §8); the `is` / `is not` ban is gone and the namespace is one
+> ordinary module (§5); the kernel opens the index read-only and writes only
+> TEMP tables, and the host appends the log and applies the tag delta (§3,
+> §4); memory is enforced by RSS monitoring, not `RLIMIT_AS`, and CPU/wall
+> expiry is latched (§7); locks live under `.quail/locks/` (§4); the module
+> layout adds `service.py` and NumPy is required (§1). Section 10 of the
+> guide lists the remaining alignment.
+
 ## Shape
 
 ```text

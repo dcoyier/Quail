@@ -3,6 +3,19 @@
 How a Quail project is laid out on disk, what is durable, what is derived,
 and how the language in [`api.md`](api.md) compiles onto it.
 
+> **Superseded in part by [`IMPLEMENTATION_GUIDE.md`](../IMPLEMENTATION_GUIDE.md).**
+> Where the two differ, the guide is right. The one idea (text project, git
+> transport, derived SQLite) stands. What changed: sessions continue across
+> source edits by stable `id` (guide §2); cell records carry a logical `order`
+> and replay is by `(order, run_id, n)`, not timestamp (§3); the host, not the
+> kernel, appends the log, and a cell commits only once its record is fsynced
+> (§3); tags are keyed by entry `id`, there is one FTS table per field, no
+> shared `tags_fts`, and the kernel writes only private TEMP tables (§4);
+> locks live under `.quail/locks/` (§4); the manifest requires
+> `embed_revision`, semantic units are whole values, and vectors can be shared
+> through `warm/` packs (§6). Section 10 of the guide lists the remaining
+> alignment.
+
 ## The one idea
 
 A project is a directory of plain text, and git is the transport. The CSV,

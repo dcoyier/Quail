@@ -5,6 +5,5 @@ __pycache__/
 .pytest_cache/
 dist/
 
-# Quail projects: the index is derived, the lock is per machine
+# Quail projects: the index, scratch, and locks are derived and per machine
 .quail/
-sessions/*/.lock
