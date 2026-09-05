@@ -242,8 +242,9 @@ sessions and never allocates one.
 
 Fork by copying a closed source session's logs into a new destination and
 writing its metadata. Preserve run IDs and source/ID provenance. Hold the
-source session lock during the copy; publish the destination only after
-the copy succeeds.
+source session lock through the copy, validate the copied logs under
+section 3, and only then publish the destination. Log validation does not
+require the historical CSV to be available.
 Never overwrite a destination or share writable files through hard links.
 Forking a historical session is allowed. Forks retain the same rules for
 stable-ID continuation and generated-ID source compatibility.
@@ -302,7 +303,7 @@ it is not the sum of all `tag()` return values.
 ### Logical order and merging
 
 On session open, synchronize its available history and obtain the largest
-`order` across all accepted complete cell records, including failures.
+`order` across all validated complete cell records, including failed cells.
 Reuse the cached maximum when the history digest matches; otherwise compute
 it during replay. The next cell uses that number plus one; each recorded
 cell advances it again.
@@ -327,48 +328,61 @@ actually applied, never newly discovered records the kernel has not seen.
 
 ### Parsing and cache markers
 
-Validate headers, record schema, scope, numbering, logical orders, and tag
-values before applying history. Preserve best-effort recovery: ignore a
-malformed complete cell as a whole and report its file, line, and reason.
-Never apply a partial tag delta. A malformed, unsupported, or wrong-scope
-header excludes that run and reports why. Conflicting duplicate cell
-identities are excluded rather than arbitrarily choosing a copy. Writers
-produce contiguous numbers; recovery may retain later valid cells after an
-ignored gap. Accepted numbers and logical orders still increase within a run.
+Validate every newline-terminated header and cell: UTF-8 and JSON, supported
+schema, scope, numbering, logical order, and tag values. Any invalid complete
+record fails synchronization and opening of that session. Never skip the
+record, exclude its run, or continue with later records after a gap. Cell
+numbers start at 1 and are contiguous within each run, including failed
+cells; logical orders increase within the run. Filename/header agreement
+and numbering checks reject duplicate identities within a session. Forked
+sessions may retain the same run IDs; no cross-session deduplication is needed.
 
-Keep every original file untouched. Include a structured recovery summary
-in setup/session information and opening results, and show human diagnostics
-on stderr. The summary identifies excluded records/runs and whether history
-is incomplete. Cached opens must retain these diagnostics. If completed log
-content contains no usable run, fail clearly instead of presenting a recovered
-empty analysis. Wholly interrupted run creations are empty history and do not
-strand a new session. Historical listings can parse logs without a source.
+Automatic recovery handles only interrupted appends:
 
-The index maps recovered writes to the current stable IDs and reports final
-orphans separately from malformed history. Missing current IDs are not a
-parse failure. New child results are still validated against their live
-source before logging; recovery is not permission to write invalid records.
+- Treat a final fragment without a newline as an unfinished append and
+  ignore it, even if its JSON appears complete. Complete records before it
+  still apply when all complete records in the session validate.
+- Treat an empty file or wholly unterminated header as an interrupted run
+  creation with no cells. These files do not strand a new session. A complete
+  invalid header remains an error.
 
-A final fragment without a newline is an interrupted append. Report and
-ignore that fragment; do not modify the old run. Valid complete records
-before it remain usable. An empty file or wholly unterminated header is
-likewise an interrupted run creation with no cells to apply. A complete
-invalid header is reported and excluded as described above.
+Frame records on newline bytes before decoding, so a partial UTF-8 character
+in the ignored tail cannot prevent reading earlier records. Leave every
+original file untouched. Report ignored tails and interrupted run creations
+through ordinary warnings with their file and location, including on cached
+opens. Report an invalid complete record as an error with session, file,
+line, and validation reason. An unsupported version should identify the
+compatibility problem; do not guess what caused a record to be invalid.
+
+Do not publish partial tags or an `applied` marker for history that failed
+validation, or use an older cached materialization as fallback after that
+failure. The affected session's open, export, and fork fail. Setup and
+session listing report it as unavailable with its error, while other
+sessions and source-only operations remain usable. Historical listings can
+validate logs without the source. Live streams retain section 4's committed
+snapshot rules; external history edits take effect on the next synchronization.
+
+Map valid historical writes to current stable IDs and report final orphan
+tags separately. An ID missing from the current source is not a malformed
+record. New child results are still checked against their live source before
+logging. Source/tag name conflicts follow section 2's compatibility rule.
 
 The session digest is SHA-256 of canonical JSON containing sorted
-`[log_filename, sha256_of_exact_file_bytes]` pairs. Include failed records,
-excluded records/runs, and ignored trailing fragments in the digest. The
+`[log_filename, sha256_of_exact_file_bytes]` pairs. Include valid failed-cell
+records, empty files, and ignored trailing fragments in the digest. The
 digest is a cache marker, not an ordering or identity system. It is independent
 of the session directory name, so copied history has the same digest.
 
 Cache synchronization replays once when the digest or source version
 differs from the stored `applied` marker, then replaces that session's
 materialized tags, orphan count, maximum logical order, history summary,
-and marker together. The summary retains counts, last activity, and recovery
-diagnostics needed by setup and open. A matching digest avoids parsing old
-cells merely to rediscover those facts. Hash files in a streaming pass;
-timestamps alone cannot prove history unchanged. At runtime the host updates
-its own file hash and summary incrementally, without re-reading past code.
+and marker together after validation succeeds. The summary retains counts,
+last activity, and interrupted-append warnings needed by setup and open;
+there is no summary of salvaged or excluded records. A matching digest in
+the current cache schema avoids parsing old cells merely to rediscover
+those facts. Hash files in a streaming pass; timestamps alone cannot prove
+history unchanged. At runtime the host updates its own file hash and
+summary incrementally, without re-reading past code.
 
 ### A cell has one durable commit point
 
@@ -406,8 +420,8 @@ file and directory.
 | Cache update fails after a synced record | The record remains committed; retry or reconstruct only the cache, never execute the code again or turn that committed cell into a rolled-back result |
 | Host dies before replying | Reopening recovers complete records; an unacknowledged cell may have committed, so do not automatically resubmit it |
 
-After a log I/O failure, a later opener uses complete records actually
-present on disk as recovery truth and syncs recovered files before
+After a log I/O failure, a later opener applies the validation and tail
+rules above to the records actually on disk and syncs recovered files before
 acknowledging a usable session. Do not pretend an uncertain append is known
 to have rolled back. If cache recovery still fails, close with a host error
 that identifies the already-committed cell and log path. Keep the original
@@ -507,9 +521,12 @@ project metadata lock before entering this path, preserving the lock order
 below. Existing-session execution needs no metadata publication lock.
 
 Rebuild source rows and FTS, preserve compatible vector rows when available,
-and replay compatible session histories by ID, recording orphan counts.
-Unavailable generated-ID sessions remain on disk and visible in listings. A schema
-mismatch rebuilds a disposable cache; it does not trigger user-data migrations.
+and replay valid, compatible session histories by ID, recording orphan
+counts. A log-validation or source-compatibility failure leaves that session
+unmaterialized and unavailable; it does not abort rebuilding the source or
+materializing other valid sessions. Keep unavailable sessions on disk and
+visible in listings with the reason. A schema mismatch rebuilds a disposable
+cache; it does not trigger user-data migrations.
 
 Opening a session then takes its session lock, checks its ID/source scope,
 synchronizes its log, and spawns the child. Validate configuration before
@@ -518,7 +535,8 @@ source version, and resolved embedding configuration; reload configuration
 by closing and reopening the stream.
 
 Session summaries, fields, and export acquire and synchronize a closed
-session before reading.
+session before reading. A validation failure returns that session's error;
+it never exposes partial tags or substitutes the older cached result.
 If its session lock is already held, read one committed WAL snapshot of
 its cache without replay. Require an `applied` marker for the matching
 source version; an owner still initializing an uncached session means
@@ -1220,7 +1238,7 @@ then processes one complete JSON object per input line:
 ```
 
 Initial success is `{"ready":true,"session":"...","run":"..."}`,
-with a `warnings` list when source changes or recovery need reporting.
+with a `warnings` list for source changes or ignored interrupted appends.
 Opening failure is `{"ready":false,"error":{...}}` followed by nonzero exit.
 An execution response is:
 
@@ -1257,10 +1275,12 @@ warnings in the file form's JSON result and human diagnostics too.
 ### Agent orientation
 
 Setup returns `documentation`, dataset summaries, and session summaries
-including ID/source compatibility and recovery diagnostics. It never starts
-a kernel. Fields are included in dataset orientation; sessions report
-history counts, last activity, source changes, and orphan tags. Unavailable
-generated-ID history is identified without inventing an empty analysis.
+including ID/source compatibility and interrupted-append warnings. It never
+starts a kernel. Fields are included in dataset orientation; valid sessions
+report history counts, last activity, source changes, and orphan tags.
+Report a session with invalid history or incompatible source as unavailable
+with its error, without inventing an empty analysis or treating partial or
+stale counts as current. The rest of the orientation remains usable.
 
 Retain the structured CLI invocation metadata alongside `documentation`,
 `datasets`, and `sessions` in setup's JSON result (shown with a compact
@@ -1331,7 +1351,8 @@ Organize tests around these observable contracts:
 | --- | --- |
 | Project identity | Safe names and paths, exact text preservation, ID resolution, source-version changes, source edited during import, non-destructive metadata publication |
 | Session scope | Stable-ID additions/edits/reorders and ID-column renames continue in the same session; deleted IDs count as final orphans and restored IDs recover tags; explicit preservation of generated IDs permits later edits; automatic positional reassignment fails; source/tag name conflicts are reported |
-| Replay | Continuation on a clock behind imported history, deterministic concurrent ties, forked history, malformed records with valid later cells, interrupted headers/tails, persistent recovery diagnostics, failed/ignored-record digests |
+| Replay | Continuation on a clock behind imported history, deterministic concurrent ties, valid forked history, rejection of any invalid complete record even with valid later cells, bad headers/numbering/duplicate identities, interrupted headers/tails including partial UTF-8, cached tail warnings, failed-cell/empty-file/tail digests |
+| Invalid history isolation | No partial materialization, new applied marker, or stale-cache fallback after validation failure; affected open/export/fork fail without changing original files; setup/listing, source rebuilds, source-only operations, and other sessions remain usable |
 | Durable completion | Child death before/after result, log append/fsync uncertainty, cache failure after log sync, host death before reply; never execute code twice |
 | Private state | Read-your-writes, disk-backed tag working tables with bounded memory, newly created fields, failed-cell rollback of tags/FTS/derived search state, variables/functions/classes retained on normal failure |
 | Concurrency | Two kernels read then tag without a shared snapshot upgrade; embedding waits coexist with another session's commit; exports see committed state |
@@ -1339,7 +1360,7 @@ Organize tests around these observable contracts:
 | Search | Isolated field/session BM25, absence/empty/nonmatch, phrase handling, equivalent warm/cold and bounded-batch scores, repeated-query reuse, precise invalidation after writes/rollback, cache eviction without changed answers |
 | Embeddings | Full-value requests, Ollama truncation disabled, input ordering, finite packed vectors, dimension races, revision separation, bounded retries |
 | Shared warming | Disjoint/balanced shard coverage, row-order-independent assignment, mixed shard-count composition, complete reused/new output, atomic publication, GitHub part sizes, cold-clone use of partial merged packs, whole-pack validation before batched ingestion, interrupted ingestion without a completion receipt, changed-file invalidation, duplicate keys, address independence and revision separation |
-| Runtime and CLI | Ready/stream/reset and setup invocation metadata, bounded output, CPU/wall/RSS failure including caught interrupts, parent/child cleanup, JSONL purity, recovery warnings, safe project-relative exports, exit status, actual harness variable persistence |
+| Runtime and CLI | Ready/stream/reset and setup invocation metadata, bounded output, CPU/wall/RSS failure including caught interrupts, parent/child cleanup, JSONL purity, interrupted-append warnings and session validation errors, safe project-relative exports, exit status, actual harness variable persistence |
 
 Run examples from the corrected agent document against a fixture that
 supplies their assumed fields and values. Check an explicit public namespace.
@@ -1366,12 +1387,12 @@ standard regression tests for the behavior corrected. Add further indexes
 or planner machinery only for an identified bottleneck.
 
 The initial Core is complete when an agent can import, inspect, search,
-annotate, recover, export, share warming work, and continue a session from
-its text project, including source edits with stable IDs. This includes
-the original workflows; build order does not make later slices optional.
-Automatic identity remapping, a worker coordinator, distributed conflict
-resolution tools, a daemon, extra backend/provider frameworks, and Hosted
-policy remain outside Core.
+annotate, recover from interrupted appends, export, share warming work, and
+continue a session from its text project, including source edits with stable
+IDs. Build order does not make later slices optional. Automatic salvage of
+invalid complete log records, identity remapping, a worker coordinator,
+distributed conflict resolution tools, a daemon, extra backend/provider
+frameworks, and Hosted policy remain outside Core.
 
 ## 10. Documentation alignment to do later
 
@@ -1381,9 +1402,9 @@ remove the temporary precedence notice at the top of this guide.
 
 | Owner | Required alignment |
 | --- | --- |
-| `docs/api.md` | Lead with orientation and the four verbs. Show same-stream variable/function/class reuse, ordinary Python identity versus symbolic absence, nested expressions, values into Python and tag back out, and live Entry reads. Correct tag-all, predicate methods, grouping, Random, stable-ID continuity, stored-field/full-value search, first-search cost and score reuse, and error/restart examples. Keep internal caches and module design out of this agent manual. |
-| `docs/storage.md` | Stable-ID re-import and orphan recovery; per-run provenance; host-owned logically ordered logs; visible best-effort replay; atomic cache summaries and durability; private working tables; per-field FTS; vector identity, shared packs, local ingestion receipts and bounded scoring; local locks and project-relative exports |
-| `docs/kernel.md` | Persistent ordinary module namespace with no identity-syntax ban; read-only source plus private TEMP transactions; host durability; minimal control exchange; recovery, RSS and bounded output; CLI-only Core and setup metadata; deferred pack ingestion; module ownership and ordinary NumPy installation |
+| `docs/api.md` | Lead with orientation and the four verbs. Show same-stream variable/function/class reuse, ordinary Python identity versus symbolic absence, nested expressions, values into Python and tag back out, and live Entry reads. Correct tag-all, predicate methods, grouping, Random, stable-ID continuity, stored-field/full-value search, first-search cost and score reuse, and error/restart examples. Explain interrupted-append warnings and invalid-history opening errors. Keep internal caches and module design out of this agent manual. |
+| `docs/storage.md` | Stable-ID re-import and orphan recovery; per-run provenance; host-owned logically ordered logs; strict complete-record validation and interrupted-tail recovery; isolation of invalid sessions; atomic cache summaries and durability; private working tables; per-field FTS; vector identity, shared packs, local ingestion receipts and bounded scoring; local locks and project-relative exports |
+| `docs/kernel.md` | Persistent ordinary module namespace with no identity-syntax ban; read-only source plus private TEMP transactions; host durability; minimal control exchange; interrupted-append warnings and session validation errors; recovery, RSS and bounded output; CLI-only Core and setup metadata; deferred pack ingestion; module ownership and ordinary NumPy installation |
 | `README.md` | Execute and publish section 8's first-run recipe against the usable rebuild revision; distinguish installing Quail from cloning a study; show the actual harness keeping one stream, optional semantic setup, GitHub shard sharing, and stable-ID updates; accurately state implementation status |
 | `AGENTS.md` | Correct document ownership and dependencies (`google-re2`, NumPy, no Core MCP); host-only provider calls; self-contained prelude without replay; preserve analysis capabilities while keeping extension through ordinary Python and the core verbs |
 
