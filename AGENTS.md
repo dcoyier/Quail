@@ -1,49 +1,80 @@
-# Quail v0.11
+# Quail core
 
-- Run, connect, and agent cold-start: `README.md`. Language: `docs/api.md`.
-- Core semantics: `docs/core.md`. Prefer making a mistake unrepresentable over
-  naming it — a new bespoke rejection message or doc caveat is a last resort.
-- Change routing: `docs/development.md`.
-- Connector author surface: `docs/connector-sdk.md`.
-- Move slowly: one coherent step at a time.
-- CLI must never write the operator TOML.
+This branch is a from-scratch rebuild. Read `README.md` first, then the
+document that owns your change.
 
-## Non-goals (still out)
+## Documents
 
-- Operator console; validate/doctor/plan/apply ceremony
-- Invitations / identity linking / live admin user APIs
-- Search infrastructure extras (ANN, lexical workers/artifact roots)
-- Hosting flourishes (ngrok as product; `public_base_url` remains)
-- Connector events host API (file GET routes are in; pub/sub is not)
+| Change | Owner |
+| --- | --- |
+| What the agent can write in a cell, what it gets back, how it runs cells | `docs/api.md` |
+| Everything else observable: project format, logs and replay, SQLite, language semantics, search, confinement, CLI, build order, tests | `IMPLEMENTATION_GUIDE.md` |
+| Earlier design notes on storage and the kernel | `docs/storage.md`, `docs/kernel.md`. They are being folded into the guide; where they disagree with it, the guide is right (guide section 10). |
 
-## Module layout (`.py` + `.txt`)
+`api.md` says what happens; the guide says how, and what the code must do.
+When they disagree, fix both in the same change. `api.md` is packaged as
+`quail/data/api.md` and returned to agents verbatim by `quail setup`, so
+every sentence in it costs context: keep it short and keep it true. Do not
+add a second agent manual.
 
-For a Python module `name`, use a folder pair — not a lone `.py` at the package root:
+## Design rules
 
-```
-quail/.../name/
-  __init__.py    # thin re-exports so `from quail....name import X` still works
-  name.py        # implementation
-  name.txt       # natural-language pseudocode mirror of name.py
-```
+- Each open kernel sees one source snapshot. Stable `id`s carry a session
+  across source edits; generated ids belong to one source version.
+- Tags are the only analysis state; Python variables are working memory. A
+  failed cell rolls back its tags and keeps its variables and output.
+- The log decides what committed. A cell is acknowledged only after its
+  record is fsynced to the run log; SQLite caches history and never competes
+  with it.
+- A cell writes only private working tables. Arbitrary Python and embedding
+  waits never hold a writer transaction on the shared index.
+- Caches do not define answers. Rebuilding the index, warming first, or
+  another session's work must not change what a query means.
+- The sandbox is subtractive: remove the network and the file system, keep
+  ordinary Python. No allow-list of modules or syntax, and no ban on `is`.
+- Ordinary Python is the extension mechanism. New capability comes from the
+  four verbs composing with user code, not from new Quail abstractions,
+  callbacks, or registries.
+- Core never runs git, never calls a language model, and contacts no remote
+  except the host's embedding provider calls. Who is calling and where a
+  server is reachable from are hosted's concern; core exposes
+  `open_session(..., spawn=, embed_fn=)`, not policy.
+- Prefer making a mistake unrepresentable over naming it. A new caveat or
+  bespoke error message is the last resort.
+- Move one coherent step at a time.
 
-Package `__init__.py` may also have a sibling `__init__.txt`. Review an existing pair (for example `quail/analysis/entry/`) before writing a new one.
+## Layout
 
-**1:1 twin rule:** whenever a `.py` has a paired `.txt`, keep them in lockstep. Any behavior, symbol, param, validation, or stub change in the `.py` must be reflected in the `.txt` in the same change (and the reverse if you edit the `.txt` first). Do not land a diff that updates only one side of a twin pair.
+Plain modules under `quail/`, one file per responsibility, no mirror files:
 
-Tests under `tests/` do **not** use this layout: plain `.py` test files only — no per-test folders and no `.txt` mirrors.
+| Module | Owns |
+| --- | --- |
+| `project.py` | Manifest, paths, metadata, locks, run-log writing and parsing, replay |
+| `index.py` | CSV import, source indexes, materialized tags, vectors, warm packs, cache sync |
+| `embed.py` | Provider HTTP only: the two dialects, timeouts, retries, response validation |
+| `prelude.py` | Expressions, SQL compiler, verbs, private tag tables, scoring, cell execution, confinement |
+| `kernel.py` | Child lifetime, control exchange, limits, durable cell completion, cached embeddings |
+| `service.py` | Project operations, the one dataset-open path, `open_session`, export, warming |
+| `cli.py` | Argument parsing, the foreground stream, presentation, exit status |
 
-### `.txt` style
+`prelude.py` is self-contained: it imports nothing else from the package,
+parses no manifest or log, performs no provider HTTP, writes no durable
+file, and contains no replay. The child starts as `python -m quail.prelude`;
+importing `quail` must not load the host graph. Provider credentials and
+HTTP stay in the host.
 
-Mirror the `.py` in reading order. Write imperative prose, not Python and not architecture essays.
+## Conventions
 
-Typical voice:
-
-- **Constants / secrets:** “There is…” / “There is a private secret called…”
-- **Types:** “X is…” (one or two sentences of purpose)
-- **Fields:** “X remembers:” then an indented name list (defaults noted inline)
-- **Construction:** “To create X …:” then indented “Require…” / “Then remember…”
-- **Methods / helpers:** a bare `name:` or `_name:` heading, then “Give back…”, “Raise…”, “If …, raise…”
-- **Not-yet-wired:** “Meant to… Not wired yet, so raise…”
-
-Keep sentences short. Prefer “give back”, “remember”, “require”, “raise” over implementation jargon. Name real symbols (`Field`, `QuailSyntaxError`, `_ENTRY_TOKEN`) when the code does. Do not dump “where this file sits” narratives into either the `.txt` or long module docstrings — short one-liners in the `.py` are enough; depth belongs in the `.txt` and in `docs/`.
+- Python 3.12+ on Linux and macOS. Dependencies: `google-re2` and `numpy`,
+  both required; the standard library for everything else, including SQLite
+  with FTS5 and HTTP. No MCP dependency in core.
+- PEP 621 with Hatchling, a committed `uv.lock`, and
+  `quail = "quail.cli:main"`. pytest, Ruff, and mypy for development.
+- Tests are plain files under `tests/` using temporary projects and real
+  SQLite; mock only the provider boundary. Organize them by the contracts in
+  guide section 9. One test asserts the explicit public namespace of
+  `prelude.py`; do not parse `api.md` for names.
+- Benchmarks, generated corpora, and profiling output stay out of the
+  repository.
+- Build in the guide's slice order. Every slice ships through the real
+  host/child boundary and the durable log.

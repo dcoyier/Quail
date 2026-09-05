@@ -1,7 +1,0 @@
-OllamaEmbedder POSTs to {base_url}/api/embed with model, input texts, and dimensions.
-
-embed_texts(texts):
-  Give back one float vector per input text.
-  HTTP, JSON, vector-shape, and dimension checks come from the shared
-  providers wire helpers (post_json, require_vector); all raise ProviderError.
-  Raise ProviderError when the response size does not match the request.
