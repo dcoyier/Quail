@@ -4,12 +4,12 @@ This is the implementation contract for the Quail core rebuild. Its goal is
 a small environment in which an agent can inspect a corpus, write annotations,
 and continue that work on another machine.
 
-This revision deliberately changes only this guide. The documents under
-`docs/` and the repository orientation files still describe parts of the
-earlier design. Where this guide specifies different behavior, follow this
-guide for the rebuild. Section 10 lists the changes to move into their owning
-documents later. This is a temporary documentation transition: the shipped
-agent document must agree with the implemented language.
+`docs/api.md`, `README.md`, and `AGENTS.md` agree with this guide.
+`docs/storage.md` and `docs/kernel.md` still describe parts of the earlier
+design; where this guide specifies different behavior, follow this guide.
+Section 10 lists what remains to move into those two documents. The shipped
+agent document must agree with the implemented language: when the code
+settles a behavior differently, change `docs/api.md` in the same commit.
 
 The guide fixes observable behavior and ownership. It does not prescribe
 the order of function definitions, a class for every concept, or a final
@@ -695,7 +695,8 @@ with only the documented `re.I`, `re.M`, and `re.S` flags.
 
 - `where` is None or a Predicate; `rank` is a number expression or None.
 - `retrieve` defaults to 10. Limit and offset are nonnegative integers
-  excluding bool. Clamp only retrieve's limit to `max_limit` and report it.
+  excluding bool. Clamp only retrieve's limit to `max_limit` and say so in
+  the cell output, the same way truncation is noted.
 - `values` retains None and accepts an uncapped nonnegative limit or None.
   It remains subject to the kernel memory limit. Statistics examples must
   filter absence explicitly.
@@ -1194,11 +1195,15 @@ After the ready record, send these two lines to that same foreground process:
 The first result is `1`; the second uses the saved predicate and commits one
 tag. Close stdin when finished, then run `quail export first-pass`. For an
 agent harness, retain its process handle and send subsequent lines through
-that handle. Setup supplies an absolute invocation prefix for subsequent
-shell calls, which may not retain this shell's virtual-environment activation.
-Do not launch a fresh shell command for every cell and imply
-that its Python variables survived. File execution is the convenient path
-for a complete saved analysis script; the stream is the iterative path.
+that handle. A harness that can only run one shell command at a time can
+hold the stream in a terminal multiplexer such as tmux, redirect its stdout
+to a file, and send lines to that pane; this needs nothing from Core beyond
+line-buffered stdin. Setup supplies an absolute invocation prefix for
+subsequent shell calls, which may not retain this shell's
+virtual-environment activation. Do not launch a fresh shell command for
+every cell and imply that its Python variables survived. File execution is
+the convenient path for a complete saved analysis script; the stream is the
+iterative path.
 
 Once Quail is installed, continuing a cloned **study repository** needs only
 `quail setup --json` and `quail exec EXISTING_SESSION --stream` from that
@@ -1300,14 +1305,14 @@ console script. An agent following setup must launch the same installation
 from a new shell without activating a venv, guessing a PATH entry, or
 rediscovering the checkout. This is command metadata, not another interface.
 
-Package the corrected canonical `docs/api.md` as `quail/data/api.md`
-using Hatch's build inclusion. Load packaged data with a repository-tree
-fallback for development, never from the caller's working directory.
-Return that text exactly. The document will explain the local stream and
-the language; Hosted may supply its own invocation wrapper later.
-Do not maintain a second agent manual or ship the old semantics with a
-runtime override banner. Reconcile the document before exposing the
-completed CLI to agents.
+Package the canonical `docs/api.md` as `quail/data/api.md` using Hatch's
+build inclusion. Load packaged data with a repository-tree fallback for
+development, never from the caller's working directory. Return that text
+exactly. The document explains the local stream and the language; Hosted
+may supply its own invocation wrapper later. Do not maintain a second agent
+manual or ship stale semantics with a runtime override banner. Run the
+document's examples in the test suite (section 9) so it cannot drift from
+the completed CLI.
 
 ## 9. Build and verification
 
@@ -1396,17 +1401,19 @@ frameworks, and Hosted policy remain outside Core.
 
 ## 10. Documentation alignment to do later
 
-This editing step leaves other files untouched. Before publishing the
-rebuild, move the settled behavior into the documents that own it and
-remove the temporary precedence notice at the top of this guide.
+`docs/api.md`, `README.md`, and `AGENTS.md` are aligned with this guide.
+`docs/storage.md` and `docs/kernel.md` are the remaining owners that lag;
+both carry a superseded notice pointing here. Before publishing the
+rebuild, either move the settled behavior below into them or retire them
+into this guide, then remove the precedence notice at the top. Two more
+items wait on running code: the README must publish section 8's first-run
+recipe against the usable revision, and the agent document's examples must
+run in the test suite.
 
 | Owner | Required alignment |
 | --- | --- |
-| `docs/api.md` | Lead with orientation and the four verbs. Show same-stream variable/function/class reuse, ordinary Python identity versus symbolic absence, nested expressions, values into Python and tag back out, and live Entry reads. Correct tag-all, predicate methods, grouping, Random, stable-ID continuity, stored-field/full-value search, first-search cost and score reuse, and error/restart examples. Explain interrupted-append warnings and invalid-history opening errors. Keep internal caches and module design out of this agent manual. |
-| `docs/storage.md` | Stable-ID re-import and orphan recovery; per-run provenance; host-owned logically ordered logs; strict complete-record validation and interrupted-tail recovery; isolation of invalid sessions; atomic cache summaries and durability; private working tables; per-field FTS; vector identity, shared packs, local ingestion receipts and bounded scoring; local locks and project-relative exports |
+| `docs/storage.md` | Stable-ID re-import and orphan recovery; per-run provenance; host-owned logically ordered logs; strict complete-record validation and interrupted-tail recovery; isolation of invalid sessions; atomic cache summaries and durability; private working tables; per-field FTS; vector identity, shared packs, local ingestion receipts and bounded scoring; locks under `.quail/locks/` and project-relative exports |
 | `docs/kernel.md` | Persistent ordinary module namespace with no identity-syntax ban; read-only source plus private TEMP transactions; host durability; minimal control exchange; interrupted-append warnings and session validation errors; recovery, RSS and bounded output; CLI-only Core and setup metadata; deferred pack ingestion; module ownership and ordinary NumPy installation |
-| `README.md` | Execute and publish section 8's first-run recipe against the usable rebuild revision; distinguish installing Quail from cloning a study; show the actual harness keeping one stream, optional semantic setup, GitHub shard sharing, and stable-ID updates; accurately state implementation status |
-| `AGENTS.md` | Correct document ownership and dependencies (`google-re2`, NumPy, no Core MCP); host-only provider calls; self-contained prelude without replay; preserve analysis capabilities while keeping extension through ordinary Python and the core verbs |
 
 When those owners agree, this guide should explain how to build their
 contract, not accumulate another series of overrides.
