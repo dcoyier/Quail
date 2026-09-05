@@ -1345,26 +1345,25 @@ Run examples from the corrected agent document against a fixture that
 supplies their assumed fields and values. Check an explicit public namespace.
 Do not parse every inline code span as a required exported name.
 
-Keep a small repeatable performance fixture: for example, 50,000 short text
-rows, a source category, sparse and dense tags, and deterministic 768-dimensional
-vectors supplied by a fake provider. Separately measure import/cold open,
-unchanged open, full-field count, grouped count, retrieved-entry display,
-lexical search, first/repeated/new-query semantic search, bulk expression tags,
-and a Python annotation loop. Report elapsed time, peak RSS, SQL statement
-counts, provider calls, and scored rows; distinguish embedding latency from
-local execution. Include a corpus exceeding the matrix-cache budget and two
-simultaneous kernels, so matrix retention or numerical-library threading
-cannot hide a memory or concurrency problem.
+Keep standard regression tests in the repository, using small temporary
+fixtures. Cover avoidable repeated work: unchanged search chains within the
+cache budget reuse embeddings and scores; displaying entries does not query
+per displayed value; bulk tags do not SELECT per entry; unchanged history
+does not replay; known packs do not decode again. Use test-side counters
+where useful, checking reuse and scaling behavior rather than fixing an exact
+SQL statement count or a machine-specific latency threshold.
 
-Use deterministic work-count checks in tests: unchanged search chains within
-the cache budget must not re-embed or re-score; ordinary display must not
-query per cell; bulk tags must not SELECT per entry; unchanged history must
-not replay; known packs
-must not be decoded again. Record timings on a named reference machine as a
-development regression baseline, rather than flaky universal latency gates.
-If local work consumes a material share of an ordinary agent iteration,
-fix the measured path before declaring the rebuild complete. Add further
-indexes or planner machinery only for an identified bottleneck.
+Performance benchmarking is ephemeral development work outside the checkout.
+Use temporary scripts and generated data when needed to investigate startup,
+search, annotation loops, memory use, or concurrent execution, distinguishing
+provider latency from local work. Keep benchmark scripts, benchmark-specific
+data generators, generated benchmark corpora and vectors, profiling output,
+and timing baselines out of the repository and package. They are not part of
+what an agent downloads or the committed CI configuration.
+
+Use those measurements to fix execution bottlenecks and retain appropriate
+standard regression tests for the behavior corrected. Add further indexes
+or planner machinery only for an identified bottleneck.
 
 The initial Core is complete when an agent can import, inspect, search,
 annotate, recover, export, share warming work, and continue a session from
