@@ -338,7 +338,8 @@ threshold; choose one by reading results. Blank and empty cells score
 truncation; when passages matter, prepare long texts into shorter rows
 before import.
 
-`query` is text. For "more like this", pass a cell: `semantic(e["body"])`.
+`query` is text. For "more like this", pass a cell:
+`Field("body").semantic(e["body"])`.
 
 The first semantic search on a field embeds every distinct value of that
 field once. On a large dataset that can take minutes; progress is reported
