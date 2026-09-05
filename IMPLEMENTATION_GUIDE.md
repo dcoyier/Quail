@@ -1,652 +1,851 @@
 # Implementation guide
 
-This guide maps the Quail specification onto code. It defines ownership,
-dependency direction, build order, and the seams that must remain stable
-while the implementation is built.
+This is the implementation contract for the Quail core rebuild. Its goal is
+a small environment in which an agent can inspect a corpus, write annotations,
+and continue that work on another machine.
 
-The documents under `docs/` define the base design:
+This revision deliberately changes only this guide. The documents under
+`docs/` and the repository orientation files still describe parts of the
+earlier design. Where this guide specifies different behavior, follow this
+guide for the rebuild. Section 10 lists the changes to move into their owning
+documents later. This is a temporary documentation transition: the shipped
+agent document must agree with the implemented language.
 
-- `docs/api.md` owns agent-visible behavior.
-- `docs/storage.md` owns durable files, the derived index, replay, and
-  expression-to-SQL semantics.
-- `docs/kernel.md` owns process behavior, limits, the CLI, and Hosted
-  seams.
+The guide fixes observable behavior and ownership. It does not prescribe
+the order of function definitions, a class for every concept, or a final
+file count. Use ordinary modules and small records. Add machinery only when
+a concrete behavior needs it. Simplicity comes from shared paths and clear
+ownership; it is not permission to remove supported workflows.
 
-This guide contains binding implementation decisions where those documents
-conflict, leave behavior open, or predate an approved direction. Those
-decisions are collected in section 8 and override only the behavior they name.
-Everywhere else, the owning document remains authoritative. Do not extend an
-override by analogy or hide another choice in code.
+## 1. The design
 
-Two approved directions account for most of the differences:
+An external agent drives one foreground CLI host. That host owns one Python
+kernel for the lifetime of an execution stream. The kernel evaluates the
+analysis language; the host owns durable files and embedding requests.
 
-- Semantic indexing embeds each complete field value once. It does not split
-  values into passages.
-- Core has one local user-facing interface: the `quail` CLI. A foreground
-  streaming `quail exec` process holds the persistent kernel. MCP belongs to
-  the future Hosted repository.
+Five rules carry the design:
 
-The implementation should be small because the boundaries are strong, not
-because behavior is duplicated or deferred.
+1. **Each open kernel sees one source snapshot.** Stable entry IDs let a
+   session continue across source edits. Generated positional IDs belong
+   only to their source version and cannot silently move annotations.
+2. **Tags are durable analysis state.** Python variables are working memory.
+   A normal failed cell rolls back its tags and keeps its earlier assignments
+   and captured output. Restarting the kernel discards working memory.
+3. **The log decides what committed.** A host acknowledges a cell only after
+   its complete result and tag delta are synced to the session log. SQLite
+   caches that history; it does not compete with it as a source of truth.
+4. **A cell writes only private working tables.** Arbitrary Python and
+   embedding waits never hold a writer transaction on the shared index.
+5. **Caches do not define answers.** Rebuilding SQLite, warming first, or
+   working in another session must not change the meaning of a query.
 
-## 1. Shape
+Core provides the CLI, language, project format, and local runtime. Hosted
+may wrap these with authentication, MCP, and container placement. Core does
+not run an agent, call a language model, run Git, or manage remote workers.
 
-Quail has two processes and one durable project:
+The first implementation targets Python 3.12+ on Linux and macOS. Use the
+standard library, SQLite with FTS5, and `google-re2`. NumPy is an optional
+scoring accelerator. There is no Core MCP dependency.
 
-```mermaid
-flowchart TD
-    A["External agent"] --> B["quail CLI host"]
-    B --> C["Project files and derived index"]
-    B --> D["Session kernel (prelude.py)"]
-    D --> C
-```
+### Ownership
 
-The foreground CLI process may read project files and contact the configured
-embedding provider. For a streaming execution it owns one kernel for the
-life of the command. During privileged bootstrap the kernel opens its index
-and run log; it then loses filesystem and network access. Hosted imports the
-same Core operations and adds MCP, server lifecycle, and policy; it does not
-replace Core storage, language, or query semantics.
+Start with this layout; each row is a responsibility, not a framework.
 
-Four rules organize the implementation:
-
-1. **Text is truth.** The manifest, CSVs, and session logs are durable.
-   SQLite, FTS state, value mappings, and vectors are rebuildable.
-2. **The kernel owns semantics.** Expressions, predicates, verbs, SQL
-   compilation, and notebook-cell behavior exist only in `prelude.py`.
-3. **The host owns capabilities.** Paths, locks, spawning, and embedding HTTP
-   stay outside the kernel.
-4. **The CLI contains no product logic.** It translates arguments and stream
-   records into calls to transport-neutral Core operations.
-
-Core is an environment, not an agent harness. It does not call a model,
-spawn subagents, expose shell/file tools inside cells, run Git, or serve MCP.
-The Core runtime targets Linux and macOS, whose advisory locks and process
-signals the kernel contract already requires; do not add a Windows shim.
-
-## 2. Source layout and dependency direction
-
-Keep `quail/__init__.py` side-effect free. Python imports it before running
-`quail.prelude` as a module; eager host-side re-exports there would pull the
-host dependency graph into kernel startup.
-
-| Module | Owns | May depend on | Must not contain |
-| --- | --- | --- | --- |
-| `project.py` | Manifest, paths, session metadata, log parsing, replay map, session/dataset locks | Standard library | SQLite, HTTP, CLI, expression logic |
-| `index.py` | CSV import/rebuild, SQLite schema, FTS build, warm-pack ingestion | `project.py`, SQLite | Provider HTTP, kernel lifecycle, CLI |
-| `embed.py` | Provider configuration, batching, retries, embedding request | `project.py`, HTTP client | Text segmentation, SQLite writes, CLI |
-| `prelude.py` | Kernel bootstrap, language, compiler, verbs, replay application, cell loop, confinement | Standard library, RE2, optional NumPy | Any `quail.*` import, HTTP, CLI, CSV import |
-| `kernel.py` | Session subprocess, control protocol, timers, memory monitor, restart, embedding forwarding | `project.py`, `embed.py`, standard library | SQL or language implementation |
-| `service.py` | Transport-neutral Core operations and warm orchestration | `project.py`, `index.py`, `embed.py`, `kernel.py` | Argparse, process-global kernels, expression internals |
-| `cli.py` | Command parsing, presentation, and the foreground exec stream | `project.py`, `service.py`, `kernel.py` | SQL, provider wire formats, in-process evaluation of agent code |
-
-`prelude.py` is deliberately self-contained. Organize it into ordinary
-private classes and functions, but do not split runtime behavior into modules
-that the confined process must import. Log replay ordering is duplicated
-between host and prelude; check both implementations against the same fixtures
-so they cannot drift.
-
-## 3. Build in vertical slices
-
-Each step should leave a tested, coherent capability. Do not create empty
-facades for later steps and do not implement a temporary second engine.
-
-| Step | Deliverable | Proof |
+| Module | Owns | Dependencies within Core |
 | --- | --- | --- |
-| 1 | Packaging, inert `__init__.py`, project manifest and errors | A project loads and invalid input fails clearly |
-| 2 | Sessions, log parser, replay map, fork, and locks | Logs deterministically recover final tag values |
-| 3 | CSV import and complete disposable SQLite index | Deleting the index and reopening reproduces it |
-| 4 | Prelude language, compiler, and verbs without semantic search | API examples execute against the real index |
-| 5 | Cell loop, tag transaction, logging, and confinement | A successful or failed cell has exactly the documented effects |
-| 6 | Host kernel lifecycle and embedding control path | A process can run, time out, restart, and request embeddings |
-| 7 | Semantic search and local warming | First use embeds; later use reuses vectors |
-| 8 | Shareable warm shards | Independent workers produce mergeable vector packs |
-| 9 | Core operations and the CLI | One-shot commands and a persistent exec stream exercise the same implementation |
+| `project.py` | Project configuration, paths, metadata, locks, run-log writing and parsing, replay | None |
+| `index.py` | CSV import, source indexes, materialized tags, vector storage, warm-pack validation and ingestion, cache synchronization | `project.py` |
+| `embed.py` | The two embedding HTTP dialects, timeouts, retries, response validation | `project.py` |
+| `prelude.py` | Expression nodes, SQL compiler, verbs, private tag tables, scoring, cell execution, confinement | None |
+| `kernel.py` | Child lifetime, control exchange, limits, durable cell completion, cached embedding requests | `project.py`, `index.py`, `embed.py` |
+| `service.py` | Project operations, the shared dataset-open path, session opening, export, local and shared warming | Host modules above |
+| `cli.py` | Argument parsing, the foreground stream, presentation, exit status | `service.py` and returned kernels |
 
-Lexical search belongs in the index/compiler slices: FTS is built during CSV
-import. Semantic search belongs after the host/kernel embedding channel
-exists.
+Keep `quail/__init__.py` inert. The child starts with
+`[sys.executable, "-m", "quail.prelude"]`; importing the package must not
+load the host graph.
 
-## 4. Cross-cutting flows
+`prelude.py` is self-contained so that Hosted can place it in a confined
+process. It does not parse manifests or logs, perform provider HTTP, or
+write durable files. Replay has one implementation, in `project.py`.
+The host initializes the child's working tags from the synchronized index.
 
-### Opening data and a session
+SQL belongs in `index.py` for host operations and `prelude.py` for
+language execution. Transport code calls those operations; it does not
+reimplement their queries. A few small wire/error records may exist on both
+sides of the process boundary and must share contract fixtures.
 
-Every host operation that needs derived data uses one dataset path:
+## 2. Projects and source versions
 
-1. Load and validate the project and dataset.
-2. Under a shared dataset lock, check that the index exists and matches the
-   source and import configuration.
-3. If it is stale, release the shared lock, acquire the lock exclusively, and
-   check again before rebuilding. If another process holds the lock, fail
-   clearly instead of replacing a live index.
-4. Once the index is current, hold or reacquire a shared lock for the rest of
-   the operation and ingest compatible shareable warm packs.
+The durable project remains ordinary text:
 
-Opening a live session continues from there:
+- `quail.toml`: project, dataset, provider, and limit configuration.
+- Dataset CSVs at their registered paths.
+- `sessions/<name>/session.toml` and `sessions/<name>/log/*.jsonl`.
+- Optional CSV exports beneath `exports/`.
 
-1. Resolve, create, or fork the session.
-2. Acquire its lock.
-3. Synchronize its log into the index when its digest differs from `applied`.
-4. Spawn the kernel while retaining the shared dataset lock and session lock.
+Optional `warm/` packs carry derived embedding vectors between machines.
+They may travel with the project through Git, but are not analysis truth;
+missing packs never prevent opening or analyzing the source.
 
-`service.py` owns both sequences. Setup and warm stop after the dataset work
-they need. Fields and export synchronize a closed session before reading it;
-when its kernel is already open, they read one committed WAL snapshot without
-replay. `open_session` performs the full sequence. The CLI and future Hosted
-never reproduce either sequence.
+`.quail/` holds disposable SQLite files and local locks and is gitignored.
+Remove it only when Quail processes using the project are closed. Core never
+commits, pulls, or pushes anything.
 
-Build a replacement index in a temporary path and publish it only after the
-build succeeds. Re-import reapplies every session's replay map and records
-the corresponding digest, so the next kernel open does not redo the same
-work. The index builder never calls the embedding provider.
+Dataset and session names are non-empty single path segments; reject `.`,
+`..`, separators, and NUL instead of rewriting them. Resolve project paths
+against the manifest root and keep managed paths inside it. Source CSVs
+cannot occupy the manifest, ignore file, or the managed `.quail/`,
+`sessions/`, and `warm/` directories. Validate resolved paths before
+creating files.
 
-### Replay
+### Manifest and commands that create files
 
-`project.py` owns the pure operation:
-
-```text
-session log files → ordered successful writes → final (entry, field) values
-```
-
-`index.py` uses it after a CSV rebuild. `prelude.py` implements the same
-specified ordering when an existing index is behind a pulled log. Both use
-the same fixture corpus and expected replay result.
-
-Malformed JSON or a cell record that fails schema validation is ignored as a
-whole and reported; replay never partially applies a record. Entry IDs—not
-SQLite rowids—cross the durable boundary. Resolve the final replay map by ID,
-skip IDs absent from the current source, and count one orphan for each final
-non-`null` `(entry_id, field)` pair. A final clear is not an orphan. Missing
-IDs do not prevent synchronization or advancement of `applied`.
-
-Use one deterministic digest algorithm in both processes. For each log file,
-compute the SHA-256 of its exact bytes. Sort `[project-relative POSIX path,
-hex digest]` pairs by path, encode that list as compact UTF-8 JSON, and hash
-those bytes once more. Prefix the result with `sha256:`. The kernel can update
-the digest of its current run incrementally instead of re-reading the full
-history after every cell. The session digest is a cache marker, not
-user-visible history.
-
-### A cell
-
-Implement one cell in this order:
-
-1. Parse and validate the cell.
-2. Begin the tag transaction.
-3. Arm limits and capture output.
-4. Execute statements and display the final expression.
-5. Finalize and bound the output before constructing the cell record, so the
-   log and returned result contain the same output.
-6. On success, append and sync the record, update `applied` in the open tag
-   transaction, then commit both together.
-7. On failure, roll back tag state, keep ordinary Python assignments, append
-   and sync the failed-cell record, then advance `applied` in a small
-   tag-free transaction.
-8. Restore process state and return the result.
-
-The log is durable truth. SQLite must never contain a committed tag write
-that cannot be recovered from the log. Any optimization of this sequence
-must preserve that invariant.
-
-Tag changes made earlier in a cell are visible to later lines in that cell,
-including a newly created tag field. Rollback restores both values and the
-field catalog.
-
-### Errors
-
-Keep the boundary simple:
-
-- A cell syntax/runtime/Quail error is an `exec` result. Iterating on cells
-  is normal.
-- A project, session-lock, spawn, or protocol failure is a host
-  `QuailError`.
-- Both serialize as `{type, message, hint}`.
-- The CLI returns Core results without interpreting cell code. Hosted may map
-  the same results onto MCP later.
-
-### Confinement
-
-The kernel opens everything it needs before installing the audit hook and
-network isolation. The host passes only project/session identifiers, limits,
-and the control channel; the prelude opens the index and run log during
-bootstrap. Spawn it with a minimal environment that excludes provider keys
-and unrelated host secrets. Provider credentials remain in the host.
-
-The standard library promised by `docs/api.md` remains importable. The audit
-hook permits read-only access beneath the resolved standard-library roots and
-denies writes and every other path; the cell-facing `open` remains disabled.
-RE2 and optional NumPy are loaded before confinement. This narrow path
-exception is for Python's loaders, not a general filesystem API. Do not add
-import-state machinery, an AST allow-list, or a module allow-list.
-
-Confinement in Core prevents ordinary accidental access; it is not a
-multi-tenant security boundary. Hosted supplies the container or microVM.
-Do not add a Python-syntax allow-list.
-
-### Concurrency
-
-- One foreground exec stream owns one kernel and one session lock.
-- A stream accepts one request at a time, so its cells are naturally
-  serialized.
-- Different sessions run in different CLI/kernel process pairs with separate
-  connections to the same WAL database and shared locks on that dataset.
-- A second stream for an already-open session gets the ordinary session-lock
-  error; Core has no daemon in which to queue it.
-- Read-only fields and export operations may use the committed SQLite state of
-  that open session; they never inspect a half-finished tag transaction.
-- Index replacement requires the dataset lock exclusively. If the source
-  changes while any kernel for that dataset is open, the opener reports that
-  those kernels must be closed; it does not wait or restart them.
-- SQLite still has one writer; busy failures must become a clear, bounded
-  host or cell error rather than an unhandled SQLite exception.
-- Derived cache work may be repeated, but it must be idempotent.
-
-## 5. Module contracts
-
-### `quail/project.py`
-
-Expose one `Project(path)` seam and small value objects for validated
-dataset/session configuration.
-
-It must:
-
-- Resolve all project paths from the manifest root.
-- When the CLI supplies no explicit root, find the nearest `quail.toml` in
-  the current directory or one of its parents; fail if none exists.
-- Validate the manifest and provider secret references.
-- Validate dataset and session names as non-empty single path segments before
-  using them. Reject `.`, `..`, separators, and NUL; never rewrite a name.
-- Read and write `session.toml`.
-- Create/fork sessions without invoking Git. A fork destination is the new
-  session name and must not exist; lock the source while copying its log.
-- Parse run headers and cell records.
-- Produce session summaries for setup/CLI.
-- Produce the pure replay map and log digest.
-- Acquire/release advisory session and dataset locks.
-
-Project initialization completes the existing `quail init [DIR]` contract; it
-does not invent another setup workflow. Create `DIR` when absent, refuse to
-overwrite an existing `quail.toml`, and write exactly this initial manifest:
+Keep the manifest shape and kernel defaults from `docs/storage.md`, with
+one addition: an embedding configuration includes an explicit revision.
 
 ```toml
 [project]
 quail = "1"
+
+[datasets.notes]
+source = "data/notes.csv"
+id = "id"                         # optional; resolution is described below
+embed = "ollama/embeddinggemma"   # optional; selects dialect and model
+embed_revision = "study-model-v1"
+
+[providers.ollama]
+base_url = "http://127.0.0.1:11434"
 ```
 
-Ensure `sessions/` exists and add the documented ignore rules while preserving
-any existing `.gitignore`. Do not create a dataset or session, run Git, or
-create derived storage.
+An embedding revision is a non-empty operator designation for fixed model
+weights and embedding behavior. It is required when `embed` is configured;
+it is not inferred from a mutable model name. Section 6 defines its use.
+Without `embed`, lexical analysis works and semantic search gives a
+configuration error.
 
-It must not open SQLite or append cell records. Only the kernel that owns a
-run file appends to that file.
+Unknown keys fail clearly. Provider credentials are always `env:NAME`
+references, resolved by the host at request time. Never put literal secrets
+in the manifest, logs, or child environment.
 
-### `quail/index.py`
+`quail init [DIR]` creates the target when needed, refuses an existing
+manifest, writes only the minimal `[project]` table, ensures `sessions/`
+exists, and adds `.quail/` to the existing ignore file without replacing
+unrelated content. Lock directories may be created as needed; init creates
+no dataset, example data, or kernel.
 
-Expose an idempotent `ensure_index(project, dataset)` operation. It owns the
-schema in `docs/storage.md`, imports source cells as text, builds FTS, and
-rebuilds when the source hash or import configuration changes. It also exposes
-one `sync_session` operation for applying a closed session's log before a
-host-side read.
+`quail import CSV` registers a new dataset and builds its index. Resolve
+the CSV from the invoking working directory and require its resolved path
+to remain inside the project. Its default dataset name is the file stem.
+Do not copy or rewrite the CSV. Refuse an existing dataset name.
 
-Important implementation rules:
+Validate the complete CSV and prospective configuration before atomically
+appending one safely quoted dataset table to the manifest. Preserve other
+tables and comments. If indexing subsequently fails, the valid registration
+remains and the next open can build its cache. Use `tomllib`; no TOML writer
+dependency is needed for this one append operation.
 
-- Quote identifiers; bind values.
-- Enable WAL and set the busy timeout on every connection.
-- Define `source_hash` as `sha256:` plus the SHA-256 hex digest of the CSV's
-  exact bytes. Track the resolved import configuration separately when
-  deciding whether the index is current.
-- Expose exactly one canonical source field named `id`. The configured source
-  column supplies it and is not duplicated under a second name. When no
-  column is configured, a source column named exactly `id` supplies it;
-  otherwise synthesize IDs. The public name `id` is reserved: selecting a
-  differently named ID column while another source column is named `id` is an
-  import error. Other identifier-like columns remain ordinary fields. Build
-  FTS for every other source field.
-- Keep tag values as canonical JSON text and vectors as little-endian float32.
-- On rebuild, preserve compatible content-addressed vectors, reconstruct
-  source-value mappings, replay every session, and report orphan IDs.
-- Ingest compatible warm packs before a kernel is spawned.
-- Enumerate deterministic source-value work and read/write warm packs for
-  the host warming path.
-- Treat the entire file as disposable; schema-version mismatch rebuilds it
-  rather than migrating user truth.
+### CSV and identity
 
-For whole-value semantics, replace the specification's `chunks` table with
-exactly one mapping table:
+Read UTF-8 CSV with a header; accept a UTF-8 BOM. Preserve cell text exactly,
+including leading whitespace and numeric-looking strings. An empty cell is
+`None`. Do not infer types.
 
-```sql
-CREATE TABLE semantic_values (
-  session TEXT NOT NULL,
-  field TEXT NOT NULL,
-  entry INTEGER NOT NULL REFERENCES entries(rowid),
-  text_hash TEXT NOT NULL,
-  PRIMARY KEY (session, field, entry)
-);
-```
+Expose one canonical source field named `id`:
 
-There is no passage number or second mapping table. Source fields use the
-empty session name and tag fields use their owning session. Vector dimensions
-are validated per exact configured `embed` string from existing vector blob
-lengths, not stored as one mutable `meta.embed_dims` value. The `model` key in
-`vectors` stores that exact string. Provider wire shape and base URL route
-requests but are not part of the cache identity.
+- An explicitly selected ID column supplies it and is renamed to `id` in
+  the public schema, without a duplicate field.
+- Otherwise an exact `id` header supplies it.
+- Otherwise synthesize `row-000001`, `row-000002`, and so on in file order.
+  Report that these IDs are meaningful only within this source version.
 
-A tag write deletes the touched `semantic_values` rows; the next semantic
-read recreates their whole-value mappings and embeds only hashes not already
-in `vectors`.
+IDs must be non-empty and unique. A different selected ID column together
+with an existing `id` column is ambiguous and is rejected. Validate header
+emptiness, NUL, row width, duplicate public names under SQLite's identifier
+comparison, the internal `rowid` name, and the active SQLite column limit.
+Quote unusual valid names rather than rewriting them. Report source row or
+header locations for import failures.
 
-CSV validation should fail at import with the source row/header in the
-message. Reject empty headers, NUL in a header, names that collide under
-SQLite's case-insensitive lookup, an unselected name that collides with the
-canonical `id`, internal `rowid`, or FTS5's reserved `rank`, inconsistent row
-width, ID violations, and a field count beyond the active SQLite build's
-column limit before publishing an index. Quoted unusual headers are otherwise
-valid. Do not allow malformed input to become a later SQL error.
-
-### `quail/embed.py`
-
-Expose one batch operation:
-
-```python
-embed(project, dataset, texts) -> list[list[float]]
-```
-
-It resolves the configured provider, reads the referenced credential at call
-time, batches requests, retries only transient failures, and preserves input
-order. It validates that all values are finite and every returned vector has
-the same nonzero dimension and norm, then returns those vectors to the caller.
-Every HTTP attempt has a finite private timeout and the retry count is fixed;
-do not add provider tuning to `quail.toml` without an observed need.
-
-It does not segment text, hash values, write SQLite, or know about fields.
-Those are kernel/index concerns. Hosted may replace this call with its own
-provider callback.
-
-### `quail/prelude.py`
-
-This file is the kernel executable. Keep its internal sections in execution
-order:
-
-1. Wire/error/value types.
-2. Expression and predicate nodes.
-3. Pipeline produce checking.
-4. SQL compiler and registered SQLite functions.
-5. Entry and verbs.
-6. Lexical and semantic preparation/scoring.
-7. Replay application.
-8. Cell execution.
-9. Bootstrap and confinement.
-10. Control loop.
-
-Implement the method table and verb signatures from `docs/api.md`; implement
-SQL shapes and registered functions from `docs/storage.md`. Do not duplicate
-those tables in comments or invent parallel Python evaluation semantics.
-
-The user namespace contains exactly the documented public names and the
-documented pre-imported modules. The same names are available on the
-`quail` recovery object. A contract test uses one explicit expected namespace
-and checks those public names against `docs/api.md`; do not infer the set from
-every code span, which also contains transport and example names.
-
-The database connection, log handle, compiler context, and control channel
-are runtime internals. Core accepts that determined introspection can reach
-them; do not distort the design trying to make in-process Python a security
-boundary.
-
-### `quail/kernel.py`
-
-`Kernel(project, session, spawn=..., embed_fn=...)` owns:
-
-- The session lock and subprocess lifetime.
-- Startup arguments and ready handshake.
-- One-at-a-time cell execution.
-- Wall timeout, interruption, kill, and restart reporting.
-- The host side of embedding requests.
-- Clean shutdown and reset.
-
-The local spawn starts `[sys.executable, "-m", "quail.prelude"]`. Hosted may
-substitute a container/microVM spawn that speaks the same protocol.
-`kernel.py` never imports prelude as a library.
-
-The host watches resident memory rather than using `RLIMIT_AS`, which limits
-address space rather than actual memory. Exceeding `memory_mb` kills and
-restarts the kernel; CPU and wall budgets remain fresh per cell, while memory
-is a kernel-wide ceiling. Provider wait pauses the cell wall budget but remains
-bounded by the embedding client's own request timeout.
-
-Never rerun a cell after an unexpected kernel exit. Check the dead run's last
-complete record: if that cell was durably logged, restart, replay, and return
-the recorded result with `kernel_restarted`; otherwise return a kernel-failure
-result after restarting. The log-before-commit invariant makes these the only
-two outcomes.
-
-The caller owns the returned `Kernel`. Core has no active-kernel registry,
-daemon, socket, or background supervisor. The foreground streaming CLI owns
-one; future Hosted may own many. `Kernel.reset()` keeps the same session lock,
-dataset lock, and index, replaces only the subprocess, and starts a new run.
-It resets notebook working memory; it is not a dataset reopen.
-
-### `quail/service.py`
-
-This module is a set of transport-neutral host operations, not a service
-object. It provides project initialization/import, `setup`, `open_session`,
-session listing/forking, fields, export, and warm.
-
-`open_session` performs the shared dataset-open path, creates or forks the
-session when required, synchronizes its log, and returns one `Kernel`. Its
-caller is responsible for closing that kernel. Cell execution and reset are
-methods on the returned kernel because that is where the live state exists.
-
-An existing session rejects `fork_from`; `dataset`, when supplied, must match.
-A new session inherits the source dataset when forked, otherwise uses the
-requested dataset or the project's sole dataset. More than one possible
-dataset is an error. Setup lists named sessions but never allocates a session
-or opens a kernel.
-
-`warm(..., embed_fn=None)` asks `index.py` for source values, uses the supplied
-embedding callback or `embed.py` in batches, and gives the vectors back to
-`index.py` for validation, cache insertion, and optional pack writing. It does
-not start a session, execute a synthetic cell, or write a session log.
-
-Package `docs/api.md` as data and return that exact text from `setup`; never
-resolve it relative to the caller's working directory. This module contains
-orchestration only: no argparse, SQL, provider wire formats, or expression
-logic.
-
-### `quail/cli.py`
-
-The CLI is Core's only local user-facing interface. Its one-shot commands
-delegate to `service.py`; they do not implement project or query behavior.
-
-`quail exec SESSION --stream` is the notebook-shaped path. It opens one
-kernel and keeps it for the lifetime of the foreground command. Standard
-input and output use a minimal JSON-lines exchange:
+Define `source_hash` as SHA-256 of the exact CSV bytes, prefixed `sha256:`.
+Define `source_version` as the same hash of canonical JSON containing:
 
 ```json
-{"op":"exec","code":"x = 10"}
-{"op":"exec","code":"x + 1"}
-{"op":"reset"}
+{"import_format":1,"source_hash":"sha256:...","id_column":"id"}
 ```
 
-The command writes one ready record at startup and exactly one result record
-per request. Requests are sequential; there are no request IDs, concurrent
-cells, or multiplexing. Cell stdout and stderr stay inside the cell result,
-so the CLI's stdout remains valid JSONL. Human diagnostics go to stderr.
+`id_column` is the resolved original column name, or JSON null for generated
+IDs. Canonical JSON means UTF-8, sorted object keys, compact separators,
+unescaped Unicode, and no non-finite numbers. The descriptor uses effective
+import behavior, so explicitly selecting the already-selected `id` column
+changes nothing. Changing source bytes or the selected ID column creates
+a new version.
 
-`quail setup` presents the exact packaged agent document and the project
-summary returned by `service.py`. Because that base document still names the
-MCP calls that Hosted will expose, Core prefixes its human output with a short
-interface note. With `--json`, it adds this sibling of `documentation`,
-`datasets`, and `sessions`:
+Hash and import the same byte stream. Never record a hash of one read and
+publish rows from a different read. Detect a source edit during import and
+leave the previous index intact.
+
+### Sessions and source edits
+
+On creation, store `dataset`, the initial `source_version`, `created`, and
+the initial resolved `id_column` in `session.toml`. Omit `id_column` for
+generated IDs. `forked_from` and `description` remain optional. The dataset
+is immutable session scope; each run records the actual ID column and source
+version it analyzed.
+
+When the source supplies stable IDs, a changed CSV automatically rebuilds
+the index on the next open. Continue the same session and reapply its tags
+by canonical ID. New entries start untagged. Final non-null `(entry, field)`
+values whose IDs are absent from the current source remain in the logs and
+count as orphan tags; a final clear does not count. If an ID returns, its
+tags become visible again. Sessions and exports report the orphan count.
+Renaming or changing the supplying column does not itself require a new
+session: continuity follows the canonical ID values. Core does not infer
+a correspondence between different ID strings.
+
+Supplied IDs declare persistent entry identity; do not recycle an ID for an
+unrelated entry. Preserving tags follows that declaration. It does not
+claim that an annotation is still appropriate after the entry's text changes.
+Report source-version changes when opening a session, so the analyst can
+review affected work. Keep provenance in the run headers; do not introduce
+an automatic annotation-revalidation or migration framework.
+
+Generated `row-...` IDs cannot establish continuity after arbitrary edits
+or reordering. While a dataset still uses generated IDs, an existing session
+can open/export only against its initial generated-ID source version. If it
+differs, require restoring that source or supplying explicit stable IDs.
+Materialize the original canonical IDs into the CSV before editing/reordering
+it; selecting that column then declares their continued identity. Merely
+numbering the already-reordered rows is not continuity. New sessions remain
+available when continuity is not intended. Listing identifies unavailable
+sessions without showing empty tags as if their work had disappeared.
+
+An open kernel always keeps its source snapshot. Close affected streams
+before rebuilding changed data. If a new source field collides with a
+session's recovered tag field, do not materialize or open that session until
+the name conflict is resolved. Report it without blocking unaffected sessions
+or hiding either field.
+
+An existing session rejects `fork_from`; a supplied dataset must match.
+A new session uses its requested dataset or the project's sole dataset.
+When forking, the source session supplies its dataset and identity provenance;
+reject any conflicting dataset argument. Ambiguity is an error. Setup lists
+sessions and never allocates one.
+
+Fork by copying a closed source session's logs into a new destination and
+writing its metadata. Preserve run IDs and source/ID provenance. Hold the
+source session lock during the copy; publish the destination only after
+the copy succeeds.
+Never overwrite a destination or share writable files through hard links.
+Forking a historical session is allowed. Forks retain the same rules for
+stable-ID continuation and generated-ID source compatibility.
+
+## 3. Logs, replay, and durable completion
+
+### One host-owned log per kernel run
+
+The host alone appends `sessions/<name>/log/<run-id>.jsonl`. Use a UTC
+timestamp plus a UUID for the run ID, create the file exclusively, and
+never reopen an old run for appending. Reset or child replacement starts
+a new run. Times describe history; they do not order writes.
+
+The first complete line is a versioned header containing the run ID,
+start time, actor, Quail version, dataset, ID column, source version, source
+hash, resolved embedding identity if configured, and actual confinement mode.
 
 ```json
-{
-  "interface": {
-    "setup": "quail setup --json",
-    "open": "quail exec SESSION --stream [--dataset D] [--fork-from S]",
-    "exec": {"op": "exec", "code": "..."},
-    "reset": {"op": "reset"},
-    "export": "quail export SESSION --json"
-  }
-}
+{"format":1,"run":"...","started":"...","actor":"...","quail":"...","dataset":"notes","id_column":"id","source_version":"sha256:...","source_hash":"sha256:...","embedding":null,"confinement":"audit"}
 ```
 
-The session, dataset, and optional fork are chosen by `open`, not repeated in
-each `exec` record. The note overrides invocation wording only; it does not
-rewrite or maintain a second copy of the agent document.
+`format` versions the log schema separately from the Quail release. When
+configured, `embedding` records `{id, embed, revision}`. Confinement reports
+`audit` or `audit+netns` according to the protection actually established.
+`actor` comes from `QUAIL_ACTOR` or the hostname and is provenance only.
+The run ID must match the filename. The header does not bind the run to a
+session name, so a fork can retain it. `id_column` is null for generated IDs.
+Headers agree with the session dataset. Stable-ID runs may name different
+ID columns and source versions; generated-ID runs must name the initial
+generated-ID version. Validate the source-version descriptor against the
+header's source hash and resolved ID column.
 
-An `exec` request calls the same `Kernel.exec` on the same kernel, so Python
-variables and imports persist. A `reset` request replaces that kernel and
-clears working memory while leaving tags and logs intact. EOF or interruption
-closes the kernel and releases the session lock.
+Every following complete line records exactly one submitted cell:
 
-`quail exec SESSION FILE.py` remains a convenient one-cell form. It opens a
-kernel, executes the file as one cell, prints the result, and closes. Tags
-persist; Python variables naturally do not survive that process. The file
-form and `--stream` are mutually exclusive.
+| Field | Meaning |
+| --- | --- |
+| `n` | Contiguous cell number within the run, starting at 1 |
+| `order` | Positive logical order, strictly increasing within a run |
+| `started`, `ended` | UTC timestamps for display |
+| `code` | The exact submitted text |
+| `output`, `truncated` | The bounded output and truncation flag |
+| `error` | Null or `{type, message, hint}` |
+| `tags_written` | Number of distinct entry/field pairs in the final delta |
+| `tags` | Per-field maps of canonical entry IDs to final JSON values; null clears |
 
-There is no local `quail mcp`, standalone cross-process reset, daemon,
-Unix socket, PID file, or namespace serialization. `quail warm` calls the
-service warm operation and never evaluates agent code.
+The host assigns `n`, `order`, scope, and submitted code. Validate the
+child's result before logging: expected request number, output shape,
+valid field names, source-field protection, IDs in this source version,
+and JSON values. An error result has an empty delta and zero writes.
 
-## 6. Warming
+Collapse multiple writes to one entry/field within a cell to the final
+value, including clears. An unchanged value explicitly written by the
+cell may remain in its delta. `tags_written` counts these distinct writes;
+it is not the sum of all `tag()` return values.
 
-### What warming means
+### Logical order and merging
 
-Warming is **semantic preparation only**.
+On session open, replay its available history and remember the largest
+`order` across all accepted complete cell records, including failures.
+The next cell uses that number plus one; each recorded cell advances it again.
 
-Lexical search is already prepared when `index.py` imports the CSV and
-builds FTS; lexical rows for tag fields are maintained when tags are
-written. There is no provider call and no useful separate lexical warm step.
+Replay successful records in ascending `(order, run_id, n)` order. The last
+write to an entry/field wins and null clears it. This is a small logical
+clock: a run continuing observed history always writes after that history,
+even when the machine's wall clock moves backward. No timestamp comparison,
+vector clock, or distributed lock is needed.
 
-Semantic search requires more work:
+Concurrent runs on separate machines may choose equal logical orders;
+the run ID breaks ties deterministically. This is a defined merge policy,
+not a claim that concurrent coding decisions agree. All original writes
+remain in the logs. Use separate named sessions or forks for independent
+coding that must remain independently inspectable. Git merges their files;
+it does not choose which analyst is right.
 
-1. Read each non-empty value from the selected source field or fields.
-2. Hash the exact UTF-8 text and deduplicate complete values.
-3. Embed values missing from the vector cache.
-4. Record which value hash belongs to each entry and field.
+A live stream uses the history it synchronized when opened plus its own
+new records. Pulled or manually edited history is incorporated on the next
+open, not halfway through a cell. Cache digests must describe only history
+actually applied, never newly discovered records the kernel has not seen.
 
-One table cell—one field on one entry—is the atomic semantic unit. A value
-is never split into passages, inspected against a model-specific limit, or
-silently truncated. Quail sends the complete value to the configured
-provider. Any provider rejection is an ordinary embedding error; unsuitable
-value lengths are a dataset concern.
+### Parsing and cache markers
 
-A semantic query is embedded whole as well. Its score for an entry is the
-cosine similarity to that entry's one field-value vector; there is no
-passage-level maximum or other aggregation.
+Validate headers, record schema, scope, numbering, logical orders, and tag
+values before applying history. Preserve best-effort recovery: ignore a
+malformed complete cell as a whole and report its file, line, and reason.
+Never apply a partial tag delta. A malformed, unsupported, or wrong-scope
+header excludes that run and reports why. Conflicting duplicate cell
+identities are excluded rather than arbitrarily choosing a copy. Writers
+produce contiguous numbers; recovery may retain later valid cells after an
+ignored gap. Accepted numbers and logical orders still increase within a run.
 
-Without an explicit warm, the first `.semantic()` performs that work.
-`quail warm DATASET [--field FIELD]` performs it ahead of time. Warming is
-an optimization only; warm and cold queries must return identical scores.
-It prepares corpus vectors, not future query strings.
+Keep every original file untouched. Include a structured recovery summary
+in setup/session information and opening results, and show human diagnostics
+on stderr. The summary identifies excluded records/runs and whether history
+is incomplete. Cached opens must retain these diagnostics. If completed log
+content contains no usable run, fail clearly instead of presenting a recovered
+empty analysis. Wholly interrupted run creations are empty history and do not
+strand a new session. Historical listings can parse logs without a source.
 
-Lazy warming belongs to `prelude.py`: a semantic query discovers a missing
-vector and asks the host to embed it. Explicit CLI warming is a host batch
-path: `service.py` coordinates value inventory and cache writes in
-`index.py` with provider calls in `embed.py`. It does not spawn a kernel.
-Both paths use the same whole-value hashing and vector representation.
+The index maps recovered writes to the current stable IDs and reports final
+orphans separately from malformed history. Missing current IDs are not a
+parse failure. New child results are still validated against their live
+source before logging; recovery is not permission to write invalid records.
 
-### Shareable warm shards
+A final fragment without a newline is an interrupted append. Report and
+ignore that fragment; do not modify the old run. Valid complete records
+before it remain usable. An empty file or wholly unterminated header is
+likewise an interrupted run creation with no cells to apply. A complete
+invalid header is reported and excluded as described above.
 
-Add one optional argument:
+The session digest is SHA-256 of canonical JSON containing sorted
+`[log_filename, sha256_of_exact_file_bytes]` pairs. Include failed records,
+excluded records/runs, and ignored trailing fragments in the digest. The
+digest is a cache marker, not an ordering or identity system. It is independent
+of the session directory name, so copied history has the same digest.
+
+Cache synchronization replays once when the digest or source version
+differs from the stored `applied` marker, then replaces that session's
+materialized tags, orphan count, and marker together. At runtime the host may
+update its current file hash incrementally. Do not re-read all past cell code
+after every successful cell.
+
+### A cell has one durable commit point
+
+1. The host sends the next numbered cell to its child.
+2. The child begins a transaction on its private tag tables, runs the
+   cell, and finalizes bounded output.
+3. On normal success it commits those private working tables and returns
+   the result and tag delta. On an exception it rolls back those tables,
+   clears the delta, and returns the error and captured output. Python
+   assignments made before the exception remain.
+4. The host validates the result, writes one complete JSON line, flushes,
+   and fsyncs the run log. This is the durable commit point.
+5. In a short independent SQLite transaction, the host applies the delta
+   and new digest to the materialized cache. No Python or HTTP runs inside
+   that transaction.
+6. The host returns the result. It sends no next cell before completing
+   these steps or discarding the child after a host failure.
+
+The child's early private commit is invisible to other processes. If the
+host cannot durably finish the cell, that child must not continue with its
+unacknowledged working tags. This needs no prepare/commit RPC: the host
+already serializes requests and can terminate its own child.
+
+Use the same log-and-cache completion path for successful and failed
+cells. Sync newly created run files and their containing directory before
+acknowledging their records. Atomic metadata replacement also syncs the
+file and directory.
+
+| Failure point | Required outcome |
+| --- | --- |
+| Cell raises normally | Log the failure with no writes; keep the child and its earlier Python assignments |
+| Child dies before a complete valid result | No tag delta can commit; log a kernel-failure result, replace the child from committed state |
+| Child dies after a complete result arrives | The host can durably finish that result, then replace the child |
+| Log write or fsync has an uncertain outcome | Stop the stream, discard the child, and report a persistence failure with the run/cell identity; never append a contradictory failure record for that cell |
+| Cache update fails after a synced record | The record remains committed; retry or reconstruct only the cache, never execute the code again or turn that committed cell into a rolled-back result |
+| Host dies before replying | Reopening recovers complete records; an unacknowledged cell may have committed, so do not automatically resubmit it |
+
+After a log I/O failure, a later opener uses complete records actually
+present on disk as recovery truth and syncs recovered files before
+acknowledging a usable session. Do not pretend an uncertain append is known
+to have rolled back. If cache recovery still fails, close with a host error
+that identifies the already-committed cell and log path. Keep the original
+result recoverable in its record.
+
+A hard process death can lose output still buffered inside the child.
+Preserve output for normal exceptions; do not promise bytes that never
+reached the host. Report child replacement with `kernel_restarted`.
+Never implicitly rerun submitted Python.
+
+## 4. SQLite, opening, and concurrency
+
+Keep one WAL-mode SQLite file per dataset at
+`.quail/<dataset>.quail`. The host's operations use short transactions
+and a finite busy timeout. Build replacements at a temporary path and
+publish only after validation and clean closure of the temporary database.
+Checkpoint and close a replacement's WAL before publishing its main file.
+
+The shared index contains:
+
+| Data | Representation and lifetime |
+| --- | --- |
+| Import metadata | Schema version, source hash/version, canonical ID resolution, ordered source fields |
+| Source rows | `entries`, with import-order integer rowid and unique text `id` |
+| Source lexical indexes | One single-column FTS5 table per non-ID source field |
+| Materialized session tags | `tags(session, entry, field, value)`, keyed by session, stable entry ID, and field; value is canonical JSON |
+| Applied history | `applied(session, source_version, log_digest, orphan_tags)` for the current materialization |
+| Embedding vectors | `vectors(embedding_id, text_hash, vec)`, keyed by identity and exact text hash |
+
+Use foreign keys for tag IDs, an index on `(session, field)`, and
+parameter binding for values. Generated FTS table names derive from field
+names through a collision-resistant hash; CSV names never become
+unquoted SQL. Tag caches exist only for sessions compatible with the indexed
+source: supplied stable IDs preserve identity across versions, while
+automatic positional identity requires the initial generated-ID version.
+
+There is no shared `tags_fts`, passage table, or persistent
+`semantic_values` table. Per-entry semantic mappings are cheap to derive
+from immutable source text or a kernel's private tags. Keep them in that
+kernel and invalidate them when needed.
+
+### The child's connection
+
+During bootstrap, the child opens the synchronized index in SQLite
+read-only mode and copies its session's tags into indexed TEMP tables.
+Use disk-backed TEMP storage (`temp_store=FILE`) with a bounded page cache;
+do not require the entire tag set to fit in Python or SQLite memory. The
+host supplies a private scratch directory beneath `.quail/` through SQLite's
+`SQLITE_TMPDIR` environment variable before startup. SQLite manages its
+temporary files; the host removes the directory after the child exits.
+Verify that the SQLite build permits file-backed TEMP storage, following
+[SQLite's temporary-file rules](https://www.sqlite.org/tempfiles.html).
+Abandoned scratch is disposable when its owning processes are closed.
+
+Build tag FTS tables lazily in TEMP, one per field when first searched.
+Source reads explicitly use `main`; tag reads and writes explicitly use
+`temp`. Join tags to
+`entries.id` by canonical ID; lexical and semantic score tables use internal
+rowids. Do not copy the old shared-tag join against `entries.rowid`.
+
+A cell transaction changes only TEMP. It may hold a read snapshot on the
+shared database, but it never upgrades that snapshot to a shared write
+transaction. Host vector inserts or another session's tag commits can
+therefore proceed while the child evaluates.
+
+The child may read vectors already visible in its read snapshot. Missing
+vectors are obtained from the host and used directly from its response:
+do not expect a long-lived read snapshot to see the host's new inserts.
+The host checks the shared cache again when servicing a request.
+
+A tag write updates its private value and any existing field FTS index
+in the same transaction. Invalidate cached semantic mappings, matrices,
+and score tables for that field. A failed cell rolls back values and FTS,
+restores the field catalog, and drops in-memory derived state touched by
+the failed cell. Avoid a second journal for those disposable caches.
+
+Read-only host operations use materialized committed tags. They never
+inspect the child's TEMP tables, so export cannot see a half-finished cell.
+
+### One opening path
+
+`service.py` owns dataset opening for setup, sessions, fields, export,
+warming, and kernel creation:
+
+1. Discover and validate the manifest and selected dataset.
+2. Check the index under a shared dataset lock.
+3. If absent or stale, release shared access, take the dataset lock
+   exclusively, recheck, and build a replacement.
+4. Hold shared access for the operation, or for the lifetime of an opened
+   kernel, and ingest compatible shared warm packs before returning it.
+
+An operation that will publish project or session metadata acquires the
+project metadata lock before entering this path, preserving the lock order
+below. Existing-session execution needs no metadata publication lock.
+
+Rebuild source rows and FTS, preserve compatible vector rows when available,
+and replay compatible session histories by ID, recording orphan counts.
+Unavailable generated-ID sessions remain on disk and visible in listings. A schema
+mismatch rebuilds a disposable cache; it does not trigger user-data migrations.
+
+Opening a session then takes its session lock, checks its ID/source scope,
+synchronizes its log, and spawns the child. Validate configuration before
+creating new session metadata. Kernel reset retains its locks, index,
+source version, and resolved embedding configuration; reload configuration
+by closing and reopening the stream.
+
+Fields/export acquire and synchronize a closed session before reading.
+If its session lock is already held, read one committed WAL snapshot of
+its cache without replay. Require an `applied` marker for the matching
+source version; an owner still initializing an uncached session means
+temporarily unavailable, not an empty analysis. This may show the previous
+committed cell while the owner finishes publishing the next one. A response
+already acknowledged by its owner must be visible to a subsequent read.
+If the current source changed, require the affected streams to close before
+rebuilding.
+
+### Locks are local lifetime protection
+
+Use ordinary advisory `flock` files beneath `.quail/locks/` for project
+metadata, datasets, and sessions. A live kernel host holds its dataset lock
+shared and its session lock exclusive. Reset retains them. Rebuild requires
+exclusive dataset access and fails clearly if a live kernel prevents it.
+
+Serialize init/import/session creation and fork publication with the project
+metadata lock. When multiple lock classes are needed, acquire project,
+dataset, then session; release the metadata lock once publication is done.
+Use nonblocking acquisition for conflicts with live sessions and rebuilds.
+Do not add a lock server or a cross-machine lease.
+
+No host operation holds a shared-index writer transaction across a cell,
+provider call, or user interaction. Retry bounded cache transactions when
+safe; never retry arbitrary Python. Multiple hosts may request the same
+embedding concurrently; duplicate computation is acceptable, duplicate
+cache keys are not.
+
+## 5. The analysis language
+
+Keep the compact shape in `docs/api.md`: `Field`, `Random`, ordinary
+numeric expressions, predicates, `count`, `retrieve`, `values`, `tag`,
+and `fields`. There is one expression-to-SQL engine in `prelude.py`.
+Python UDFs implement individual operations SQLite cannot faithfully
+provide; they are not a second row-by-row execution engine.
+
+Compile expressions to parameterized SQL and reuse joins within a query.
+Carry the value's kind and encoding with its compiled fragment: source
+text, SQL numbers, and JSON-encoded tag/list values are distinct. Decode
+JSON at explicit boundaries, never by guessing from string contents or by
+discarding its type through `json_extract` before a typed comparison.
+
+Expression construction inspects the cached field catalog and type
+information, but reads no rows and performs no search or embedding.
+Reject unknown fields and invalid method/produce pairs at construction.
+An expression referring to a tag field must also be checked when evaluated,
+since rollback or clearing its last value can remove that field.
+
+Keep one method-signature table for construction checks. Methods that return
+predicates are actually `Predicate` objects. Expressions and predicates
+reject Python truth testing and iteration; `&`, `|`, and `~` compose
+predicates. Reject direct `is`/`is not` syntax before a cell executes
+because Python identity cannot be overloaded for symbolic values. This is
+a language guard, not a security mechanism.
+
+### Values, absence, and comparisons
+
+Source values are text or None. Tags accept JSON scalars, arrays, and
+objects with string keys and finite numbers, including nested nulls.
+Top-level None means absence and is represented by no tag row.
+
+Use these runtime rules for an `any` tag value:
+
+| Operation | Behavior |
+| --- | --- |
+| Text conversion | Strings unchanged; other scalars use JSON spelling; objects use canonical JSON; arrays join recursively rendered items with newlines, spelling nested nulls as `null` |
+| Length | Characters of strings, elements of arrays, keys of objects; None for other scalars |
+| Slice | Python slicing for strings/arrays; None for other kinds |
+| Contains | Substring for strings, Python item membership for arrays, key membership for objects; false for other scalars |
+| Substitution | Apply to each array item through text conversion, preserving null items; otherwise substitute in the converted text |
+| Case/strip/regex/search | Use the same text conversion before the operation |
+
+Value-producing operations propagate top-level None. Predicate-producing
+operations return booleans, never SQL NULL. Comparisons involving an absent
+operand are false except explicit comparisons to a None literal:
+`== None` tests absence and `!= None` tests presence. Negation therefore
+includes absent rows when negating an ordinary false comparison.
+
+Numeric literals trigger the documented numeric conversion of the other
+operand. Numeric conversion accepts finite numeric text and numbers,
+including bool as 0/1; failure returns None. Two expressions do not gain
+implicit numeric conversion. For JSON scalar comparisons preserve Python
+scalar equality; ordering incompatible scalar types returns false.
+Container equality compares decoded JSON values, and container ordering
+returns false. Do not inherit SQLite's arbitrary text-versus-number
+ordering or compare a JSON-encoded object as if it were a source string.
+
+`.isin([...])` is equivalent to OR-ing comparisons with each supplied
+scalar literal, including None. An empty list is false. This keeps mixed
+literal lists consistent with individual comparisons. Use `.contains()`
+for membership in list-valued cells. Reject non-scalar `.isin` literals.
+
+Use Python Unicode `lower`, `upper`, `strip`, and `len` through UDFs
+where SQLite differs. Numeric arithmetic returns finite numbers or None;
+absence propagates and division by zero is None. Regex patterns use RE2,
+with only the documented `re.I`, `re.M`, and `re.S` flags.
+
+### Verbs and entries
+
+- `where` is None or a Predicate; `rank` is a number expression.
+- `retrieve` defaults to 10. Limit and offset are nonnegative integers
+  excluding bool. Clamp only retrieve's limit to `max_limit` and report it.
+- `values` retains None and accepts an uncapped nonnegative limit or None.
+  It remains subject to the kernel memory limit. Statistics examples must
+  filter absence explicitly.
+- Rank descending with None last, then import order as a stable tie-breaker.
+  Negation gives ascending numeric rank while still placing None last.
+- `Random` accepts the ordinary `random.Random` seed types; numeric seeds
+  must be finite. Use a private seeded generator to choose the expression's
+  integer salt once, with None choosing it afresh. Hash that salt and the
+  canonical entry ID with a stable algorithm to produce numbers in `[0, 1)`.
+  Reusing an expression keeps its per-entry numbers. Neither SQLite rowids
+  nor Python's randomized string hash participates.
+
+`count(by=...)` returns a Counter. A scalar or None contributes one key;
+a flat list contributes one per item, including repetitions. Multiple
+grouping expressions take the Cartesian product of those contributions.
+An empty list contributes nothing, so totals may exceed or fall below the
+entry count. Follow ordinary Counter scalar equality and use import order
+to break frequency ties. Objects and containers remaining after that
+one-level expansion are supported grouping values. Represent their keys as
+the plain tuple `("json", canonical_json)`: for example, `{"a": 1}` becomes
+`("json", '{"a":1}')`. A literal string keeps its string key, so the two
+cannot collide. Cross-tabs contain these keys inside their outer tuple.
+This needs no custom key class or separate grouping engine.
+
+`tag(None, field, value)` targets all entries. Other targets are a
+Predicate, an Entry, or a list of Entries. Deduplicate entry lists by ID
+and validate their dataset version and kernel scope before writing.
+The return value is the distinct target count, including targets whose
+value was already equal.
+
+A tag field is a non-empty string without NUL that does not name a source
+field. Its first non-None write creates it and clearing its last value
+removes it. Each `tag` call resolves its complete target and computed values
+before applying its writes, so its predicate cannot change partway through
+that same call. Later lines in the cell see those writes. Snapshot JSON
+values at the write; later Python mutation must not alter an already-staged
+tag. There is one replace/clear operation, with no append or separate untag API.
+
+Entries are read-only handles to rows in this kernel and source version.
+String lookups and expression lookups read the current working state;
+both see earlier tag writes. The mapping covers the current field catalog,
+with None for an absent cell and KeyError for an unknown string key.
+`entry.id` is canonical ID. `entry.score` records its retrieval rank
+value; it does not silently change after a later tag write. Materialize
+a dict when a caller wants a value snapshot. Source cells can be cached
+because this source version is immutable.
+
+Expose the documented verbs, constructors, error, pre-imported modules,
+and `quail` recovery object. Use an explicit expected public namespace in
+tests; example variable names and transport names are not public bindings.
+Do not reserve ordinary Python assignment names.
+
+## 6. Search and embeddings
+
+Both searches produce numeric expressions, but start directly from a
+stored source or tag Field. The canonical ID is not searchable.
+A transformed search raises at construction with a hint to tag the
+transformed value first. This gives both source and derived analysis
+one indexing path. Query strings must contain non-whitespace text.
+
+### Lexical corpus boundaries
+
+Use FTS5 with `porter unicode61`, and one single-column corpus per field.
+Source corpora are built at import. Tag corpora are private to a kernel
+and built lazily from that session's working tags.
+
+Index each present value as one document using its text conversion;
+document rowids correspond to source rowids. Include present empty text
+as an empty document; absent values have no document. Restrict BM25
+statistics to this field and, for tags, this session. Another field's
+contents or another session's work cannot change its scores.
+
+Sanitize queries into quoted tokens and quoted phrases joined with OR.
+Do not pass user FTS syntax through. There is no cross-column filter
+expression to get wrong because each corpus has one text column.
+Negate FTS5's BM25 score so higher is better. Absent values score None,
+present nonmatches score zero, and matches score positively.
+
+Compute corpus statistics over the full field, independent of a verb's
+candidate filter. Scores are relative and not comparable across fields.
+Updating private tags updates an existing private FTS index in the same
+cell transaction. A rollback restores both.
+
+### One complete value is the semantic unit
+
+Embed each complete non-empty rendered value once; its score is cosine
+similarity to the complete query vector. Empty rendered text has no semantic
+vector and scores None, even when the underlying tag is present.
+
+This first version is suited to rows that are meaningful analysis units,
+such as one survey answer or one prepared excerpt. It provides no passage
+splitting, best-passage aggregation, automatic truncation, ANN index, or
+model-window estimator. Long transcripts should be prepared into suitable
+rows outside Core when passage retrieval is needed.
+
+Pass complete text to the provider and fail clearly on oversized input.
+For Ollama `/api/embed`, explicitly send `truncate: false`; its default
+otherwise truncates. Do not assume an HTTP success from an arbitrary
+compatible endpoint proves that endpoint preserved all input. Supported
+provider configurations must honor rejection instead of silent truncation.
+
+### Embedding identity and one cache path
+
+An embedding identity is SHA-256, prefixed `sha256:`, of canonical JSON
+`{"format":1,"embed":<exact configured string>,"revision":<embed_revision>}`.
+Split `embed` at its first slash: `ollama` or `openai` selects the wire
+dialect and the remainder is the provider's model name.
+
+Base URLs and credentials route requests and do not belong in identity.
+The revision must change when weights or embedding behavior change,
+including any externally configured preprocessing. Freeze the resolved
+embedding configuration for each open stream and record the identity in
+its run header. Core validates vectors; it does not attest remote weights.
+A revision is an explicit reproducibility obligation, not evidence that
+two arbitrary endpoints are equivalent.
+
+Hash exact rendered UTF-8 text with SHA-256, prefixed `sha256:`. The host owns
+one cached embedding operation used by both kernel requests and `quail warm`:
+
+1. Deduplicate inputs, preserving the mapping back to request order.
+2. Read existing `(embedding_id, text_hash)` vectors.
+3. Call the provider for missing texts in bounded batches, outside every
+   database transaction.
+4. Validate and insert completed batches in short transactions.
+5. Return the canonical stored vectors in input order.
+
+Infer dimensions from an existing vector for that identity, or establish
+them with its first inserted batch. Recheck inside the writer transaction,
+so simultaneous first requests cannot establish different dimensions.
+Validate response count, finite coordinates, nonzero dimension and norm,
+and the little-endian float32 representation after packing. An existing
+key wins a concurrent insertion; return that stored vector to both callers.
+
+`embed.py` performs HTTP only. Use the standard-library client for Ollama
+and OpenAI-compatible endpoints, preserve request order (including indexed
+OpenAI response items), and use finite request timeouts with a small fixed
+retry bound for transport, rate-limit, and server failures. Do not retry
+authentication, invalid-input, dimension, or schema errors.
+
+`index.py` owns cache reads, validation at insertion, and writes. A plain
+host function in `kernel.py` composes it with `embed.py`; both kernel
+execution and `service.py` warming call that function without requiring a
+child. A cache batch may survive a failed cell: vectors are derived
+operational state, not annotations.
+
+The child prepares field-to-vector mappings and score tables in memory.
+Use packed vectors or NumPy arrays rather than a full corpus of Python
+float objects. Serve requests in batches; internal vector responses can
+carry base64 packed float32 to avoid repeatedly expanding the corpus into
+JSON numbers. Use returned vectors directly when the child's read snapshot
+predates the cache insert. Source mappings persist within the kernel;
+tag writes invalidate affected fields.
+
+Cosine computation has a standard-library path and an optional NumPy path
+with the same semantics. Test numeric agreement within a stated tolerance;
+do not promise bitwise identity across numerical libraries or provider
+recomputations. Identical source, tags, query, embedding revision, and
+compatible provider behavior must give equivalent warm and cold results.
+
+### Local and shared warming
+
+Shared warming is part of the initial Core capability:
 
 ```text
-quail warm DATASET [--field FIELD] [--shard I/N]
+quail warm DATASET [--field F] [--shard I/N] [--json]
 ```
 
-Without `--shard`, warm all selected source values into the local
-gitignored SQLite cache, as already described by the specification.
+Warm a selected non-ID source field, or all non-ID source fields. Reject
+the canonical ID, tag fields, and unknown fields. Both forms start no
+session, execute no synthetic cell, and write no analysis log. Tag fields
+continue to warm inside their sessions. Lexical indexes already exist;
+warming prepares semantic corpus vectors, not future query strings.
 
-With `--shard I/N`:
+Without `--shard`, warm the full selected inventory into the local cache.
+With `--shard I/N`, warm that deterministic fraction and publish its vectors
+under `warm/` for transfer through Git. Both forms use the same host cached
+embedding function as a semantic query. `index.py` owns inventory, pack
+encoding/validation, and cache insertion; `service.py` coordinates the work.
+Report selected, reused, and newly embedded value counts, plus any pack path.
 
-- `I` is one-based and `1 <= I <= N`.
-- Build the distinct non-empty value set for the selected source field, or all
-  non-ID source fields when `--field` is omitted.
-- Reject the canonical ID, a tag field, or an unknown field; explicit packs
-  contain source-field work only.
-- Sort the values by text hash. For `M` values, shard `I/N` takes indices
-  `start <= j < stop`, where `start = ((I - 1) * M) // N` and
-  `stop = (I * M) // N`.
-- Embed only that shard.
-- Insert the vectors into the local cache.
-- Write every selected shard vector—reused or newly embedded—to a shareable
-  warm pack under `warm/`.
-- Report selected, reused, and newly embedded value counts plus the pack
-  path.
+### Shard assignment
 
-This divides the deterministic work list into contiguous sections whose sizes
-differ by at most one. Workers need only the same source contents, embedding
-designation, and field selection; their provider base URLs may differ. Quail
-uses the exact configured `embed` string as the cache identity and trusts that
-workers using it run compatible model weights. Different shard counts may be
-combined: for example, `1/4`, `2/4`, and `2/2` cover the complete list without
-overlap.
-
-Use this layout:
+Build the distinct non-empty text inventory from the selected source fields
+using the same text conversion and hashing as semantic search. Sort it by
+text hash. For `M` values and one-based `1 <= I <= N`, select indices:
 
 ```text
-warm/
-  <dataset>/
-    <source-hash>/
-      <plan-hash>/
-        part-0001-of-0008.jsonl
+start = ((I - 1) * M) // N
+stop  = (I * M) // N
+start <= j < stop
 ```
 
-`plan-hash` is the SHA-256 of canonical JSON containing the warm-pack format
-version, exact configured `embed` string, sorted field names, and shard count.
-Provider wire shape and base URL are deliberately excluded: they describe how
-to reach a model, not which declared model produced the vectors. The hash
-prevents incompatible warm runs from choosing the same part filenames; it is
-not a separate manifest.
-The file begins with one header record:
+Reject invalid shard syntax or bounds. The ranges are disjoint and cover
+the inventory, with sizes differing by at most one. Assignment depends on
+the value set, not row order, machine, cache hits, or provider address.
+Compatible ranges can compose across shard counts: `1/4`, `2/4`, and `2/2`
+cover the same inventory as one full warm.
+
+Workers use the same source/import configuration, selected fields, and
+embedding identity, including its explicit revision. Different base URLs
+are fine under that declared identity. An empty range reports zero work
+and writes no pack. It is not a missing completion record.
+
+### One portable pack format
+
+Use one JSONL format and deterministic part paths:
+
+```text
+warm/<dataset>/<source-version-hex>/<plan-hash-hex>/part-0001-of-0008.jsonl
+```
+
+The directory components use the bare hash hex digits. Compute `plan_hash`
+from canonical JSON containing `format: 1`, `embedding_id`, the sorted
+selected `fields`, and `shards: N`. Source version scopes the parent
+directory. There is no separate plan file or worker manifest.
+
+The first line is the complete header:
 
 ```json
-{"quail_warm":1,"dataset":"notes","source_hash":"…","embed":"ollama/embeddinggemma:latest","fields":["body"],"dims":768,"shard":[1,8]}
+{"quail_warm":1,"dataset":"notes","source_version":"sha256:...","source_hash":"sha256:...","embedding":{"id":"sha256:...","embed":"ollama/embeddinggemma","revision":"study-model-v1"},"fields":["body"],"dims":768,"shard":[1,8]}
 ```
 
-Each remaining line is sorted by text hash and contains one vector:
+Every following line contains one selected vector, sorted by text hash:
 
 ```json
-{"text_hash":"sha256:…","vector":"<base64 little-endian float32>"}
+{"text_hash":"sha256:...","vector":"<base64 little-endian float32>"}
 ```
 
-The source text and entry rowids are not included. The CSV reconstructs
-value-to-entry mappings cheaply and deterministically; only the expensive
-vectors need to travel. Repeated identical values share the same vector.
+Include every vector in the selected range, whether reused locally or newly
+embedded. A machine with a warm cache must still produce a complete pack
+for a cold recipient. Read canonical stored vectors after insertion so
+concurrent cache fills and pack output agree. Source text, entry IDs,
+per-entry mappings, and session tags do not travel in a pack.
 
-Warm packs are derived, shareable cache—not analysis truth. Quail writes the
-pack atomically and prints its path; it never commits or pushes it. Separate
-workers write separate part files, so ordinary Git merges take their union
-without line-level conflicts. Choose enough shards to keep each file
-comfortably below the Git host's file-size limit.
+Write a temporary file beside its destination, finish and sync it, then
+publish atomically. Never append to a published pack. An interrupted warm
+may leave useful local vectors but no partial final pack. Re-running the
+same shard may atomically replace its part file. Separate assigned shards
+have separate filenames, so their Git merge is a file union. Choose enough
+shards to keep individual files within the Git host's size limits; Core
+does not commit, push, schedule workers, or repartition automatically.
 
-If a shard contains no values, report that fact and do not write a pack.
-Warm packs are caches, not completion records.
-
-On dataset open, `index.py` scans packs for the current dataset and source
-hash. Validate the complete header and every vector record in one transaction:
-the format, configured `embed` string, declared fields, text hashes, base64
-payload, finite values, nonzero consistent dimension and norm, and membership
-in the current source-value inventory. Then insert by `(model, text_hash)`
-with `INSERT OR IGNORE`. A malformed pack contributes nothing. Fields and
-shard count describe how a pack was produced; they do not change whether one
-of its content-addressed vectors is reusable. Missing parts are fine: the next
-semantic warm/query embeds only the hashes still absent.
-
-Keep the first version deliberately narrow:
-
-- Source fields only. Session-specific tag fields continue to warm lazily
-  inside their session.
-- One vector format and whole-value embedding only.
-- No coordinator, manifest of workers, remote cache service, Git API, or
-  completeness database.
-- No automatic repartitioning. Start another plan with a different `N` if
-  needed.
-- Newly pulled packs are ingested on the next dataset open. Do not add live
-  cache invalidation.
-
-Example with four workers:
+For example, separate workers can run:
 
 ```sh
 quail warm notes --field body --shard 1/4
@@ -655,585 +854,118 @@ quail warm notes --field body --shard 3/4
 quail warm notes --field body --shard 4/4
 ```
 
-Each worker commits its one file. After the branches are merged and pulled,
-the next dataset open imports all four packs into the local SQLite cache.
+Each transfers its completed part through the project's normal Git workflow.
+
+### Ingestion uses the same vector cache
+
+On dataset open, scan finalized packs for the current dataset and source
+version. Ingest compatible packs before spawning a kernel or starting an
+explicit warm. Skip other embedding identities without treating their
+presence as a project error. Newly pulled packs become visible on the next
+open; no live watcher or cache-distribution service is needed.
+
+Validate each candidate pack completely: schema version; path/header and
+dataset/source agreement; embedding descriptor and identity; source field
+selection; shard bounds; and sorted, unique hashes exactly covering the
+declared range in that inventory. Validate strict base64, packed float32,
+dimensions, finite coordinates, and nonzero norm through the same vector
+validator used for provider results. Reject a malformed or truncated pack
+as a whole, report its path and reason, and continue with other packs or
+ordinary lazy embedding. Missing parts are always acceptable.
+
+Validate and stage records outside a shared-index writer transaction. A
+host TEMP table can stage a large file without retaining Python float
+objects. After staging completes and its transaction closes, insert one
+valid pack in a short shared-cache transaction, rechecking the established
+dimension there. Never hold that writer while reading/decoding the file or
+contacting a provider. An invalid pack contributes no vectors.
+
+Use the existing `(embedding_id, text_hash)` key and canonical-insertion
+rule; overlaps and repeated ingestion are harmless. Fields and shard counts
+describe production and validation, not separate vector namespaces. Once
+inserted, a compatible vector is reusable wherever that exact text occurs.
+Partial pack sets simply leave some cache misses for later warm/query calls.
+Keep packs derived and optional: no coordinator, completeness database,
+alternate cache engine, or remote-cache API is required.
+
+## 7. Kernel execution and confinement
+
+The child opens the read-only index, initializes private tables, loads RE2
+and optional NumPy, registers UDFs, and creates the user namespace before
+confinement. Pass only the control descriptors it needs; it inherits no
+host locks, run-log handles, or provider connections and receives no
+provider credentials.
+
+Use a scrubbed environment. Disable the cell-facing file API and install
+the subtractive audit hook for filesystem mutations, new database
+connections, sockets, process creation, native loading, and instrumentation
+as described in `docs/kernel.md`. Permit read-only access under resolved
+standard-library roots so ordinary imports work; disable bytecode writes.
+Deny other file paths. On Linux attempt network namespace isolation and
+report whether it succeeded. Do not introduce a Python module allow-list,
+import-state framework, or general syntax allow-list.
+
+Open SQLite read-only and install its authorizer before user code. Permit
+the runtime's TEMP operations; deny main-schema writes, attach/detach,
+extension loading, and writable pragmas. Kernel internals are outside the
+public namespace. Core's confinement prevents ordinary accidental access;
+determined Python introspection is outside its trust boundary. Hosted
+supplies OS isolation for untrusted execution.
+
+The cell runner parses once, executes statements, and displays the last
+expression's repr when it is not None. Capture stdout, stderr, display,
+and formatted traceback through the same bounded text sink. Retain only
+the UTF-8 prefix that fits `output_kib`, count omitted bytes, append a
+truncation notice, and set `truncated`. Formatting runs inside cell limits.
+Do not accumulate unlimited output and truncate it afterward.
+
+Keep the existing limit defaults:
+
+| Limit | Enforcement |
+| --- | --- |
+| CPU: 30 seconds per cell | Child CPU timer and a normal cell error when handled; hard recovery remains available through the host |
+| Wall: 120 seconds per cell | Host interrupts, then kills after a five-second grace period |
+| RSS: 1024 MiB per kernel | Host monitors resident memory and kills an over-limit child |
+| Output: 64 KiB per cell | Bounded capture plus a truncation notice |
+| Retrieve: 1000 entries | Clamp retrieve only; values stays subject to RSS |
+
+CPU and wall budgets reset per cell. A provider request pauses the cell's
+wall budget, but each provider attempt and retry sequence is bounded.
+Host memory monitoring and cancellation continue while the provider is
+busy. Sample RSS through `/proc` on Linux or `ps` on macOS. A single
+missed sample is not a limit failure; persistent inability to monitor
+must fail startup or the host operation, not silently disable enforcement.
+Do not use `RLIMIT_AS` as a substitute for RSS.
+
+A normal exception rolls back private tags. CPU and wall expiry are latched
+for that cell: catching the interrupt in user Python cannot turn an expired
+cell into a success. If the child returns, it reports a limit error with
+no tag delta. The host's wall deadline and grace period still bound a child
+that does not return. A killed child is reconstructed from committed
+cache/log state. The host never retries the Python that was interrupted.
+
+Closing the host closes or terminates and reaps its child, then releases
+locks. The child must also exit on loss of its control channel while a cell
+is executing, so abrupt host death cannot leave an orphan kernel running.
+This is parent/child lifetime handling, not a background supervisor.
+
+## 8. Core operations and the CLI
+
+`service.py` contains plain operations for initialization, import,
+`setup(project)`, `open_session(...)`, listing, fork, fields, export,
+and warm. It owns no kernel registry or process-global state.
+
+`open_session(project, session, dataset=None, fork_from=None, *,
+spawn=None, embed_fn=None)` returns a ready `Kernel`. The caller owns it.
+`Kernel.exec(code)`, `reset()`, and `close()` own live operations.
+The spawn and raw embedding callables are the only Hosted substitutions
+needed initially; do not generalize them into plugin registries.
 
-## 7. Verification
-
-Tests should prove boundaries and durable behavior, not mirror module
-internals.
-
-### Contract tests
-
-- Every public prelude name appears in `docs/api.md`, and every documented
-  name exists.
-- Every expression method accepts and produces exactly the documented
-  pipeline type.
-- One-shot and streaming CLI paths delegate to the same Core operations.
-- `quail/__init__.py` does not import the host graph during prelude startup.
-
-### Durable-state tests
-
-- Deleting SQLite and reopening reconstructs source rows and session tags.
-- Host replay and prelude replay produce the same result from shared fixtures.
-- A failed cell never leaves a durable tag write.
-- Successful and failed records both advance `applied` without unnecessary
-  replay on the next open.
-- Crash points around log sync and SQLite commit recover from the log.
-- Re-import preserves compatible vectors, reapplies tags, and reports
-  final orphaned `(entry_id, field)` pairs without failing.
-- A live dataset cannot be replaced; closed-session reads synchronize, while
-  open-session fields/export reads see committed tag state only.
-- Fork copies history without sharing mutable files and never overwrites its
-  destination.
-
-### Engine tests
-
-- Compiler cases cover every row in the expression/predicate tables.
-- Search rejects transformed expressions and the canonical ID without
-  creating a slow evaluation path.
-- Runtime JSON behavior, list grouping, strict verb arguments, and
-  `tag(None, ...)` match section 8.
-- SQL three-valued logic is reduced to the documented two-valued predicates.
-- Lexical tests distinguish absent, no-match, and positive score.
-- Warm and cold semantic queries return the same result.
-- Each non-empty field value maps to exactly one semantic vector, and long
-  values are passed through whole without special handling.
-- Limits roll back tags and report whether the kernel restarted.
-
-### Warm-shard tests
-
-- Shards are disjoint and their union equals the full distinct value set.
-- Assignment is independent of CSV row order and worker.
-- Changing only a provider base URL does not change assignment, cache keys, or
-  plan identity; changing the exact `embed` string does.
-- Compatible fractional ranges compose across shard counts; `1/4 + 2/4 +
-  2/2` equals one complete warm.
-- Pack records are sorted by text hash.
-- A successful pack contains reused and newly embedded vectors for its full
-  selected range.
-- Partial pack sets import successfully and missing hashes embed lazily.
-- Merging pack directories requires no content merge.
-- Wrong source/model/dimensions/version or a malformed vector rejects the
-  whole pack without partial insertion.
-- Duplicate vector keys are ignored.
-
-Keep performance checks coarse and representative: project open, count,
-retrieve, lexical search, warm semantic search, and bulk tag commit on a
-fixed corpus. Do not bake machine-specific millisecond promises into the
-product specification.
-
-## 8. Binding implementation decisions
-
-The base documents intentionally remain compact. The decisions below resolve
-their conflicting or missing edges for this rebuild. They are requirements,
-not future questions, and override only the behavior they name.
-
-1. **Standard-library imports remain available.** The audit hook permits
-   read-only access beneath the resolved standard-library roots, while the
-   cell-facing `open` is disabled. It denies all writes and every other path.
-   RE2 and optional NumPy load before confinement. Do not add import-state
-   machinery, an AST allow-list, or a module allow-list.
-
-2. **Search starts from a stored field.** `.lexical()` and `.semantic()` are
-   valid only directly on a `Field` for a source or tag field. The canonical
-   `id` field is not searchable. Reject transformed search while building the
-   expression, with the hint to tag the transformed value and search that tag.
-   This keeps one indexing path and avoids a second row-by-row evaluator.
-   Search queries must be non-empty text.
-
-3. **Predicate-producing methods return predicates.** Pipeline methods return
-   an `Expression` except `.isin()` and `.contains()`, which return a
-   `Predicate`. Comparisons also return a `Predicate`. The method table's
-   produce column controls.
-
-4. **`any` uses one JSON runtime rule.** Tags accept JSON-like values with
-   string object keys and finite numbers and are stored as compact,
-   key-sorted, UTF-8 JSON. `None` remains absence. For an `any` value,
-   `q_text` leaves strings alone, uses JSON spelling for scalars, joins array
-   items rendered by the same rule with newlines, and renders objects as
-   compact key-sorted JSON. `.text()`, case/strip operations, `.search()`,
-   `.findall()`, and both searches use that conversion. `.sub()` applies per
-   item and preserves an array; otherwise it substitutes in the converted
-   text. Length is characters for text, items for arrays, keys for objects,
-   and `None` for other scalars. Slice supports text and arrays and otherwise
-   returns `None`. Contains means substring for text, item membership for
-   arrays, and key membership for objects; other scalars return false. Tag
-   FTS indexes the same `q_text` rendering. These rules apply recursively to
-   mixed JSON rather than introducing per-field schemas.
-
-5. **Verb inputs are strict.** `where` is `None` or a `Predicate`; an
-   `Expression` raises with a hint to compare it. `rank` is a number
-   expression. `retrieve` accepts a nonnegative integer limit and offset,
-   clamps only its limit to `max_limit`, and reports the clamp. `values`
-   accepts `None` or a nonnegative integer limit and is otherwise deliberately
-   uncapped so a complete column can be used by Python statistics. It retains
-   `None`; callers filter absence explicitly. Thus the statistics example in
-   `api.md` must behave as if written
-   `values(Field("words"), where=Field("words") != None)` rather than teaching
-   the engine to discard missing values.
-
-6. **`tag(None, field, value)` targets all entries.** A predicate, one
-   `Entry`, and a list of entries retain their documented meanings. Entry
-   lists are deduplicated by stable ID and must belong to the current dataset.
-   The field must be a non-empty string and must not name a source field. The
-   return value is the number of distinct targeted entries. This provides an
-   explicit all-data operation without routing through `retrieve` and its
-   limit.
-
-7. **List grouping is a bag.** In `count(by=...)`, a scalar or `None`
-   contributes one key and an array contributes one key per item. Multiple
-   grouping expressions use the Cartesian product of those one-level
-   expansions; an empty array contributes no group and repeated items remain
-   repeated. Group totals can therefore exceed the matching entry count.
-   Objects and nested containers use their canonical JSON text as hashable
-   keys. For `.isin()`, an empty list is false, `None` explicitly matches
-   absence, and numeric coercion applies only when every non-`None` literal is
-   numeric. Mixed literal types do not trigger numeric coercion; list-valued
-   cells use `.contains()` for membership.
-
-8. **There is exactly one canonical entry ID.** `Field("id")` and `Entry.id`
-   always expose it. The configured CSV column supplies that field; without a
-   configured column, an exact `id` header supplies it, or Quail synthesizes
-   the documented row IDs and warning. The supplying column is not duplicated
-   under another name. Because the public name is reserved, a different
-   configured ID plus a source column named `id` is an import error. Other
-   identifier-like columns are ordinary fields. Durable logs, entry targets,
-   replay, and seeded random use the canonical ID. `Random(seed)` hashes
-   `(seed, entry_id)`, never the disposable SQLite rowid, so it is stable
-   across rebuilds.
-
-9. **Every complete log record advances `applied`.** Successful cells fsync
-   their record before committing tags and the new digest together. Failed
-   cells roll back tags, fsync a record with no tag writes, then advance only
-   the digest. On replay, malformed records are ignored whole and reported;
-   missing entry IDs are skipped and counted as final non-`null`
-   `(entry_id, field)` orphans. Neither failure records nor orphans force the
-   same replay on every open.
-
-10. **Live indexes are not replaced.** A kernel holds a shared advisory lock
-    for its dataset. Rebuild takes the lock exclusively. If the source or
-    import configuration changed while any kernel on that dataset is open,
-    fail clearly and require those kernels to close; do not wait, replace
-    underneath them, or restart them automatically. `reset` replaces a child
-    process against the already-open index and therefore does not release this
-    lock. Fields and export take the session lock and synchronize when it is
-    closed. If it is open, they skip replay and read one committed SQLite
-    snapshot, which lets an agent export without ending its notebook. They do
-    not copy logs or mutate that session.
-
-11. **Embedding identity is the exact configured `embed` string.** For
-    example, `ollama/embeddinggemma:latest` names the vector cache. Split it at
-    the first slash: the `ollama` or `openai` prefix chooses the request and
-    response JSON dialect, and the remainder is the model value sent to that
-    provider. The configured base URL only routes the HTTP request. Neither
-    wire dialect nor base URL is part of cache or warm-pack identity, so
-    workers may reach the same declared model at different addresses. This
-    applies equally to Ollama and OpenAI-compatible endpoints. Quail validates
-    structure and dimensions; it does not attempt model attestation.
-
-12. **Dimensions are per embedding identity.** Infer the established
-    dimension from existing vector blob lengths. The first vector establishes
-    it and every later vector must match. Do not maintain one mutable
-    `meta.embed_dims` value. Provider responses and warm packs must contain the
-    requested count of finite, nonzero-dimension, nonzero-norm vectors.
-
-13. **Semantic indexing is whole-value only.** One complete non-empty field
-    value maps to one text hash and one vector; identical values share it. The
-    complete query is embedded once and each entry receives that single cosine
-    score. There is no passage splitting, truncation, best-passage aggregate,
-    model-window inspection, or passage-number column. A provider rejection
-    for an unsuitable value is an ordinary embedding error and a dataset
-    concern.
-
-14. **The Core host is the only networked layer.** The kernel never contacts
-    the embedding provider and receives no provider credentials. The host may
-    contact the configured endpoint only for semantic queries and explicit
-    warming; Core performs no other remote operation. Spawn kernels with a
-    scrubbed environment. The SQLite authorizer also denies attach/detach,
-    extension loading, schema mutation, and writable pragmas while allowing
-    the exact tag, vector, applied, and temporary-table operations the runtime
-    needs.
-
-15. **Memory is enforced as resident memory.** `memory_mb` is a kernel-wide
-    RSS ceiling watched by the host, not an `RLIMIT_AS` address-space limit.
-    Crossing it kills and restarts the kernel. CPU and wall budgets reset per
-    cell; the stream itself has no overall timeout. Output is limited per cell
-    to `output_kib`: preserve the UTF-8 prefix that fits, append the documented
-    truncation notice, and set `truncated`. Embedding-provider wait pauses the
-    cell wall clock but each HTTP attempt has its own finite timeout. `values`
-    remains subject to the same kernel memory ceiling.
-
-16. **A dead kernel never causes implicit re-execution.** After an unexpected
-    exit, inspect the dead run's final complete record. Treat it as the
-    requested cell only when its run, expected next cell number, and exact
-    code all match. If it was durably logged, restart, replay, and return that
-    stored result with `kernel_restarted`. If it was not logged, the
-    log-before-commit invariant proves that its tags did not commit; restart
-    and return a kernel-failure result. If restart fails, the host operation
-    fails and a CLI stream ends.
-
-17. **Session names, not generated IDs, identify notebooks.** Setup lists
-    sessions and never allocates or locks one. Opening an existing session
-    rejects `fork_from` and requires any supplied dataset to match. A new
-    session inherits its fork source's dataset, otherwise uses the requested
-    dataset or the project's sole dataset; ambiguity is an error. In
-    `quail fork SRC DST`, `DST` is the new session name and must not exist.
-    Lock `SRC` while copying. Names are validated path segments and are never
-    silently normalized.
-
-18. **Core has one CLI and no MCP surface.** The persistent local notebook is
-    the foreground `quail exec SESSION --stream` process described in sections
-    5 and 9. It owns one kernel and supports only sequential `exec` and `reset`
-    records. One-shot file execution uses the same `Kernel.exec` path. Core has
-    no MCP dependency, tool server, daemon, socket, request multiplexing, or
-    process-global kernel registry. Future Hosted wraps the plain service and
-    kernel seams.
-
-19. **Project creation and dataset registration are narrow.** `quail init`
-    uses the current directory when `DIR` is omitted. Create the target when
-    absent; refuse to overwrite an existing `quail.toml`; write only the
-    manifest shown in section 5; ensure `sessions/` exists; and add `.quail/`
-    and `sessions/*/.lock` while preserving an existing `.gitignore`. It does
-    not create a dataset or session, run Git, or create derived storage.
-    `quail import` does not copy or rewrite its CSV. The file must resolve
-    inside the project; its dataset name defaults to the file stem. Validate
-    the complete source and prospective configuration before atomically
-    adding one new `[datasets.<name>]` entry, then build its index. If the
-    process stops between those steps, the next dataset open builds it. Refuse
-    an existing dataset name; later source edits re-import automatically on
-    open.
-
-20. **A successful warm shard is complete for its selected range.** Its pack
-    contains both reused and newly embedded vectors for every selected hash.
-    Validate the whole pack transactionally before inserting any row. Local
-    cache insertion remains content-addressed and idempotent; partial shard
-    sets remain valid and missing hashes warm lazily. The contiguous range
-    arithmetic in section 6 is the only partitioning scheme—there is no
-    coordinator, worker manifest, or completeness protocol.
-
-Everything not named above is implemented directly from the three base
-documents. Do not add extension points, registries, alternate backends, or
-abstraction layers until a second real implementation needs them.
-
-## 9. File-by-file construction blueprint
-
-This is the executable form of the build order in section 3. It fixes the
-repository shape, the order in which files become real, and the responsibility
-of each file. It does not restate the language or storage specification.
-
-Create a file only when its slice is being implemented. Do not add placeholder
-modules, empty tests, compatibility layers, or interfaces for hypothetical
-backends.
-
-### Final checked-in layout
-
-```text
-.
-├── .github/
-│   └── workflows/
-│       └── ci.yml
-├── docs/
-│   ├── api.md
-│   ├── kernel.md
-│   └── storage.md
-├── quail/
-│   ├── __init__.py
-│   ├── project.py
-│   ├── index.py
-│   ├── embed.py
-│   ├── prelude.py
-│   ├── kernel.py
-│   ├── service.py
-│   └── cli.py
-├── tests/
-│   ├── conftest.py
-│   ├── test_project.py
-│   ├── test_index.py
-│   ├── test_language.py
-│   ├── test_cell.py
-│   ├── test_embed.py
-│   ├── test_kernel.py
-│   ├── test_semantic.py
-│   ├── test_warm.py
-│   ├── test_service.py
-│   └── test_cli.py
-├── .gitignore
-├── AGENTS.md
-├── IMPLEMENTATION_GUIDE.md
-├── LICENSE
-├── README.md
-├── pyproject.toml
-└── uv.lock
-```
-
-There is no `src/` directory, `quail/__main__.py`, `quail/mcp.py`, migrations
-directory, provider package, protocol package, ORM layer, or checked-in copy
-of `docs/api.md`. Hatch includes that canonical file as
-`quail/data/api.md` in the built wheel; the copy is a build artifact, not
-another source file.
-
-### Creation order
-
-Each row is one coherent change and must pass before the next begins. Files
-listed as “extend” already exist and gain only the behavior for that slice.
-
-| Order | Create or extend | Slice is complete when |
-| --- | --- | --- |
-| 1 | `pyproject.toml`, `uv.lock`, `.github/workflows/ci.yml`, `quail/__init__.py`, `tests/conftest.py`, `quail/project.py`, `tests/test_project.py` | A project can be initialized, loaded, validated, locked, forked, and replayed without SQLite, and the slice passes in CI. |
-| 2 | `quail/index.py`, `tests/test_index.py` | A valid CSV builds the complete disposable index, and deleting it then reopening produces the same source and tag state. |
-| 3 | `quail/prelude.py`, `tests/test_language.py` | Expressions, predicates, compilation, lexical search, and read-only verbs execute against the real index. |
-| 4 | Extend `prelude.py`; create `tests/test_cell.py` | Notebook display, persistent variables, transactional tags, logs, errors, and output bounding satisfy the in-process cell contract. |
-| 5 | `quail/embed.py`, `tests/test_embed.py`, `quail/kernel.py`, `tests/test_kernel.py` | A host can run and restart one confined kernel, enforce CPU/wall/RSS limits, and service a bounded embedding request over the control channel. |
-| 6 | Extend `prelude.py` and `index.py`; create `tests/test_semantic.py` | Whole-value semantic search is identical cold and warm and never splits a value. |
-| 7 | `quail/service.py`, `tests/test_service.py`; extend `index.py` with local and shareable warming; create `tests/test_warm.py` | Plain Core operations share one dataset-open path, and independently produced shard files combine by directory union. |
-| 8 | `quail/cli.py`, `tests/test_cli.py`; finish the console entry point in `pyproject.toml` | One-shot commands delegate, while one foreground stream preserves a kernel across cells and closes it on EOF. |
-| 9 | Update only the status and usage portions of `README.md`; add the installed-wheel smoke test to `ci.yml` | A clean clone installs, checks, tests, builds a wheel, and runs the installed `quail` command. |
-
-Apply the binding decisions in section 8 as their slices are built. Do not
-reopen them inside implementation commits or introduce temporary behavior
-that a later row must remove.
-
-### Root and support files
-
-#### `pyproject.toml`
-
-Use PEP 621 with Hatchling and a single package, `quail`. It contains:
-
-- Python 3.12 or newer and the Apache-2.0 project metadata.
-- One direct runtime dependency: `google-re2`.
-- NumPy as an optional performance dependency; the standard-library scoring
-  path remains functional.
-- A development group containing `pytest`, `ruff`, and `mypy`.
-- `quail = "quail.cli:main"` as the sole console script.
-- Pytest, Ruff, and mypy configuration kept to the few project-wide settings
-  actually used.
-- A Hatch wheel `force-include` from `docs/api.md` to
-  `quail/data/api.md`, so the canonical agent document ships without a
-  checked-in mirror.
-
-Do not put project manifest defaults, provider URLs, or kernel limits here.
-Do not add a plugin system or optional database/backend groups.
-
-#### `uv.lock`
-
-Generate it from `pyproject.toml` and commit it. Never edit it by hand.
-Regenerate it whenever declared dependencies change.
-
-#### `.gitignore`
-
-Ignore Python/build caches, `.venv/`, `.quail/`, and
-`sessions/*/.lock`. Do not ignore `data/`, `sessions/`, `exports/`, or
-`warm/`; those are durable or intentionally shareable project files.
-
-#### `README.md`, `AGENTS.md`, `docs/`, and `LICENSE`
-
-Keep their current ownership:
-
-- `README.md` explains the product and the shortest successful local path.
-- `AGENTS.md` contains repository rules, not implementation detail.
-- The three files under `docs/` remain the specification owners described at
-  the top of this guide.
-- `LICENSE` remains unchanged.
-
-Do not duplicate sections from this guide into those files. Update a
-canonical document only when behavior changes, and update README examples
-only after the corresponding command works.
-
-#### `.github/workflows/ci.yml`
-
-Use one small Linux job on Python 3.12. From the first slice it installs from
-`uv.lock`, runs Ruff, mypy, and pytest, and builds the wheel. Once the CLI
-exists, it also installs that wheel into a clean environment and smoke-tests
-`quail --help`. Add no version matrix, release workflow, service containers,
-or coverage gate until there is a concrete need.
-
-### Package files
-
-#### `quail/__init__.py`
-
-Keep this file inert: one package docstring and an empty `__all__`. It must
-not import any other Quail module. This guarantees that
-`python -m quail.prelude` does not load host code before confinement.
-
-Host callers import the explicit seams from their owning modules:
-`Project`, `Kernel`, and the functions in `service.py`. Do not re-export the
-agent language; it exists only inside the kernel.
-
-#### `quail/project.py`
-
-Build the file from top to bottom in this order:
-
-1. Constants and the host `QuailError` exception (`type`, `message`, `hint`).
-2. Small immutable records for validated dataset, session, and kernel
-   configuration.
-3. Name, path, timestamp, TOML, and atomic-text-write helpers.
-4. `Project(path)`: manifest discovery, strict parsing, and resolved paths.
-5. Project initialization and manifest updates used by `quail init` and
-   `quail import`.
-6. Session create, list, fork, and metadata operations.
-7. Run-log parsing, digesting, and replay-map construction.
-8. Advisory session- and dataset-lock context managers.
-
-Only `Project` and `QuailError` are promised external host seams.
-Configuration records are Core-internal even when another Core module imports
-them. This file performs no SQL, HTTP, cell evaluation, or Git operation, and
-it never appends a run log.
-
-Adding a dataset appends one safely quoted TOML table to the existing manifest
-with an atomic text replacement; it does not parse and reserialize unrelated
-tables or comments. Do not add a TOML-writing dependency for this single
-append-only operation.
-
-#### `quail/index.py`
-
-Build the file in this order:
-
-1. Schema/version constants and the literal schema SQL.
-2. SQLite connection setup: foreign keys, WAL, busy timeout, and row factory.
-3. CSV header/row/ID validation, source hashing, and identifier quoting.
-4. Full index construction at a temporary path and atomic publication.
-5. Session replay into a rebuilt index, applied digests, and orphan counts.
-6. `ensure_index(project, dataset)`, `sync_session`, and small read helpers
-   needed by setup, fields, and export. SQL does not leak into `service.py`.
-7. Whole-value hashing and source-cell-to-vector mapping used by semantic
-   search and warming.
-8. Warm-value inventory, vector-cache writes, and warm-pack read, write,
-   validation, ingestion, and shard selection from section 6.
-
-Use functions and small records, not an ORM or repository class. Keep schema
-creation in this file rather than creating migrations for a disposable cache.
-Its Core-facing operations are `ensure_index`, dataset/session summaries,
-field catalog, session export, warm-value inventory, vector insertion, and
-warm-pack writing. Warm-pack ingestion stays inside `ensure_index`; schema
-helpers remain private. This file never contacts an embedding provider. For
-explicit warming, `service.py` obtains the value inventory here, calls
-`embed.py`, then returns validated vectors here for cache and optional pack
-writes.
-
-#### `quail/embed.py`
-
-This is one operation and its private helpers:
-
-```python
-embed(project, dataset, texts) -> list[list[float]]
-```
-
-Lay it out as provider/configuration resolution, bounded HTTP request helper,
-the two supported wire shapes (Ollama and OpenAI-compatible), response
-validation, then `embed`. Use the standard library HTTP stack unless it proves
-insufficient; do not introduce provider classes or a registry for two request
-formats.
-
-Preserve input order. Give every HTTP attempt a finite timeout and retry only
-transient transport, rate-limit, and server failures with a small fixed bound.
-Validate count, nonzero consistent dimension and norm, and finite numbers.
-Send each complete input value unchanged. This file does not hash text,
-inspect model context limits, access SQLite, or cache anything.
-
-#### `quail/prelude.py`
-
-This is intentionally the largest file because it is the sealed Cell 0
-runtime. Organize definitions in exactly this order:
-
-1. Standard-library, RE2, and optional NumPy imports.
-2. Wire records, `QuailError`, JSON-safe display values, and private runtime
-   state.
-3. Immutable expression/predicate node types and operator construction.
-4. Pipeline-method produce checks and the public `Field` and `Random`
-   constructors.
-5. Registered `q_*` SQLite functions and the expression-to-SQL compiler.
-6. `Entry`, `count`, `retrieve`, `values`, `tag`, and `fields`.
-7. Lexical preparation and whole-value semantic preparation/scoring.
-8. Replay application and append-only run-log writing.
-9. Cell parsing, final-expression display, output capture, transaction,
-   traceback cleanup, and limit handling.
-10. Bootstrap, confinement, ready handshake, and the JSON-lines control loop.
-
-Within bootstrap, do privileged work first: parse startup arguments, open and
-configure SQLite, apply replay, open the run log, import the free modules, and
-construct the user namespace. Install the SQLite authorizer while configuring
-the connection; install the audit hook, narrow standard-library import path,
-and network isolation only after every needed file is open. Signal ready last.
-
-There is one execution engine: verbs compile expression nodes to parameterized
-SQL and decode results. Do not add a row-by-row Python evaluator. The module
-imports no `quail.*` file, performs no provider HTTP, and exposes only names
-listed in `docs/api.md` to the cell namespace.
-
-#### `quail/kernel.py`
-
-Build the file in this order:
-
-1. Control-message encoding/decoding and subprocess-start helpers using the
-   current `sys.executable` and a scrubbed environment.
-2. The injectable spawn and embedding callables used by local Core and
-   Hosted.
-3. `Kernel(project, session, spawn=..., embed_fn=...)` lifecycle.
-4. One serialized execution loop that pauses the cell's wall deadline, answers
-   bounded kernel embedding requests, then resumes it before returning the
-   final cell result.
-5. CPU/wall timers, host RSS monitoring, interrupt, kill, restart reporting,
-   dead-run result recovery, and clean close.
-
-Use a standard-library RSS check: read `/proc/<pid>/status` when available and
-otherwise ask `ps` for that process's RSS. Failure to sample once is not a
-limit failure; continue watching. Do not add a process-monitoring dependency
-for this one value.
-
-`Kernel` owns one shared dataset lock, one session lock, and one subprocess.
-It does not own a pool, compile SQL, parse logs, or know about CLI/MCP types.
-The local spawn is `[sys.executable, "-m", "quail.prelude"]`; Hosted substitutes
-only the spawn callable and the embedding service behind the same control
-protocol.
-
-#### `quail/service.py`
-
-This module contains plain functions and no long-lived object. Lay it out in
-this order:
-
-1. Agent-document loading from packaged data, with the repository copy as the
-   development fallback.
-2. The one shared dataset-open operation and closed-session synchronization.
-3. Project initialization and dataset import.
-4. `setup(project) -> dict`.
-5. `open_session(project, session, dataset=None, fork_from=None, *,
-   spawn=None, embed_fn=None) -> Kernel`.
-6. Session listing/forking, field catalog, and export.
-7. `warm(..., embed_fn=None)`, coordinating value inventory, the supplied
-   embedding callback or `embed.py`, cache insertion, and an optional shard
-   pack.
-
-`open_session` creates or forks a session when required, ensures its index,
-synchronizes its log, and returns a ready `Kernel`. The caller owns and closes
-it. There is no service class, kernel dictionary, singleton, daemon, or
-process-global state. Future Hosted may keep returned kernels in its own
-authenticated session registry; that policy does not enter Core.
-
-Load agent documentation from packaged `quail/data/api.md`, with canonical
-`docs/api.md` as the development-tree fallback. Do not accept an arbitrary
-runtime override or resolve it from the caller's working directory.
-
-The module contains orchestration only: no SQL, argparse, provider wire
-formats, expression logic, or transport-specific results.
-
-#### `quail/cli.py`
-
-Use `argparse`; do not add a CLI framework. Build the parser, one function per
-documented command, the exec-stream loop, and `main(argv=None) -> int`.
-
-`quail init` delegates the exact narrow behavior in decision 19: it preserves
-existing files, creates no data or derived cache, and never runs Git.
-Every other command discovers the project from the current directory.
-`quail import` resolves `CSV` from that directory, requires it to remain
-inside the project after symlink resolution, and delegates registration and
-index construction as one service operation.
-
-The final command set is:
+Use this command set:
 
 ```text
 quail init [DIR]
-quail import CSV [--name N] [--id COL] [--embed PROVIDER/MODEL]
+quail import CSV [--name N] [--id COL] [--embed PROVIDER/MODEL --embed-revision R]
 quail setup [--json]
 quail exec SESSION FILE.py [--dataset D] [--fork-from S] [--json]
 quail exec SESSION --stream [--dataset D] [--fork-from S]
@@ -1244,71 +976,168 @@ quail export SESSION [--out PATH] [--json]
 quail warm DATASET [--field F] [--shard I/N] [--json]
 ```
 
-For `--stream`, open one kernel before reading requests. Write this ready
-record first:
+Use `argparse`. All commands except init discover the nearest
+`quail.toml` from the working directory or its parents. One-shot commands
+delegate to the same Core operations used by a live stream.
 
-```json
-{"ready":true,"session":"billing-coding","run":"20260901T210000Z-a1b2c3"}
-```
+Export source fields in import order with canonical ID first, then tag
+fields in deterministic name order. Preserve text and JSON-encode compound
+tag values. Default to `exports/<session>.csv` and write atomically. A
+supplied output path resolves from the invoking directory and may be anywhere
+inside the project after symlink resolution. Reject an output that names or
+aliases a registered source, the manifest, or the ignore file, or falls in
+the managed session, index/lock, or warm-pack directories. Return the path,
+rows, columns, and orphan count. Export is a report, not a lossless backup.
 
-If opening fails, write
-`{"ready":false,"error":{"type":"...","message":"...","hint":"..."}}`
-and exit nonzero.
+### Foreground execution
 
-Then read exactly two request shapes, one compact JSON object per line:
+`quail exec SESSION --stream` owns one kernel. It writes a ready record,
+then processes one complete JSON object per input line:
 
 ```json
 {"op":"exec","code":"x = 10\nx + 1"}
 {"op":"reset"}
 ```
 
-An exec response is the ordinary cell-result object. A reset response is
-`{"reset":true,"session":"...","run":"<new run id>"}` after the
-replacement kernel is ready. A malformed record returns one serialized
-error as `{"error":{"type":"...","message":"...","hint":"..."}}`
-and leaves the stream open. Process one line completely before reading the
-next; do not add IDs, batching, negotiation, or asynchronous messages.
+Initial success is `{"ready":true,"session":"...","run":"..."}`,
+with a `warnings` list when source changes or recovery need reporting.
+Opening failure is `{"ready":false,"error":{...}}` followed by nonzero exit.
+An execution response is:
 
-Stream stdout is JSONL only. Cell output is captured inside its response and
-CLI diagnostics use stderr. Encode records as UTF-8 and flush after every
-line. On EOF, `SIGINT`, or a broken output pipe, close the kernel in `finally`
-and exit. The file form performs the same open/exec/close sequence once. A
-cell error remains a normal result and does not close the stream; in file
-mode it exits zero after printing that result. Failures outside a cell exit
-nonzero.
+```json
+{"session":"study","run":"...","cell":1,"output":"11","error":null,"tags_written":0,"truncated":false,"kernel_restarted":false}
+```
 
-Every command delegates to `service.py` or to the returned `Kernel`. No
-command opens SQLite directly, edits TOML directly, evaluates code in-process,
-runs Git, starts a daemon, or serves MCP.
+Reset returns `{"reset":true,"session":"...","run":"<new run>"}` once
+the replacement is ready. Malformed requests return one serialized error
+without executing or logging a cell and leave the stream open.
 
-### Test files
+Cell failures are ordinary execution responses and keep the stream open.
+Persistence, unrecoverable cache, or protocol failures close it with a host
+error. There are no concurrent requests, request IDs, multiplexing,
+standalone reset command, socket, or background supervisor.
 
-Tests use temporary project directories and the real SQLite engine. Mock only
-the embedding HTTP boundary, time, signals, and subprocess placement when the
-behavior under test requires it.
+The internal child protocol is equally small: ready, numbered run/result,
+and bounded embedding request/response records while a cell is in flight.
+It carries tag deltas and vector data that are never included in agent
+output. Host-assigned run/cell identity is enough to associate results;
+there is no general RPC system or retryable execution protocol.
 
-| File | Owns |
+Flush after each record. Stream stdout is JSONL only; human diagnostics
+use stderr and cell output is inside its result. EOF, SIGINT, or a broken
+output pipe closes the owned child in a finally block. Never interpret a
+delivery failure after log sync as an annotation rollback.
+
+The file form opens, executes once, prints the result, and closes. It exits
+zero for a successful cell and nonzero for a cell or host failure, so shell
+pipelines cannot mistake a failed analysis for success. Python variables
+persist only in the stream; tags persist in both forms. Include opening
+warnings in the file form's JSON result and human diagnostics too.
+
+### Agent orientation
+
+Setup returns `documentation`, dataset summaries, and session summaries
+including ID/source compatibility and recovery diagnostics. It never starts
+a kernel. Fields are included in dataset orientation; sessions report
+history counts, last activity, source changes, and orphan tags. Unavailable
+generated-ID history is identified without inventing an empty analysis.
+
+Retain the structured CLI invocation metadata alongside `documentation`,
+`datasets`, and `sessions` in setup's JSON result:
+
+```json
+{"interface":{"setup":"quail setup --json","open":"quail exec SESSION --stream [--dataset D] [--fork-from S]","exec":{"op":"exec","code":"..."},"reset":{"op":"reset"},"export":"quail export SESSION --json"}}
+```
+
+This describes invocation and remains consistent with the agent document;
+it does not override that document's semantics.
+
+Package the corrected canonical `docs/api.md` as `quail/data/api.md`
+using Hatch's build inclusion. Load packaged data with a repository-tree
+fallback for development, never from the caller's working directory.
+Return that text exactly. The document will explain the local stream and
+the language; Hosted may supply its own invocation wrapper later.
+Do not maintain a second agent manual or ship the old semantics with a
+runtime override banner. Reconcile the document before exposing the
+completed CLI to agents.
+
+## 9. Build and verification
+
+Build useful paths through the system. The first runnable slice must
+exercise the real host/child boundary and durable log; it need not have
+semantic search.
+
+| Slice | Deliverable | Proof |
+| --- | --- | --- |
+| 1 | Packaging, minimal project/import/index, CLI setup and persistent execution, Field reads, count/retrieve, tag, log replay | Initialize a small CSV project, inspect and tag it through the actual CLI, fail a cell, close, reopen, and recover the committed tags |
+| 2 | Complete language, values/grouping, lexical search, entry behavior, fields/export/fork | Agent workflows run through the same engine; another session cannot change lexical scores |
+| 3 | Limits, persistence failure recovery, locking and source/ID continuity | Concurrent local sessions work; stable-ID edits preserve sessions and positional IDs cannot reassign tags |
+| 4 | Provider adapters, one cached embedding path, exact semantic scoring, local and shared warming | Warm/cold and NumPy/fallback agree; workers produce complete mergeable shards; imported packs reuse the same cache; a slow provider does not block another session's tag commit |
+| 5 | Documentation alignment, installed-wheel and real-harness checks | A clean installation and the intended agent harness can keep variables, recover errors, export, pull shared vectors, and continue after cloning |
+
+Each slice can be several small commits. Introduce the relevant guards
+with the behavior they protect; slice 3 completes failure coverage rather
+than licensing an unsafe first implementation. Create files as needed,
+not as empty placeholders. Get a working CLI path before investing in
+warming optimizations.
+
+Use PEP 621 and Hatchling, a generated committed `uv.lock`, and
+`quail = "quail.cli:main"` as the entry point. Use pytest, Ruff, and mypy
+for development. CI installs the lock, runs checks and tests, and builds
+a wheel. Once the CLI exists, install that wheel into a clean environment
+and smoke-test it. Exercise the small platform-dependent lifecycle and
+confinement surface on both supported OSes before claiming support;
+no broad dependency or version matrix is needed.
+
+Tests use temporary projects and real SQLite. Mock the provider boundary
+and inject time, process failure, or placement only where needed.
+Organize tests around these observable contracts:
+
+| Contract | Essential cases |
 | --- | --- |
-| `tests/conftest.py` | Minimal temporary-project builders, sample CSVs, and a deterministic fake embedding callback shared across files. |
-| `tests/test_project.py` | Exact non-destructive init, append-only dataset registration, manifest strictness, safe names/paths, sessions, fork destinations, session/dataset locks, log parsing, digests, replay, and malformed lines. |
-| `tests/test_index.py` | CSV/ID validation, text preservation, schema, FTS import, guarded rebuild, vector preservation, session synchronization, applied digests, orphans, and atomic failure behavior. |
-| `tests/test_language.py` | Public namespace, every documented method/produce pair, stored-field search, runtime JSON behavior, grouping, compiler cases, predicates, verbs, and stable ordering. |
-| `tests/test_cell.py` | Last-expression display, stdout/stderr, namespace persistence, all-entry tagging, tag visibility/commit/rollback, successful/failed log digests, traceback cleanup, and truncation. |
-| `tests/test_embed.py` | Ollama and OpenAI-compatible requests, batching, ordering, retry boundary, credential resolution, and response validation. |
-| `tests/test_kernel.py` | Spawn/ready, scrubbed environment, serialization, bounded embedding forwarding, session/dataset lock lifetime, filesystem/network confinement, CPU/wall/RSS recovery, dead-run result recovery, close, and protocol failure. |
-| `tests/test_semantic.py` | One vector per complete non-empty value, deduplication, query caching, cosine scores, cold/warm equivalence, NumPy/fallback equivalence, and tag invalidation. |
-| `tests/test_warm.py` | Local warm, shard union/disjointness, stable assignment, full reused/new pack output, transactional validation/import, partial availability, duplicates, and Git-conflict-free filenames. |
-| `tests/test_service.py` | Shared guarded dataset-open flow, closed-session synchronization, open-session read snapshots, project/import/setup/session/list/fork/fields/export/warm operations, and caller ownership of returned kernels. |
-| `tests/test_cli.py` | Installed one-shot commands plus setup interface framing, init safety, session create/open/fork rules, stream ready, multi-cell variable persistence, reset, malformed input recovery, stdout purity, and cleanup on EOF/interruption. |
+| Project identity | Safe names and paths, exact text preservation, ID resolution, source-version changes, source edited during import, non-destructive metadata publication |
+| Session scope | Stable-ID additions/edits/reorders and ID-column renames continue in the same session; deleted IDs count as final orphans and restored IDs recover tags; explicit preservation of generated IDs permits later edits; automatic positional reassignment fails; source/tag name conflicts are reported |
+| Replay | Continuation on a clock behind imported history, deterministic concurrent ties, forked history, malformed records with valid later cells, interrupted headers/tails, persistent recovery diagnostics, failed/ignored-record digests |
+| Durable completion | Child death before/after result, log append/fsync uncertainty, cache failure after log sync, host death before reply; never execute code twice |
+| Private state | Read-your-writes, disk-backed tag working tables with bounded memory, newly created fields, failed-cell rollback of tags/FTS/derived search state, variables retained on normal failure |
+| Concurrency | Two kernels read then tag without a shared snapshot upgrade; embedding waits coexist with another session's commit; exports see committed state |
+| Language | Method/produce pairs, None and predicate negation, numeric and mixed-list comparison, recursive text conversion, container grouping without string collisions, Unicode case and whitespace, strict verb arguments, standard seed types and random-expression reuse |
+| Search | Isolated field/session BM25, absent versus empty versus nonmatch, phrase handling, invalidation after tags, equivalent warm/cold scores |
+| Embeddings | Full-value requests, Ollama truncation disabled, input ordering, finite packed vectors, dimension races, revision separation, bounded retries |
+| Shared warming | Disjoint/balanced shard coverage, row-order-independent assignment, mixed shard-count composition, complete reused/new output, atomic publication, partial pack sets, whole-pack rejection, duplicate keys, address independence and revision separation |
+| Runtime and CLI | Ready/stream/reset and setup invocation metadata, bounded output, CPU/wall/RSS failure including caught interrupts, parent/child cleanup, JSONL purity, recovery warnings, safe project-relative exports, exit status, actual harness variable persistence |
 
-Do not mirror implementation modules mechanically. The files above are
-behavioral boundaries; add a new test file only when a genuinely new product
-concern appears.
+Run examples from the corrected agent document against a fixture that
+supplies their assumed fields and values. Check an explicit public namespace.
+Do not parse every inline code span as a required exported name.
 
-### The stopping rule
+Keep performance checks representative: source open/rebuild, a full-field
+count, ranked retrieval, lexical search, semantic reuse, and a bulk tag
+commit on a fixed corpus. Measure before adding another cache, persistent
+mapping table, or planner optimization. Avoid machine-specific latency
+promises.
 
-The layout is complete when the files above implement the canonical behavior
-and pass their boundary tests. File size alone is not a reason to split a
-module—especially `prelude.py`. Add another production file only when one
-existing file has acquired a second independent concern that can be named,
-tested, and used without creating a new framework around it.
+The initial Core is complete when an agent can import, inspect, search,
+annotate, recover, export, share warming work, and continue a session from
+its text project, including source edits with stable IDs. This includes
+the original workflows; build order does not make later slices optional.
+Automatic identity remapping, a worker coordinator, distributed conflict
+resolution tools, a daemon, extra backend/provider frameworks, and Hosted
+policy remain outside Core.
+
+## 10. Documentation alignment to do later
+
+This editing step leaves other files untouched. Before publishing the
+rebuild, move the settled behavior into the documents that own it and
+remove the temporary precedence notice at the top of this guide.
+
+| Owner | Required alignment |
+| --- | --- |
+| `docs/api.md` | CLI stream invocation; stable-ID continuity and positional-ID scope; tag-all with None; predicate-producing methods and absence; stored-field-only search; whole-value semantics and length failure; live Entry reads; container grouping keys and random-expression reuse; normal exception versus hard-crash output; corrected examples |
+| `docs/storage.md` | Stable-ID re-import and orphan recovery; per-run source provenance; host-owned logs and logical ordering; visible best-effort replay; one durable commit point; private tag working tables; per-field FTS; shared warming and revised vector identity; local lock layout; project-relative exports |
+| `docs/kernel.md` | Read-only source connection plus private TEMP transactions; host durability and cache operations; minimal control exchange; recovery diagnostics and outcomes; RSS and bounded output; CLI-only Core with setup invocation metadata; shared-warm orchestration; module ownership |
+| `README.md` | Working CLI path, shared warming, stable-ID source updates, and current implementation status; no local MCP command |
+| `AGENTS.md` | The corrected document ownership and dependency list; host-only remote embedding requests; self-contained prelude without log replay |
+
+When those owners agree, this guide should explain how to build their
+contract, not accumulate another series of overrides.
