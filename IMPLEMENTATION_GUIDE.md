@@ -1075,11 +1075,12 @@ provider credentials.
 Use a scrubbed environment. Disable the cell-facing file API and install
 the subtractive audit hook for filesystem mutations, new database
 connections, sockets, process creation, native loading, and instrumentation
-as described in `docs/kernel.md`. Permit read-only access under resolved
-standard-library roots so ordinary imports work; disable bytecode writes.
-NumPy is also available to analysis code from the preloaded module; this
-does not grant its file or network operations any additional capabilities.
-Deny other file paths. On Linux attempt network namespace isolation and
+as described in `docs/kernel.md`. Permit read-only access under the
+resolved standard-library roots and the package roots of the preloaded
+NumPy and RE2 modules, so ordinary imports and NumPy's lazily imported
+submodules work; disable bytecode writes. NumPy is available to analysis
+code from the preloaded module; this does not grant its file or network
+operations any additional capabilities. Deny other file paths. On Linux attempt network namespace isolation and
 report whether it succeeded. Do not introduce a Python module allow-list,
 import-state framework, or general syntax allow-list.
 
