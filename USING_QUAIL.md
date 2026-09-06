@@ -13,9 +13,15 @@ body    = Field("body")
 parking = body.lexical("parking permit") > 0             # keyword match, per entry
 nearby  = body.semantic("no place to park near work")    # closeness in meaning, per entry
 
-count(parking)                                           # how many
-count(where=parking, by=Field("dept"))                   # and who says it
+print(count(parking))                                    # how many
+print(count(where=parking, by=Field("dept")))            # and who says it
 retrieve(rank=nearby, limit=5)                           # read the five closest
+```
+
+After inspecting results, choose a threshold for this corpus and model;
+`0.55` below is only an example. In a later cell:
+
+```python
 tag(parking | (nearby > 0.55), "topic", "parking")       # keep the decision
 ```
 
@@ -47,9 +53,9 @@ continue.
 - A **cell** is one submission to the kernel. Variables, functions,
   classes, and imports persist from cell to cell while the kernel runs.
 - A **tag** is a value you write onto entries, in a field you name. Tags
-  are what a session produces: they are in the session log before you see
+  are durable annotations: they are in the session log before you see
   the cell's result, they outlive the kernel, and they travel with the
-  study through git. Variables are working memory; tags are what you keep.
+  study through git. The log also preserves submitted code and captured output.
 
 A study is a directory of text, and git carries it between agents and
 machines. If a harness has already opened a session for you, skip to
@@ -147,9 +153,10 @@ this stream, and they hold until you close it.
 
 **Warnings.** The ready record's `warnings` tell you when the source CSV has
 changed since the session last ran, or when an earlier run was interrupted
-mid-write (the unfinished line is ignored; nothing else is lost). A session
-whose history does not validate is reported as unavailable, with the
-reason; other sessions and new ones still work.
+mid-write. An unfinished final line is ignored; earlier complete records
+apply if the history validates. A session whose history does not validate
+is reported as unavailable, with the reason; other sessions and new ones
+still work.
 
 **One file as one cell.** `quail exec SESSION FILE.py` opens the session, runs
 the file as a single cell in a fresh kernel, prints the result, and exits:
@@ -179,9 +186,10 @@ directory or its parents.
 
 A cell is a transaction for tags. If it finishes, its tag writes are
 committed together and written to the session log before you see the
-result. If it raises, none of them are kept, but the variables you assigned
-before the error are, as in a notebook. Fix the line and run the next cell;
-a failed cell costs nothing but the time it took.
+result. If it raises normally, none of its tag writes are kept, but Python
+assignments and mutations made before the error remain, as in a notebook.
+Fix the error with that working state in mind. Completed embedding work
+may remain cached even when the cell fails.
 
 Available: Python 3.12 and its standard library, and `numpy`. Already
 imported: `re`, `math`, `statistics`, `json`, `itertools`, `collections`,
@@ -344,9 +352,10 @@ retrieve(where=billing, rank=-Field("body").length(), limit=3)   # shortest
 retrieve(where=billing, rank=Random(seed=7), limit=10)           # a sample
 ```
 
-A seeded `Random` gives the same sample every time, which makes it a fair
-way to check your own coding: read ten entries you tagged and see whether
-you agree with yourself.
+A fixed seed makes a sample repeatable for the same data and query. To
+check a coding scheme, sample both included and excluded entries: the first
+can reveal incorrect labels, the second missed matches. Use fresh samples
+as you revise the scheme.
 
 ### `values`
 
@@ -398,11 +407,10 @@ tag(billing, "topic", None)                       # clear
 ```
 
 Tags are scoped to this session; another session on the same dataset does
-not see them. They are the only analysis state that persists, so put
-anything you want to keep in a tag, not a variable. A provisional label is
-fine: tag now, read a sample, and rewrite. Tagging in a Python loop
-(`for e in retrieve(...): tag(e, ...)`) is fine too; the writes share the
-cell's transaction.
+not see them. Tags survive kernel loss; variables are working memory. A
+provisional label is fine: tag now, read a sample, and rewrite. Tagging in a
+Python loop (`for e in retrieve(...): tag(e, ...)`) is fine too; the writes
+share the cell's transaction.
 
 ### `fields`
 
@@ -444,11 +452,11 @@ wrap a phrase in double quotes to require adjacency. There are no other
 operators, and a query must contain at least one word. Words are stemmed,
 so `parking` matches `parked`.
 
-The score is `None` when the cell is blank, `0` when it is present and none
-of the query's words appear, and greater than `0` when any of them does, so
-`> 0` means matched. Higher is a better match: more of the query's words,
-and rarer ones. Scores are relative to the whole field and are not
-comparable across fields or datasets.
+The score is `None` when the cell is blank, `0` for a present nonmatch,
+and greater than `0` when any unquoted query word or complete quoted phrase
+matches, so `> 0` means matched. Higher is a better match under BM25. Scores
+are relative to the whole field and are not comparable across fields or
+datasets.
 
 ```python
 count(Field("body").lexical("parking permit") > 0)
@@ -472,10 +480,40 @@ similar = Field("body").semantic("the office closes before I finish work")
 retrieve(rank=similar, limit=10)
 ```
 
-Semantic search needs an embedding model, chosen for the dataset at import
+Semantic search needs an embedding model. Locally, choose one at import
 (`--embed ollama/embeddinggemma --embed-revision v1`) or in `quail.toml`.
-The revision is a label you give the model's current weights; change it
-when they change, and vectors from the two are kept apart. Without a model,
+For an existing dataset, edit its table; keep its source and ID settings.
+For example, the `notes` dataset from the first study becomes:
+
+```toml
+[datasets.notes]
+source = "notes.csv"
+embed = "ollama/embeddinggemma"
+embed_revision = "v1"
+```
+
+Import registers new datasets; do not re-import `notes` or add a second
+`[datasets.notes]` table. This example uses Ollama at `http://127.0.0.1:11434`.
+For another Ollama server, set `base_url` under `[providers.ollama]`.
+
+For an OpenAI-compatible endpoint, set the dataset's `embed` to
+`"openai/MODEL"`, replacing `MODEL` with its model name, and add or edit:
+
+```toml
+[providers.openai]
+base_url = "https://your-provider.example/v1"
+api_key = "env:OPENAI_API_KEY"
+```
+
+Replace the URL with the endpoint's base URL. Export `OPENAI_API_KEY` in the
+shell that starts Quail; keep only the environment reference in the manifest.
+Omit `api_key` if the endpoint needs no credentials. The selected model must
+be available at its provider when missing embeddings are needed.
+
+The revision labels fixed weights and embedding behavior, including
+preprocessing. Change it when those change; vectors from different revisions
+are kept apart. Close and reopen the stream after configuration changes;
+`reset` retains the old configuration. Without an embedding configuration,
 `.semantic()` raises with a hint, and `quail info` says whether one is
 configured.
 
@@ -490,10 +528,10 @@ choose weights by reading the top results, not by assumption.
 
 ## Reusable Python
 
-Ordinary Python is the extension mechanism. Anything you would write in a
-notebook works here and is reusable in every later cell of the stream: a
-class or function that wraps the verbs, a coding scheme kept as a dict of
-predicates, a loop that tags entry by entry.
+Ordinary Python is the extension mechanism, with the libraries and
+capability restrictions described under [Cells](#cells). Reuse your code in
+later cells of the stream: a class or function that wraps the verbs, a
+coding scheme kept as a dict of predicates, a loop that tags entry by entry.
 
 ```python
 class Theme:
@@ -544,7 +582,8 @@ for e in retrieve(where=sem != None, rank=sem, limit=8):
 ```
 
 ```python
-# cell 4: code the theme, then check the coding
+# cell 4: code the theme, then inspect the counts
+# 0.55 is illustrative; choose a cutoff after reading the results.
 parking = kw | (sem > 0.55)
 tag(parking, "topic", "parking")
 count(by=Field("topic"))
@@ -560,13 +599,15 @@ statistics.quantiles(lengths, n=4)
 ```python
 # cell 6: read the disagreements between the two signals
 only_kw = kw & ~(sem > 0.55)
+only_sem = (sem > 0.55) & ~kw
 for e in retrieve(only_kw, limit=5):
-    print(e.id, e["body"][:200])
+    print("keyword only", e.id, e["body"][:200])
+for e in retrieve(only_sem, limit=5):
+    print("semantic only", e.id, e["body"][:200])
 ```
 
-If cell 4 had raised partway through, its `tag` would have been rolled back,
-`parking` would still be defined, and the next cell would start from the
-state after cell 3.
+If cell 4 raised normally after assigning `parking`, the tags would return
+to their state after cell 3, while `parking` would remain defined.
 
 ## Ids and source edits
 
@@ -607,6 +648,13 @@ four workers each embed a quarter and commit the resulting `warm/` files. A
 fresh clone uses whatever parts have arrived, and ordinary search fills in
 the rest. Warming is preparation, never a requirement.
 
+Before pulling or editing source CSVs, close streams using those datasets.
+After pulling source, logs, or `warm/` files, reopen affected streams to see
+the changes. A live stream keeps its source snapshot and synchronized
+history; new pack paths are discovered on open. `reset` retains that source
+snapshot and configuration, so use close and reopen to synchronize. Python
+variables are gone after reopening; resubmit saved helper definitions.
+
 ## Errors and restarts
 
 Every Quail error is a `QuailError` with a message and, when there is an
@@ -618,7 +666,8 @@ A cell that runs out of CPU or wall time fails with no tag writes; catching
 the interrupt does not turn it into a success. If the kernel itself is
 replaced (it ran out of memory, ignored the interrupt, its process died, or
 you sent `reset`), the response says so with `kernel_restarted` or `reset`.
-Variables are gone; every committed tag is intact. Resubmit your helper
+Variables are gone; every committed tag is intact. A hard process death can
+also lose output still buffered in the kernel. Resubmit your helper
 definitions and continue. Nothing you sent is ever run twice on your behalf.
 
 Losing the stream, or receiving a host persistence error, is different: a
@@ -642,8 +691,9 @@ Six facts hold everywhere in Quail:
    booleans; comparisons with it are false except `== None` and `!= None`;
    it sorts last.
 3. Expressions are inert. Only the verbs and `entry[...]` read data.
-4. A cell commits its tags together or not at all. Variables and output
-   are kept either way.
+4. A cell commits its tags together or not at all. Ordinary exceptions keep
+   Python assignments, mutations, and captured output; kernel replacement
+   discards working memory.
 5. Expressions and predicates have no truth value. Use `&` `|` `~`, and
    `== None` for blank cells.
 6. No network, no files, no subprocesses. Otherwise it is Python.

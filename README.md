@@ -5,14 +5,13 @@ answers, support tickets, interview excerpts, field notes, any collection
 that is worth deciding from and too large to read end to end. The agent
 works in a persistent Python kernel with a small analysis language, decides
 for itself what to look for and how to check it, and writes its judgments
-back as tags. Every conclusion it reaches is backed by tags it can show and
-a log of the cells that produced them.
+back as tags. Tags and the cell log let it show how it reached a conclusion.
 
 ```python
 body    = Field("body")
 parking = body.lexical("parking permit") > 0
-count(where=parking, by=Field("dept"))
-retrieve(rank=body.semantic("no place to park near work"), limit=5)
+print(count(where=parking, by=Field("dept")))
+print(retrieve(rank=body.semantic("no place to park near work"), limit=5))
 tag(parking, "topic", "parking")
 ```
 
@@ -27,7 +26,7 @@ tag(parking, "topic", "parking")
   CSV. Every entry has a durable `id`, and the source is never modified.
 - A **session** is a persistent Python kernel on one dataset plus its
   **tags**: values the agent writes onto entries, in fields it names. Tags
-  are the only analysis state; variables are working memory.
+  are durable annotations; variables are working memory.
 - A **cell** is one submission to the kernel. Variables persist across
   cells. A cell's tags commit together or not at all, and are in the
   session log before the agent sees the result.
