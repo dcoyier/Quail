@@ -1,19 +1,10 @@
 # Quail
 
-Quail is an environment where an agent studies a corpus of text: survey
-answers, support tickets, interview excerpts, field notes, any collection
-that is worth deciding from and too large to read end to end. The agent
-works in a persistent Python kernel with a small analysis language, decides
-for itself what to look for and how to check it, and writes its judgments
-back as tags. Tags and the cell log let it show how it reached a conclusion.
-
-```python
-body    = Field("body")
-parking = body.lexical("parking permit") > 0
-print(count(where=parking, by=Field("dept")))
-print(retrieve(rank=body.semantic("no place to park near work"), limit=5))
-tag(parking, "topic", "parking")
-```
+Quail is an environment for agentic qualitative analysis. An agent works in
+a persistent Python kernel to study a corpus of text. It decides for itself
+what to look for and how to check it, and writes its judgments back as tags.
+Tags and the cell log preserve the analysis history so the study can be
+inspected, continued, and shared.
 
 | Document | Reader | Contents |
 | --- | --- | --- |

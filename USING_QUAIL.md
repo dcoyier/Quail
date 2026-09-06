@@ -1,12 +1,15 @@
 # Using Quail
 
-Quail is a place to study a corpus of text: survey answers, support
-tickets, interview excerpts, field notes, anything worth deciding from and
-too much to read end to end. You work in a persistent Python kernel, one
-cell at a time, as in a notebook. You count, read, search, compare, and
-write your judgments back as tags. What to look for, how to define it, and
-how to check yourself are your calls; Quail makes each question cheap to
-ask and each answer easy to show.
+You work in a persistent Python kernel, one cell at a time, as in a
+notebook. You count, read, search, compare, and write your judgments back as
+tags. What to look for, how to define it, and how to check yourself are your
+calls; Quail makes each question cheap to ask and each answer easy to show.
+
+For example, suppose you are exploring parking concerns in a staff survey.
+The following cells assume an open session with survey responses in `body`,
+a `dept` field, and semantic search configured. They illustrate how an
+analysis can begin; [Working locally](#working-locally) below walks through
+starting your first study.
 
 ```python
 body    = Field("body")
