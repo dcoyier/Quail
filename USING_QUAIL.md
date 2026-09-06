@@ -1,24 +1,69 @@
 # Using Quail
 
-You are analyzing one dataset inside a Quail session. A session is a
-persistent Python kernel plus a set of tags. Each cell you send runs in that
-kernel. Variables, functions, classes, and imports persist from cell to cell
-while the kernel runs. Tags persist in the project on disk, outlive the
-kernel, and travel with the project through git.
+Quail is a place to study a corpus of text: survey answers, support
+tickets, interview excerpts, field notes, anything worth deciding from and
+too much to read end to end. You work in a persistent Python kernel, one
+cell at a time, as in a notebook. You count, read, search, compare, and
+write your judgments back as tags. What to look for, how to define it, and
+how to check yourself are your calls; Quail makes each question cheap to
+ask and each answer easy to show.
 
-The dataset is an immutable grid: entries (rows) by fields (columns). You
-read it with `count`, `retrieve`, and `values`. You annotate it with `tag`.
-Nothing you do changes the source.
+```python
+body    = Field("body")
+parking = body.lexical("parking permit") > 0             # keyword match, per entry
+nearby  = body.semantic("no place to park near work")    # closeness in meaning, per entry
 
-## Starting or continuing a study locally
+count(parking)                                           # how many
+count(where=parking, by=Field("dept"))                   # and who says it
+retrieve(rank=nearby, limit=5)                           # read the five closest
+tag(parking | (nearby > 0.55), "topic", "parking")       # keep the decision
+```
 
-Install Quail using [README.md](README.md#installation). Quail lives in its
-own checkout or environment; a study is a separate directory, normally its
-own git repository, that Quail operates on.
+This is ordinary Python plus a small vocabulary: `Field`, comparisons that
+yield a true-or-false per entry, and four verbs. `parking` and `nearby` are
+descriptions, not results. They cost nothing until a verb runs them, so you
+can hold them in variables, combine them, wrap them in functions and
+classes, and use them again in later cells. Keyword search works on any
+dataset; `.semantic()` needs an embedding model configured for it, as
+described under [Search](#search).
 
-The shell commands below assume an activated environment. In fresh shell
-calls, use the absolute `<checkout>/.venv/bin/quail` path from the README
-installation. To create a small study:
+A session has room for the whole arc of a study. Look at the fields and a
+few rows. Find a theme by keyword and by meaning, and read where the two
+disagree. Code entries with a scheme, check it against a random sample,
+and revise it. Cross-tabulate a tag against a source field. Compute a
+number per entry and hand the column to `statistics` or `numpy`. Keep a
+shortlist. Fork the session to try a different scheme without disturbing
+the first. Export the result, or leave the session for another agent to
+continue.
+
+## The shape of a study
+
+- A **dataset** is an immutable grid of entries (rows) by fields (columns),
+  imported once from a CSV. Every entry has a durable `id`. Nothing you do
+  changes the source.
+- A **session** is your workspace on one dataset: a persistent kernel plus
+  the tags you have written. Sessions are named, and a dataset can have
+  many.
+- A **cell** is one submission to the kernel. Variables, functions,
+  classes, and imports persist from cell to cell while the kernel runs.
+- A **tag** is a value you write onto entries, in a field you name. Tags
+  are what a session produces: they are in the session log before you see
+  the cell's result, they outlive the kernel, and they travel with the
+  study through git. Variables are working memory; tags are what you keep.
+
+A study is a directory of text, and git carries it between agents and
+machines. If a harness has already opened a session for you, skip to
+[Cells](#cells). To start or continue a study yourself, read on.
+
+## Working locally
+
+Quail is installed as described in the [README](README.md#installation); a
+study is a separate directory, normally its own git repository. The
+commands below assume that environment is active. When a shell call does
+not carry the activation, use the absolute `<checkout>/.venv/bin/quail`
+path instead.
+
+### Start a study
 
 ```sh
 quail init ../study && cd ../study
@@ -31,46 +76,45 @@ quail import notes.csv           # registers the dataset and builds its index
 quail exec first-pass --stream   # one foreground kernel; JSON lines in, JSON lines out
 ```
 
-Keep the harness's process handle, wait for readiness, and send these cells
-through it, waiting for each response before the next request:
+The CSV stays where it is; import never copies or rewrites it. The stream
+prints a ready record, then answers one request at a time. Send these two
+cells through the same process:
 
 ```text
 {"op":"exec","code":"body = Field('body')\nparking = body.lexical('parking') > 0\ncount(parking)"}
 {"op":"exec","code":"tag(parking, 'topic', 'parking')\ncount(by=Field('topic'))"}
 ```
 
-The first result is `1`; the second reuses `parking` and commits its tag.
-Send `{"op":"close"}` through the same handle, wait for the closing
-acknowledgment and process exit, then run `quail export first-pass` to write
-the source fields plus the session's tags to CSV.
+The first result is `1`; the second reuses `parking` and commits one tag.
+Send `{"op":"close"}`, wait for the closing acknowledgment and the process
+to exit, and `quail export first-pass` writes the source fields and the
+session's tags to `exports/first-pass.csv`.
 
-`quail info --json` describes the project: each dataset with its fields,
-the sessions that already exist, configured `limits`, and under `interface`
-the exact commands to run next. Use it when you need orientation; it starts
-no kernel and creates no session. If you know which dataset or session to
-open, go straight to `quail exec`. The reported invocation strings use
-absolute executable paths, so they work in fresh shells without activation.
+### Continue a study
 
-To continue an existing study, clone its repository, enter its directory,
-and run `quail exec EXISTING_SESSION --stream`. Use `info` if you need to
-choose a dataset or session. Indexes and tags rebuild from the text on
-first open; nothing is re-imported.
+Clone the study, enter it, and run `quail exec EXISTING_SESSION --stream`.
+Indexes and tags rebuild from the text on first open; nothing is
+re-imported. To choose a dataset or session first, `quail info --json`
+describes the study: each dataset with its fields, the sessions that exist
+with their history and last activity, the configured `limits`, and under
+`interface` the exact commands to run next, as absolute invocations that
+work from any shell. It starts no kernel and creates no session.
 
-## Running cells locally
+A new name starts a fresh session. To build on existing work instead,
+`quail exec NEW --fork-from OLD --stream` starts `NEW` from a copy of the
+tags and history of `OLD`, which must be closed and is left untouched.
 
-A session runs as one foreground process that you keep open:
+### The stream
 
 ```text
 quail exec SESSION --stream [--dataset D] [--fork-from S]
 ```
 
-Continue a session by naming it. Start a new one with a new name, adding
-`--dataset` when the project has more than one. `--fork-from` starts the new
-session from a copy of another session's tags and history.
-
-The process prints one JSON line when it is ready, then answers each JSON
-line you write to its stdin with one JSON line on its stdout. Wait for each
-response before sending the next request:
+Naming an existing session continues it. A new name starts one, on the
+study's only dataset or the one named by `--dataset`. The process prints
+one JSON line when it is ready, then answers each JSON line on its stdin
+with one JSON line on its stdout. Send one request at a time and wait for
+its response:
 
 ```text
 stdout  {"ready":true,"session":"study","run":"...","warnings":[],"limits":{"cpu_seconds":30,"wall_seconds":120,"memory_mb":1024,"max_limit":1000,"output_kib":64}}
@@ -82,52 +126,75 @@ stdin   {"op":"close"}
 stdout  {"closed":true,"session":"study","run":"..."}
 ```
 
-`output` is what a notebook would show: everything you `print`, then the
-value of the last expression if it is not `None`, then the traceback if the
-cell raised. `error` is `null` or an object with `type`, `message`, and `hint`.
-The default limits are 64 KiB of output, 30 seconds of CPU and 120 seconds
-of wall time per cell, and 1 GiB of kernel memory. Output beyond its limit
-is truncated with a note. These limits are configurable; the ready record
-reports the values applied to this stream. Provider HTTP waits pause the
-wall budget. Reset keeps the same limits; close and reopen to pick up
-configuration changes.
+`output` is what a notebook would show: everything you print, then the
+value of the last expression when it is not `None`, then the traceback if
+the cell raised. `error` is `null` or an object with `type`, `message`, and
+`hint`. `tags_written` is the number of entry/field pairs the cell
+committed. `reset` replaces the kernel: variables are gone, tags remain.
+`close` shuts the kernel down and exits; always finish with it, through a
+pipe or a terminal alike (in a terminal, Ctrl-D is not end of input). A
+malformed request gets one error response and the stream stays open. If
+the session cannot be opened, the first line is
+`{"ready":false,"error":{...}}` and the process exits nonzero.
 
-Keep the harness's process handle and send every cell through it. Pipes and
-terminal handles both work. A fresh process per cell loses Python variables;
-iterative analysis requires a harness that can retain a running process
-across calls. When finished, send `{"op":"close"}` and wait for its
-acknowledgment and process exit. Committed tags remain on disk.
+**Limits.** By default a cell may produce 64 KiB of output and use 30 seconds
+of CPU and 120 seconds of wall time, the kernel may hold 1 GiB of memory,
+and `retrieve` returns at most 1000 entries per call. Output past its limit
+is cut with a note and `truncated` is set. Time spent waiting for an
+embedding provider does not count against the wall budget. The values are
+configurable in `quail.toml`; the ready record reports those applied to
+this stream, and they hold until you close it.
 
-`quail exec SESSION FILE.py` runs one file as one cell in a fresh kernel and
-exits. Use it for a complete saved script. Its tags persist like any cell's;
-its variables do not. `quail export SESSION` writes the source fields plus
-the session's tags to a CSV under `exports/`.
+**Warnings.** The ready record's `warnings` tell you when the source CSV has
+changed since the session last ran, or when an earlier run was interrupted
+mid-write (the unfinished line is ignored; nothing else is lost). A session
+whose history does not validate is reported as unavailable, with the
+reason; other sessions and new ones still work.
 
-`warnings` in the ready record tell you when the source CSV changed since
-the session last ran, or when an earlier run was interrupted mid-write (the
-unfinished line is ignored; nothing else is lost). A session whose history
-does not validate is reported as unavailable with the reason; other sessions
-and new ones still work.
+**One file as one cell.** `quail exec SESSION FILE.py` opens the session, runs
+the file as a single cell in a fresh kernel, prints the result, and exits:
+zero on success, nonzero on any failure. Its tags persist like any cell's;
+its variables do not. Use it for a complete saved script, or when the
+harness cannot hold a process open between calls.
+
+### Commands
+
+Every command except `init` finds the nearest `quail.toml` in the working
+directory or its parents.
+
+| Command | Effect |
+| --- | --- |
+| `quail init [DIR]` | Create an empty study: a minimal `quail.toml`, `sessions/`, and `.quail/` in the ignore file. |
+| `quail import CSV [--name N] [--id COL] [--embed PROVIDER/MODEL --embed-revision R]` | Register a CSV as a dataset and build its index. |
+| `quail info [--json]` | Describe datasets, fields, sessions, limits, and the commands to run next. |
+| `quail exec SESSION --stream [--dataset D] [--fork-from S]` | Open a session as a foreground kernel. |
+| `quail exec SESSION FILE.py [--dataset D] [--fork-from S] [--json]` | Run one file as one cell and exit. |
+| `quail sessions [--json]` | List sessions with their history, last activity, and availability. |
+| `quail fork SRC DST` | Copy a closed session's tags and history into a new session. |
+| `quail fields DATASET [--session S] [--json]` | List a dataset's fields, with a session's tag fields when one is named. |
+| `quail export SESSION [--out PATH] [--json]` | Write source fields and tags to `exports/SESSION.csv`. |
+| `quail warm DATASET [--field F] [--shard I/N] [--json]` | Embed a field ahead of time, alone or in shards. See [Sharing work](#sharing-work). |
 
 ## Cells
 
-A cell is a transaction for tags. If the cell finishes, its tag writes are
+A cell is a transaction for tags. If it finishes, its tag writes are
 committed together and written to the session log before you see the
-result. If it raises, none of them are kept. Variables you assigned before
-the error are kept, as in a notebook. Fix the line and run the next cell.
+result. If it raises, none of them are kept, but the variables you assigned
+before the error are, as in a notebook. Fix the line and run the next cell;
+a failed cell costs nothing but the time it took.
 
 Available: Python 3.12 and its standard library, and `numpy`. Already
-imported for you: `re`, `math`, `statistics`, `json`, `itertools`,
-`collections`, and `Counter`; import anything else as usual. Not available:
-the network, the file system, subprocesses. Everything else is ordinary
-Python: define functions and classes, keep results in variables, build
-expressions in loops, and use them in later cells.
+imported: `re`, `math`, `statistics`, `json`, `itertools`, `collections`,
+and `Counter`; import anything else as usual. Not available: the network,
+files, and subprocesses. Everything else is ordinary Python: define
+functions and classes, keep results in variables, build expressions in
+loops, and use them in later cells.
 
 Two things are not ordinary:
 
 - Expressions and predicates have no truth value. `if pred:`,
   `pred and other`, `0 < expr < 10`, and `x in Field("f")` all raise.
-  Combine predicates with `&` `|` `~`; test membership with `.isin` /
+  Combine predicates with `&` `|` `~`; test membership with `.isin` and
   `.contains`. Verbs reject a plain `True` or `False` where they need a
   predicate.
 - `is None` asks about a Python object; `== None` asks about each entry.
@@ -135,7 +202,7 @@ Two things are not ordinary:
   object. `Field("topic") == None` is the predicate "this cell is blank".
   Use the first in helpers (`if where is None:`) and the second in queries.
 
-## Start here
+## First look
 
 ```python
 fields()            # every field: name, kind ("source" or "tag"), present count
@@ -143,14 +210,14 @@ count()             # entries in the dataset
 retrieve(limit=3)   # three entries in import order
 ```
 
-Field names differ per dataset. Look before assuming a schema. Blank cells
+Field names differ per dataset; look before assuming a schema. Blank cells
 are `None`. Every dataset has an `id` field.
 
 ## Expressions
 
 `Field(name)` is the value of one column, per entry. It is the simplest
-`Expression`. Every method below returns another `Expression`. Nothing is
-read until a verb runs.
+`Expression`, and every method below returns another. Nothing is read
+until a verb runs.
 
 Source cells are text. Tag cells are whatever you wrote (`bool`, `int`,
 `float`, `str`, `list`, `dict`).
@@ -169,7 +236,7 @@ Source cells are text. Tag cells are whatever you wrote (`bool`, `int`,
 | `.isin(values)` | any, text, number | predicate | `values` is a list of scalars; the same as `==` against each. `[]` matches nothing. |
 | `.contains(value)` | any, text, list | predicate | Substring of text, item of a list, key of a dict. |
 | `.lexical(query)` | a `Field` only | `number` | Keyword relevance. See [Search](#search). |
-| `.semantic(query)` | a `Field` only | `number` | Meaning similarity. See [Search](#search). |
+| `.semantic(query)` | a `Field` only | `number` | Closeness in meaning. See [Search](#search). |
 | `Random(seed=None)` | — | `number` | A random number per entry, fixed by the seed. Use as `rank=` to sample. |
 
 Regex patterns are RE2 syntax (no lookaround or backreferences). `flags`
@@ -186,8 +253,8 @@ Nothing else about kinds needs attention.
 Absence is `None`. Value-producing methods propagate it; predicates always
 return booleans. Comparisons involving absence are false, except `== None`
 (blank) and `!= None` (present). `.isin([None])` also matches blank cells;
-`.contains(...)` is false for them. Negation therefore includes blank entries:
-`~(Field("topic") == "billing")` is every entry whose topic is not
+`.contains(...)` is false for them. Negation therefore includes blank
+entries: `~(Field("topic") == "billing")` is every entry whose topic is not
 `"billing"`, including entries with no topic. `None` sorts last under
 `rank`. `count(by=...)` groups it under the key `None`.
 
@@ -234,6 +301,8 @@ runs it, and literal arguments are copied when it is built.
 
 ## Verbs
 
+Four verbs read and write the dataset, and `fields()` describes it.
+
 ### `count`
 
 ```python
@@ -274,6 +343,10 @@ retrieve(rank=score, limit=20)
 retrieve(where=billing, rank=-Field("body").length(), limit=3)   # shortest
 retrieve(where=billing, rank=Random(seed=7), limit=10)           # a sample
 ```
+
+A seeded `Random` gives the same sample every time, which makes it a fair
+way to check your own coding: read ten entries you tagged and see whether
+you agree with yourself.
 
 ### `values`
 
@@ -324,10 +397,11 @@ tag(Field("topic") == None, "topic", "uncoded")
 tag(billing, "topic", None)                       # clear
 ```
 
-Tags are scoped to this session. Another session on the same dataset does
+Tags are scoped to this session; another session on the same dataset does
 not see them. They are the only analysis state that persists, so put
-anything you want to keep in a tag, not a variable. Tagging in a Python
-loop (`for e in retrieve(...): tag(e, ...)`) is fine; the writes share the
+anything you want to keep in a tag, not a variable. A provisional label is
+fine: tag now, read a sample, and rewrite. Tagging in a Python loop
+(`for e in retrieve(...): tag(e, ...)`) is fine too; the writes share the
 cell's transaction.
 
 ### `fields`
@@ -367,13 +441,14 @@ expression, so they filter, rank, and combine like any other number. The
 
 Keyword relevance (BM25) of the cell against `query`. Write plain words;
 wrap a phrase in double quotes to require adjacency. There are no other
-operators, and a query must contain at least one word. Words are stemmed, so
-`parking` matches `parked`.
+operators, and a query must contain at least one word. Words are stemmed,
+so `parking` matches `parked`.
 
-The score is `None` when the cell is blank, `0` when it is present and no
-query word appears, and greater than `0` when one does, so `> 0` means
-matched. Scores are relative to the whole field and are not comparable
-across fields or datasets.
+The score is `None` when the cell is blank, `0` when it is present and none
+of the query's words appear, and greater than `0` when any of them does, so
+`> 0` means matched. Higher is a better match: more of the query's words,
+and rarer ones. Scores are relative to the whole field and are not
+comparable across fields or datasets.
 
 ```python
 count(Field("body").lexical("parking permit") > 0)
@@ -392,25 +467,33 @@ before import.
 `query` is text. For "more like this", pass a cell:
 `Field("body").semantic(e["body"])`.
 
-The first semantic search on a field embeds every distinct value of that
-field once. On a large dataset that can take minutes; progress is reported
-on stderr. Later searches on that field, and repeated queries, reuse the
-work, and vectors shared with the project through git make the first search
-fast too. If the dataset has no embedding model configured, `.semantic()`
-raises with a hint; `quail info` says whether one is configured.
-
 ```python
 similar = Field("body").semantic("the office closes before I finish work")
 retrieve(rank=similar, limit=10)
 ```
+
+Semantic search needs an embedding model, chosen for the dataset at import
+(`--embed ollama/embeddinggemma --embed-revision v1`) or in `quail.toml`.
+The revision is a label you give the model's current weights; change it
+when they change, and vectors from the two are kept apart. Without a model,
+`.semantic()` raises with a hint, and `quail info` says whether one is
+configured.
+
+The first semantic search on a field embeds every distinct value of that
+field once. On a large dataset that can take minutes; progress is reported
+on stderr. Later searches on that field, and repeated queries, reuse the
+work, and vectors shared with the study through git make the first search
+fast too (see [Sharing work](#sharing-work)).
 
 Lexical and semantic scores live on different scales. When you sum them,
 choose weights by reading the top results, not by assumption.
 
 ## Reusable Python
 
-Ordinary Python is the extension mechanism. A class or function that wraps
-the verbs is reusable in every later cell of the stream:
+Ordinary Python is the extension mechanism. Anything you would write in a
+notebook works here and is reusable in every later cell of the stream: a
+class or function that wraps the verbs, a coding scheme kept as a dict of
+predicates, a loop that tags entry by entry.
 
 ```python
 class Theme:
@@ -436,86 +519,10 @@ parking.sample(limit=3)
 ```
 
 Variables live in the kernel and die with it. Keep helper definitions you
-care about in a file, and resubmit them after a restart.
+care about in a script in the study, and resubmit them as a cell after a
+restart.
 
-## Ids and the source
-
-`e.id` is the entry's identity: the CSV's `id` column, or the column chosen
-at import. Tags are stored by id. If the CSV is edited and the session
-continues, tags follow their ids: entries that were removed keep their tags
-out of sight (the session reports them as orphans), entries that return get
-them back, and new entries start untagged. An edited text is not
-re-examined for you; the ready record warns that the source changed so you
-can review the affected work.
-
-If the CSV had no id column, ids were generated in file order
-(`row-000001`, ...) and are meaningful only for that version of the file.
-To continue the session across edits, write those original ids into an
-explicit `id` column before editing or reordering; tags then follow those
-stable values. Numbering rows after reordering does not preserve identity.
-While ids remain generated, an existing session requires its original
-source version.
-
-## Sharing work and embeddings locally
-
-Commit and share the study's manifest, source CSVs, session logs, and
-optional `warm/` files with your own git tools. `.quail/` holds disposable
-indexes and local locks and stays gitignored. Quail never runs git.
-
-Two agents in two sessions push separate log files and merge without
-conflicts. An agent continuing another's session appends a new log file to
-the same session.
-
-Semantic search is optional. Configure an embedding model and a fixed
-revision at import (`--embed ollama/embeddinggemma --embed-revision v1`) or
-in `quail.toml`, and `.semantic()` embeds a field the first time it is
-searched. To do that work in parallel and share it, workers run
-`quail warm notes --shard 1/4` through `4/4` and commit the resulting
-`warm/` files; a fresh clone uses whatever parts have arrived.
-
-Warming is optional preparation. Ordinary semantic search fills missing
-vectors as needed.
-
-## Rules
-
-1. Source is frozen. Only tags change, only in this session.
-2. Absence is `None`. Value methods propagate it; predicates return booleans.
-   Comparisons with it are false except explicit absence/presence checks;
-   it sorts last.
-3. Expressions are inert. Only the verbs and `entry[...]` read data.
-4. A cell commits its tags together or not at all. Variables and output
-   are kept either way.
-5. Expressions and predicates have no truth value. Use `&` `|` `~`, and
-   `== None` for blank cells.
-6. No network, no files. Otherwise it is Python.
-
-## Errors and restarts
-
-Every Quail error is a `QuailError` with a message and, when there is an
-obvious fix, a hint. Mistakes in building an expression raise on the line
-that builds it. Ordinary Python exceptions retain their type and message.
-For a normal cell error, read the traceback, fix the cell, and run again.
-
-A cell that runs out of CPU or wall time fails with no tag writes; catching
-the interrupt does not turn it into a success. If the kernel itself is
-replaced (it ran out of memory, ignored the interrupt, its process died, or
-you sent `reset`), the response says `kernel_restarted` or `reset`.
-Variables are gone; every committed tag is intact. Resubmit your helper
-definitions and continue. Nothing you sent is ever run twice on your behalf.
-
-Losing the stream or receiving a host persistence error is different: a
-cell may have committed before its response was delivered. If the process
-is still running, keep reading its pending response. Otherwise reopen to
-recover committed history and inspect the submitted cell's record under
-`sessions/SESSION/log/`, using its reported run/cell identity and code,
-before deciding whether to resubmit. An unanswered cell is not necessarily
-a failed cell.
-
-If you have shadowed a verb (`count = 0` is the usual accident), the
-originals are available as `quail.count`, `quail.retrieve`, and so on:
-`count = quail.count`.
-
-## Example session
+## An example session
 
 ```python
 # cell 1: look
@@ -560,3 +567,83 @@ for e in retrieve(only_kw, limit=5):
 If cell 4 had raised partway through, its `tag` would have been rolled back,
 `parking` would still be defined, and the next cell would start from the
 state after cell 3.
+
+## Ids and source edits
+
+`e.id` is the entry's identity: the CSV's `id` column, or the column chosen
+with `--id` at import. Tags are stored by id. If the CSV is edited and the
+session continues, tags follow their ids: entries that were removed keep
+their tags out of sight (the session reports them as orphans), entries that
+return get them back, and new entries start untagged. Edited text is not
+re-examined for you; the ready record warns that the source changed so you
+can review the affected work.
+
+If the CSV had no id column, ids were generated in file order
+(`row-000001`, ...) and are meaningful only for that version of the file.
+To continue a session across edits, first write those original ids into an
+explicit `id` column, then edit or reorder; tags follow the stable values.
+Numbering rows after reordering does not preserve identity. While ids
+remain generated, an existing session opens only against its original
+source version.
+
+## Sharing work
+
+Locally, a study is a directory you commit and share with your own git
+tools: the manifest, the source CSVs, the session logs, and any `warm/`
+files. `.quail/` holds disposable indexes and local locks and stays
+gitignored. Quail never runs git.
+
+Sessions are the unit of parallel work. Two agents in two sessions push
+separate log files and merge without conflict; an agent continuing
+another's session appends a new log file to it. Two agents may even
+continue the same session on separate machines: git merges their files,
+and Quail replays them in one fixed order, but it does not reconcile their
+disagreements. Give independent coding passes their own sessions, or fork
+one from the other, and compare the exports.
+
+Semantic vectors can be shared the same way. `quail warm notes --field body`
+embeds a field before anyone searches it; with `--shard 1/4` through `4/4`,
+four workers each embed a quarter and commit the resulting `warm/` files. A
+fresh clone uses whatever parts have arrived, and ordinary search fills in
+the rest. Warming is preparation, never a requirement.
+
+## Errors and restarts
+
+Every Quail error is a `QuailError` with a message and, when there is an
+obvious fix, a hint. Mistakes in building an expression raise on the line
+that builds it. Ordinary Python exceptions keep their type and message.
+For a normal cell error, read the traceback, fix the cell, and run again.
+
+A cell that runs out of CPU or wall time fails with no tag writes; catching
+the interrupt does not turn it into a success. If the kernel itself is
+replaced (it ran out of memory, ignored the interrupt, its process died, or
+you sent `reset`), the response says so with `kernel_restarted` or `reset`.
+Variables are gone; every committed tag is intact. Resubmit your helper
+definitions and continue. Nothing you sent is ever run twice on your behalf.
+
+Losing the stream, or receiving a host persistence error, is different: a
+cell may have committed before its response reached you. If the process is
+still running, keep reading its pending response. Otherwise reopen the
+session to recover its committed history, and look for the cell's record
+under `sessions/SESSION/log/` by its reported run, cell number, and code
+before deciding whether to resubmit. An unanswered cell is not necessarily
+a failed cell.
+
+If you have shadowed a verb (`count = 0` is the usual accident), the
+originals are available as `quail.count`, `quail.retrieve`, and so on:
+`count = quail.count`.
+
+## Always true
+
+Six facts hold everywhere in Quail:
+
+1. The source is frozen. Only tags change, and only in this session.
+2. Absence is `None`. Value methods propagate it; predicates return
+   booleans; comparisons with it are false except `== None` and `!= None`;
+   it sorts last.
+3. Expressions are inert. Only the verbs and `entry[...]` read data.
+4. A cell commits its tags together or not at all. Variables and output
+   are kept either way.
+5. Expressions and predicates have no truth value. Use `&` `|` `~`, and
+   `== None` for blank cells.
+6. No network, no files, no subprocesses. Otherwise it is Python.
