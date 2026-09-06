@@ -9,7 +9,7 @@ document that owns your change.
 | --- | --- |
 | What the agent can write in a cell, what it gets back, how it runs cells | `docs/api.md` |
 | Everything else observable: project format, logs and replay, SQLite, language semantics, search, confinement, CLI, build order, tests | `IMPLEMENTATION_GUIDE.md` |
-| Earlier design notes on storage and the kernel | `docs/storage.md`, `docs/kernel.md`. They are being folded into the guide; where they disagree with it, the guide is right (guide section 10). |
+| Installation, orientation, and the first-run workflow | `README.md` |
 
 `api.md` says what happens; the guide says how, and what the code must do.
 When they disagree, fix both in the same change. `api.md` is packaged as

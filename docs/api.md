@@ -14,7 +14,8 @@ Nothing you do changes the source.
 
 `quail setup --json` describes the project: this document, each dataset
 with its fields, the sessions that already exist, and under `interface` the
-exact commands to run next. Run it once; it starts nothing.
+exact commands to run next. It also reports configured `limits`. Run it
+once; it starts no kernel.
 
 A session runs as one foreground process that you keep open:
 
@@ -27,27 +28,34 @@ Continue a session by naming it. Start a new one with a new name, adding
 session from a copy of another session's tags and history.
 
 The process prints one JSON line when it is ready, then answers each JSON
-line you write to its stdin with one JSON line on its stdout:
+line you write to its stdin with one JSON line on its stdout. Wait for each
+response before sending the next request:
 
 ```text
-stdout  {"ready":true,"session":"study","run":"...","warnings":[]}
+stdout  {"ready":true,"session":"study","run":"...","warnings":[],"limits":{"cpu_seconds":30,"wall_seconds":120,"memory_mb":1024,"max_limit":1000,"output_kib":64}}
 stdin   {"op":"exec","code":"n = count()\nn"}
 stdout  {"session":"study","run":"...","cell":1,"output":"1204","error":null,"tags_written":0,"truncated":false,"kernel_restarted":false}
 stdin   {"op":"reset"}
 stdout  {"reset":true,"session":"study","run":"..."}
+stdin   {"op":"close"}
+stdout  {"closed":true,"session":"study","run":"..."}
 ```
 
 `output` is what a notebook would show: everything you `print`, then the
 value of the last expression if it is not `None`, then the traceback if the
-cell raised. `error` is `null` or `{"type", "message", "hint"}`. Output past
-64 KiB is truncated with a note. A cell may use 30 seconds of CPU and 120
-seconds of wall time; the kernel may use 1 GiB of memory.
+cell raised. `error` is `null` or an object with `type`, `message`, and `hint`.
+The default limits are 64 KiB of output, 30 seconds of CPU and 120 seconds
+of wall time per cell, and 1 GiB of kernel memory. Output beyond its limit
+is truncated with a note. These limits are configurable; the ready record
+reports the values applied to this stream. Provider HTTP waits pause the
+wall budget. Reset keeps the same limits; close and reopen to pick up
+configuration changes.
 
-Keep the process and send every cell through it. A new shell command per
-cell is a new kernel, and your variables are gone with the old one. If your
-harness runs one shell command at a time, start the stream inside a tmux
-session with its stdout redirected to a file, and send lines to it. Close
-stdin when you are done.
+Keep the harness's process handle and send every cell through it. Pipes and
+terminal handles both work. A fresh process per cell loses Python variables;
+iterative analysis requires a harness that can retain a running process
+across calls. When finished, send `{"op":"close"}` and wait for its
+acknowledgment and process exit. Committed tags remain on disk.
 
 `quail exec SESSION FILE.py` runs one file as one cell in a fresh kernel and
 exits. Use it for a complete saved script. Its tags persist like any cell's;
@@ -134,9 +142,10 @@ Nothing else about kinds needs attention.
 
 ### Absence
 
-Absence is `None`, and it flows through everything. Every method maps `None`
-to `None`. Comparisons with `None` are false, except `== None` (blank) and
-`!= None` (present). Negation therefore includes blank entries:
+Absence is `None`. Value-producing methods propagate it; predicates always
+return booleans. Comparisons involving absence are false, except `== None`
+(blank) and `!= None` (present). `.isin([None])` also matches blank cells;
+`.contains(...)` is false for them. Negation therefore includes blank entries:
 `~(Field("topic") == "billing")` is every entry whose topic is not
 `"billing"`, including entries with no topic. `None` sorts last under
 `rank`. `count(by=...)` groups it under the key `None`.
@@ -214,8 +223,9 @@ retrieve(where=None, rank=None, limit=10, offset=0) -> list[Entry]
 
 Entries matching `where`. With `rank`, a `number` expression, highest first,
 ties in import order, and `None` last; without it, import order. Negate to
-sort ascending. `limit` defaults to 10 and is capped at 1000; the result
-says when it was clamped. `offset` pages.
+sort ascending. `limit` defaults to 10 and is capped by the configured
+`max_limit` (default 1000); cell output notes when it was clamped. `offset`
+pages.
 
 ```python
 retrieve(long, limit=5)
@@ -268,7 +278,7 @@ append. For multi-label coding, either keep one boolean field per label
 ```python
 tag(billing, "topic", "billing")
 tag(retrieve(rank=score, limit=40), "shortlist", True)
-tag(None, "words", Field("body").length())
+tag(None, "characters", Field("body").length())
 tag(Field("topic") == None, "topic", "uncoded")
 tag(billing, "topic", None)                       # clear
 ```
@@ -398,14 +408,19 @@ re-examined for you; the ready record warns that the source changed so you
 can review the affected work.
 
 If the CSV had no id column, ids were generated in file order
-(`row-000001`, ...) and are meaningful only for that version of the file. A
-session on such a dataset cannot continue once the file changes.
+(`row-000001`, ...) and are meaningful only for that version of the file.
+To continue the session across edits, write those original ids into an
+explicit `id` column before editing or reordering; tags then follow those
+stable values. Numbering rows after reordering does not preserve identity.
+While ids remain generated, an existing session requires its original
+source version.
 
 ## Rules
 
 1. Source is frozen. Only tags change, only in this session.
-2. Absence is `None`. It flows through every method; comparisons with it
-   are false except `== None` / `!= None`; it sorts last.
+2. Absence is `None`. Value methods propagate it; predicates return booleans.
+   Comparisons with it are false except explicit absence/presence checks;
+   it sorts last.
 3. Expressions are inert. Only the verbs and `entry[...]` read data.
 4. A cell commits its tags together or not at all. Variables and output
    are kept either way.
@@ -417,7 +432,8 @@ session on such a dataset cannot continue once the file changes.
 
 Every Quail error is a `QuailError` with a message and, when there is an
 obvious fix, a hint. Mistakes in building an expression raise on the line
-that builds it. Read the traceback, fix the cell, run again.
+that builds it. Ordinary Python exceptions retain their type and message.
+For a normal cell error, read the traceback, fix the cell, and run again.
 
 A cell that runs out of CPU or wall time fails with no tag writes; catching
 the interrupt does not turn it into a success. If the kernel itself is
@@ -425,6 +441,14 @@ replaced (it ran out of memory, ignored the interrupt, its process died, or
 you sent `reset`), the response says `kernel_restarted` or `reset`.
 Variables are gone; every committed tag is intact. Resubmit your helper
 definitions and continue. Nothing you sent is ever run twice on your behalf.
+
+Losing the stream or receiving a host persistence error is different: a
+cell may have committed before its response was delivered. If the process
+is still running, keep reading its pending response. Otherwise reopen to
+recover committed history and inspect the submitted cell's record under
+`sessions/SESSION/log/`, using its reported run/cell identity and code,
+before deciding whether to resubmit. An unanswered cell is not necessarily
+a failed cell.
 
 If you have shadowed a verb (`count = 0` is the usual accident), the
 originals are available as `quail.count`, `quail.retrieve`, and so on:
@@ -447,7 +471,7 @@ count(by=Field("dept"))
 kw  = Field("body").lexical("parking permit lot") > 0
 sem = Field("body").semantic("no place to park near the building")
 print(count(kw))
-for e in retrieve(rank=sem, limit=8):
+for e in retrieve(where=sem != None, rank=sem, limit=8):
     print(e.id, round(e.score, 3), e["body"][:120])
 ```
 
@@ -460,9 +484,9 @@ count(by=Field("topic"))
 
 ```python
 # cell 5: a derived number, then statistics in plain Python
-tag(None, "words", Field("body").length())
-words = [w for w in values(Field("words")) if w is not None]
-statistics.quantiles(words, n=4)
+tag(None, "characters", Field("body").length())
+lengths = [n for n in values(Field("characters")) if n is not None]
+statistics.quantiles(lengths, n=4)
 ```
 
 ```python

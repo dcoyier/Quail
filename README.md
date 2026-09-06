@@ -13,7 +13,7 @@ and not yet the code.
 | --- | --- | --- |
 | [`docs/api.md`](docs/api.md) | the agent, at runtime | The analysis language and the local stream. `quail setup` returns this file verbatim. |
 | [`IMPLEMENTATION_GUIDE.md`](IMPLEMENTATION_GUIDE.md) | implementers | The implementation contract: observable behavior, module ownership, build order, and tests. |
-| [`docs/storage.md`](docs/storage.md), [`docs/kernel.md`](docs/kernel.md) | implementers | Earlier design notes on the project format and the kernel. Where they differ from the guide, the guide is right; they are being folded into it. |
+| [`AGENTS.md`](AGENTS.md) | coding agents | Document ownership, design rules, and implementation conventions. |
 
 ## The model
 
@@ -56,20 +56,32 @@ git clone --depth 1 https://github.com/dcoyier/Quail.git
 cd Quail && uv sync --locked --no-dev --python 3.12 && . .venv/bin/activate
 
 quail init ../study && cd ../study
+cat > notes.csv <<'CSV'
+id,body
+n1,The parking permit is too expensive.
+n2,The staff were helpful.
+CSV
 quail import notes.csv           # registers the dataset and builds its index
 quail setup --json               # orientation: docs, fields, sessions, exact next commands
 quail exec first-pass --stream   # one foreground kernel; JSON lines in, JSON lines out
 ```
 
-The agent keeps that one process open and sends cells to it:
+The agent keeps the harness's process handle, waits for readiness, and sends
+these cells through it, waiting for each response before the next request:
 
 ```text
 {"op":"exec","code":"body = Field('body')\nparking = body.lexical('parking') > 0\ncount(parking)"}
 {"op":"exec","code":"tag(parking, 'topic', 'parking')\ncount(by=Field('topic'))"}
 ```
 
-Then `quail export first-pass` writes a CSV of the source fields plus the
-session's tags.
+The first result is `1`; the second reuses `parking` and commits its tag.
+Send `{"op":"close"}` through the same handle, wait for the closing
+acknowledgment and process exit, then run `quail export first-pass` to write
+the source fields plus the session's tags to CSV.
+
+Iterative analysis requires a harness that retains the process across calls;
+Quail supports both pipe and terminal handles. `quail exec SESSION FILE.py`
+runs a complete saved script in a fresh kernel and preserves its tags.
 
 Continuing someone else's work is a clone: `git clone` the study, then
 `quail setup --json` and `quail exec first-pass --stream`. Indexes and tags

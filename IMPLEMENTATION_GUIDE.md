@@ -4,12 +4,11 @@ This is the implementation contract for the Quail core rebuild. Its goal is
 a small environment in which an agent can inspect a corpus, write annotations,
 and continue that work on another machine.
 
-`docs/api.md`, `README.md`, and `AGENTS.md` agree with this guide.
-`docs/storage.md` and `docs/kernel.md` still describe parts of the earlier
-design; where this guide specifies different behavior, follow this guide.
-Section 10 lists what remains to move into those two documents. The shipped
-agent document must agree with the implemented language: when the code
-settles a behavior differently, change `docs/api.md` in the same commit.
+This guide owns the implementation contract; `docs/api.md` owns the
+agent-facing language and invocation instructions. `README.md` provides
+orientation and the first-run workflow; `AGENTS.md` gives coding conventions.
+Keep them consistent. When implementation settles a behavior differently,
+update its contract and agent-facing documentation in the same commit.
 
 The guide fixes observable behavior and ownership. It does not prescribe
 the order of function definitions, a class for every concept, or a final
@@ -109,12 +108,13 @@ creating files.
 
 ### Manifest and commands that create files
 
-Keep the manifest shape and kernel defaults from `docs/storage.md`, with
-one addition: an embedding configuration includes an explicit revision.
+The manifest is editable text with this shape. Provider tables and
+`[kernel]` are optional; the base URLs and kernel values shown are defaults.
+Embedding configuration includes an explicit revision.
 
 ```toml
 [project]
-quail = "1"
+quail = "1"                       # manifest schema version
 
 [datasets.notes]
 source = "data/notes.csv"
@@ -124,7 +124,22 @@ embed_revision = "study-model-v1"
 
 [providers.ollama]
 base_url = "http://127.0.0.1:11434"
+
+[providers.openai]                # an OpenAI-compatible endpoint
+base_url = "https://api.openai.com/v1"
+api_key = "env:OPENAI_API_KEY"    # optional credential reference
+
+[kernel]
+cpu_seconds = 30
+wall_seconds = 120
+memory_mb = 1024
+max_limit = 1000
+output_kib = 64
 ```
+
+Dataset paths resolve relative to the manifest. Embedding dimensions are
+learned from vectors and are not a manifest setting. The `[kernel]` values
+configure section 7's limits; they are defaults, not fixed product limits.
 
 An embedding revision is a non-empty operator designation for fixed model
 weights and embedding behavior. It is required when `embed` is configured;
@@ -1073,16 +1088,27 @@ host locks, run-log handles, or provider connections and receives no
 provider credentials.
 
 Use a scrubbed environment. Disable the cell-facing file API and install
-the subtractive audit hook for filesystem mutations, new database
-connections, sockets, process creation, native loading, and instrumentation
-as described in `docs/kernel.md`. Permit read-only access under the
-resolved standard-library roots and the package roots of the preloaded
-NumPy and RE2 modules, so ordinary imports and NumPy's lazily imported
-submodules work; disable bytecode writes. NumPy is available to analysis
-code from the preloaded module; this does not grant its file or network
-operations any additional capabilities. Deny other file paths. On Linux attempt network namespace isolation and
-report whether it succeeded. Do not introduce a Python module allow-list,
-import-state framework, or general syntax allow-list.
+the subtractive audit hook before reporting the child ready:
+
+- For `open`, permit only read access under resolved standard-library roots
+  and the package roots of the preloaded NumPy and RE2 modules. Reject
+  writes and other paths; disable bytecode writes. These read permissions
+  let ordinary imports and NumPy's lazily imported submodules work.
+- Deny filesystem mutation events, including `os.remove`, `os.rename`,
+  `os.mkdir`, `os.rmdir`, and `shutil.*`; new connections through
+  `sqlite3.connect`; and `socket.*`.
+- Deny process creation through `subprocess.Popen`, `os.system`, `os.fork`,
+  `os.exec`, and `os.posix_spawn`; native access through `ctypes.*`; and
+  instrumentation through `sys.addaudithook`, `sys.setprofile`, and
+  `sys.settrace`.
+
+NumPy is available to analysis code from the preloaded module; its file
+and network operations receive no additional capabilities. SQLite uses the
+connection opened during bootstrap and manages its private temporary files
+below Python's audit layer. On Linux attempt
+`os.unshare(CLONE_NEWUSER | CLONE_NEWNET)` and report whether it succeeded.
+Do not introduce a Python module allow-list, import-state framework, or
+general syntax allow-list.
 
 Open SQLite read-only and install its authorizer before user code. Permit
 the runtime's TEMP operations; deny main-schema writes, attach/detach,
@@ -1098,7 +1124,12 @@ the UTF-8 prefix that fits `output_kib`, count omitted bytes, append a
 truncation notice, and set `truncated`. Formatting runs inside cell limits.
 Do not accumulate unlimited output and truncate it afterward.
 
-Keep the existing limit defaults:
+Quail errors have type `QuailError`, a message, and an optional actionable hint.
+Ordinary Python exceptions retain their type name and message, with a null
+hint. Format tracebacks with the prelude's own frames removed, preserving
+cell and user-helper frames so the agent can locate its error.
+
+Use the configurable `[kernel]` defaults from section 2:
 
 | Limit | Enforcement |
 | --- | --- |
@@ -1186,7 +1217,8 @@ quail setup --json
 quail exec first-pass --stream
 ```
 
-After the ready record, send these two lines to that same foreground process:
+After the ready record, send these two cells to that same foreground process,
+waiting for each response before sending the next request:
 
 ```jsonl
 {"op":"exec","code":"body = Field('body')\nparking = body.lexical('parking') > 0\ncount(parking)"}
@@ -1194,17 +1226,18 @@ After the ready record, send these two lines to that same foreground process:
 ```
 
 The first result is `1`; the second uses the saved predicate and commits one
-tag. Close stdin when finished, then run `quail export first-pass`. For an
-agent harness, retain its process handle and send subsequent lines through
-that handle. A harness that can only run one shell command at a time can
-hold the stream in a terminal multiplexer such as tmux, redirect its stdout
-to a file, and send lines to that pane; this needs nothing from Core beyond
-line-buffered stdin. Setup supplies an absolute invocation prefix for
-subsequent shell calls, which may not retain this shell's
-virtual-environment activation. Do not launch a fresh shell command for
-every cell and imply that its Python variables survived. File execution is
-the convenient path for a complete saved analysis script; the stream is the
-iterative path.
+tag. Finish by sending `{"op":"close"}` through the same process handle.
+After the closing acknowledgment and process exit, run
+`quail export first-pass`.
+
+An iterative harness must retain the foreground process and its input/output
+handle across tool calls, using pipes or a terminal. Wait for readiness,
+send one JSONL request, read its complete response, and reuse that handle
+for later cells. The stream handles terminal input as specified below.
+A harness limited to fresh one-shot processes cannot preserve a live Python
+namespace; the file form still runs a complete saved script and preserves
+its tags. Setup supplies an absolute invocation prefix for subsequent shell
+calls, which may not retain virtual-environment activation.
 
 Once Quail is installed, continuing a cloned **study repository** needs only
 `quail setup --json` and `quail exec EXISTING_SESSION --stream` from that
@@ -1241,10 +1274,14 @@ then processes one complete JSON object per input line:
 ```json
 {"op":"exec","code":"x = 10\nx + 1"}
 {"op":"reset"}
+{"op":"close"}
 ```
 
 Initial success is `{"ready":true,"session":"...","run":"..."}`,
-with a `warnings` list for source changes or ignored interrupted appends.
+with a `warnings` list for source changes or ignored interrupted appends and
+a `limits` object containing the five resolved `[kernel]` settings actually
+applied to this stream. Reset retains these limits; closing and reopening
+loads configuration again.
 Opening failure is `{"ready":false,"error":{...}}` followed by nonzero exit.
 An execution response is:
 
@@ -1253,8 +1290,14 @@ An execution response is:
 ```
 
 Reset returns `{"reset":true,"session":"...","run":"<new run>"}` once
-the replacement is ready. Malformed requests return one serialized error
-without executing or logging a cell and leave the stream open.
+the replacement is ready. Close calls `Kernel.close()`, reaps the child,
+releases its locks, and restores any terminal settings changed by the host.
+Only then return `{"closed":true,"session":"...","run":"..."}`, flush,
+and exit zero. Close executes no Python and creates no cell record; a
+cleanup failure is a host error, not a successful closing acknowledgment.
+The caller sends close after receiving the preceding response. Malformed
+requests return one serialized error without executing or logging a cell
+and leave the stream open.
 
 Cell failures are ordinary execution responses and keep the stream open.
 Persistence, unrecoverable cache, or protocol failures close it with a host
@@ -1267,10 +1310,24 @@ It carries tag deltas and vector data that are never included in agent
 output. Host-assigned run/cell identity is enough to associate results;
 there is no general RPC system or retryable execution protocol.
 
+`cli.py` owns terminal handling. When stdin is a terminal, save its settings
+and disable `ICANON` and `ECHO`, with `VMIN=1` and `VTIME=0`, before emitting
+ready. Keep signal processing enabled and restore the saved settings on
+orderly exit, including opening failure and handled interrupts. For pipes,
+leave input settings alone. Read complete JSONL records across arbitrary
+read boundaries; a terminal's canonical line limit must not truncate a
+Python cell. Use the close request for an orderly terminal shutdown;
+Ctrl-D is not EOF with noncanonical input.
+
 Flush after each record. Stream stdout is JSONL only; human diagnostics
-use stderr and cell output is inside its result. EOF, SIGINT, or a broken
-output pipe closes the owned child in a finally block. Never interpret a
-delivery failure after log sync as an annotation rollback.
+use stderr and cell output is inside its result. Close, EOF, SIGINT, or a
+broken output pipe closes the owned child in a finally block. Never
+interpret a delivery failure after log sync as an annotation rollback.
+An agent that loses a response must check the submitted cell's run-log
+record before deciding to resubmit it, using the reported run/cell identity
+and submitted code. Reopening recovers committed history; it does not imply
+that the unanswered cell failed. If the process is still running, continue
+reading its pending response instead of submitting the code again.
 
 The file form opens, executes once, prints the result, and closes. It exits
 zero for a successful cell and nonzero for a cell or host failure, so shell
@@ -1280,10 +1337,11 @@ warnings in the file form's JSON result and human diagnostics too.
 
 ### Agent orientation
 
-Setup returns `documentation`, dataset summaries, and session summaries
-including ID/source compatibility and interrupted-append warnings. It never
-starts a kernel. Fields are included in dataset orientation; valid sessions
-report history counts, last activity, source changes, and orphan tags.
+Setup returns `documentation`, configured `limits`, dataset summaries, and
+session summaries including ID/source compatibility and interrupted-append
+warnings. It never starts a kernel. Fields are included in dataset
+orientation; valid sessions report history counts, last activity, source
+changes, and orphan tags.
 Report a session with invalid history or incompatible source as unavailable
 with its error, without inventing an empty analysis or treating partial or
 stale counts as current. The rest of the orientation remains usable.
@@ -1293,11 +1351,13 @@ Retain the structured CLI invocation metadata alongside `documentation`,
 `quail` prefix here):
 
 ```json
-{"interface":{"setup":"quail setup --json","open":"quail exec SESSION --stream [--dataset D] [--fork-from S]","exec":{"op":"exec","code":"..."},"reset":{"op":"reset"},"export":"quail export SESSION --json"}}
+{"limits":{"cpu_seconds":30,"wall_seconds":120,"memory_mb":1024,"max_limit":1000,"output_kib":64},"interface":{"setup":"quail setup --json","open":"quail exec SESSION --stream [--dataset D] [--fork-from S]","exec":{"op":"exec","code":"..."},"reset":{"op":"reset"},"close":{"op":"close"},"export":"quail export SESSION --json"}}
 ```
 
 This describes invocation and remains consistent with the agent document;
-it does not override that document's semantics.
+it does not override that document's semantics. Setup reports the current
+manifest's resolved limits, including defaults; a running stream continues
+to use the limits in its ready record until it is closed.
 
 Generate runnable invocation strings from the current absolute
 `sys.executable` plus `-m quail.cli`, quoting arguments for the supported
@@ -1327,7 +1387,7 @@ semantic search.
 | 2 | Complete language, values/grouping, lexical search, entry behavior, fields/export/fork | Agent workflows run through the same engine with bulk database operations; another session cannot change lexical scores |
 | 3 | Limits, persistence failure recovery, locking and source/ID continuity | Concurrent local sessions work; stable-ID edits preserve sessions and positional IDs cannot reassign tags |
 | 4 | Provider adapters, one cached embedding path, exact semantic scoring, local and shared warming | Warm/cold and bounded-batch scoring agree; repeated queries reuse scores; workers produce complete mergeable shards; a slow provider does not block another session's tag commit |
-| 5 | Documentation alignment, installed-wheel and real-harness checks | Run the download-to-analysis recipe; the actual harness preserves Python objects, recovers errors, exports, and continues a cloned project with shared vectors |
+| 5 | Documentation alignment, installed-wheel and real-harness checks | Run the download-to-analysis recipe; the actual harness preserves Python objects, recovers errors, closes cleanly, exports, and continues a cloned project with shared vectors |
 
 Each slice can be several small commits. Introduce the relevant guards
 with the behavior they protect; slice 3 completes failure coverage rather
@@ -1366,11 +1426,17 @@ Organize tests around these observable contracts:
 | Search | Isolated field/session BM25, absence/empty/nonmatch, phrase handling, equivalent warm/cold and bounded-batch scores, repeated-query reuse, precise invalidation after writes/rollback, cache eviction without changed answers |
 | Embeddings | Full-value requests, Ollama truncation disabled, input ordering, finite packed vectors, dimension races, revision separation, bounded retries |
 | Shared warming | Disjoint/balanced shard coverage, row-order-independent assignment, mixed shard-count composition, complete reused/new output, atomic publication, GitHub part sizes, cold-clone use of partial merged packs, whole-pack validation before batched ingestion, interrupted ingestion without a completion receipt, changed-file invalidation, duplicate keys, address independence and revision separation |
-| Runtime and CLI | Ready/stream/reset and setup invocation metadata, bounded output, CPU/wall/RSS failure including caught interrupts, parent/child cleanup, JSONL purity, interrupted-append warnings and session validation errors, safe project-relative exports, exit status, actual harness variable persistence |
+| Runtime and CLI | Ready/stream/reset/close and setup invocation metadata; configured versus applied limits; bounded output; CPU/wall/RSS failure including caught interrupts; parent/child cleanup; pipes and noncanonical terminal input without echo, long Unicode requests and complete responses, terminal restoration; interrupted-append warnings and session validation errors; safe project-relative exports; exit status; actual harness variable persistence |
 
 Run examples from the corrected agent document against a fixture that
 supplies their assumed fields and values. Check an explicit public namespace.
 Do not parse every inline code span as a required exported name.
+Include absent text/scores in the example fixture. Through the actual harness,
+reuse classes and variables across cells, recover from a normal cell error,
+reset, and close with an acknowledgment and process exit. Check that large
+requests are received exactly, output contains complete JSON responses
+without echoed input, and close releases the child and locks. These are
+ordinary regression and integration checks using small temporary fixtures.
 
 Keep standard regression tests in the repository, using small temporary
 fixtures. Cover avoidable repeated work: unchanged search chains within the
@@ -1399,22 +1465,3 @@ IDs. Build order does not make later slices optional. Automatic salvage of
 invalid complete log records, identity remapping, a worker coordinator,
 distributed conflict resolution tools, a daemon, extra backend/provider
 frameworks, and Hosted policy remain outside Core.
-
-## 10. Documentation alignment to do later
-
-`docs/api.md`, `README.md`, and `AGENTS.md` are aligned with this guide.
-`docs/storage.md` and `docs/kernel.md` are the remaining owners that lag;
-both carry a superseded notice pointing here. Before publishing the
-rebuild, either move the settled behavior below into them or retire them
-into this guide, then remove the precedence notice at the top. Two more
-items wait on running code: the README must publish section 8's first-run
-recipe against the usable revision, and the agent document's examples must
-run in the test suite.
-
-| Owner | Required alignment |
-| --- | --- |
-| `docs/storage.md` | Stable-ID re-import and orphan recovery; per-run provenance; host-owned logically ordered logs; strict complete-record validation and interrupted-tail recovery; isolation of invalid sessions; atomic cache summaries and durability; private working tables; per-field FTS; vector identity, shared packs, local ingestion receipts and bounded scoring; locks under `.quail/locks/` and project-relative exports |
-| `docs/kernel.md` | Persistent ordinary module namespace with no identity-syntax ban; read-only source plus private TEMP transactions; host durability; minimal control exchange; interrupted-append warnings and session validation errors; recovery, RSS and bounded output; CLI-only Core and setup metadata; deferred pack ingestion; module ownership and ordinary NumPy installation |
-
-When those owners agree, this guide should explain how to build their
-contract, not accumulate another series of overrides.
