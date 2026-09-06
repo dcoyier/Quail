@@ -4,9 +4,9 @@ This is the implementation contract for the Quail core rebuild. Its goal is
 a small environment in which an agent can inspect a corpus, write annotations,
 and continue that work on another machine.
 
-This guide owns the implementation contract; `docs/api.md` owns the
-agent-facing language and invocation instructions. `README.md` provides
-orientation and the first-run workflow; `AGENTS.md` gives coding conventions.
+This guide owns the implementation contract; `USING_QUAIL.md` owns the
+agent-facing language and operating instructions. `README.md` provides
+installation and repository orientation; `AGENTS.md` gives coding conventions.
 Keep them consistent. When implementation settles a behavior differently,
 update its contract and agent-facing documentation in the same commit.
 
@@ -252,8 +252,8 @@ or hiding either field.
 An existing session rejects `fork_from`; a supplied dataset must match.
 A new session uses its requested dataset or the project's sole dataset.
 When forking, the source session supplies its dataset and identity provenance;
-reject any conflicting dataset argument. Ambiguity is an error. Setup lists
-sessions and never allocates one.
+reject any conflicting dataset argument. Ambiguity is an error. `quail info`
+lists sessions and never allocates one.
 
 Fork by copying a closed source session's logs into a new destination and
 writing its metadata. Preserve run IDs and source/ID provenance. Hold the
@@ -371,7 +371,7 @@ compatibility problem; do not guess what caused a record to be invalid.
 
 Do not publish partial tags or an `applied` marker for history that failed
 validation, or use an older cached materialization as fallback after that
-failure. The affected session's open, export, and fork fail. Setup and
+failure. The affected session's open, export, and fork fail. `quail info` and
 session listing report it as unavailable with its error, while other
 sessions and source-only operations remain usable. Historical listings can
 validate logs without the source. Live streams retain section 4's committed
@@ -392,7 +392,7 @@ Cache synchronization replays once when the digest or source version
 differs from the stored `applied` marker, then replaces that session's
 materialized tags, orphan count, maximum logical order, history summary,
 and marker together after validation succeeds. The summary retains counts,
-last activity, and interrupted-append warnings needed by setup and open;
+last activity, and interrupted-append warnings needed by info and open;
 there is no summary of salvaged or excluded records. A matching digest in
 the current cache schema avoids parsing old cells merely to rediscover
 those facts. Hash files in a streaming pass; timestamps alone cannot prove
@@ -520,7 +520,7 @@ inspect the child's TEMP tables, so export cannot see a half-finished cell.
 
 ### One opening path
 
-`service.py` owns dataset opening for setup, sessions, fields, export,
+`service.py` owns dataset opening for info, sessions, fields, export,
 warming, and kernel creation:
 
 1. Discover and validate the manifest and selected dataset.
@@ -582,7 +582,7 @@ cache keys are not.
 
 ## 5. The analysis language
 
-Keep the compact shape in `docs/api.md`: `Field`, `Random`, ordinary
+Keep the compact shape in `USING_QUAIL.md`: `Field`, `Random`, ordinary
 numeric expressions, predicates, `count`, `retrieve`, `values`, `tag`,
 and `fields`. There is one expression-to-SQL engine in `prelude.py`.
 Python UDFs implement individual operations SQLite cannot faithfully
@@ -1041,10 +1041,11 @@ use ordinary Git without requiring LFS or a second transport.
 On dataset open, discover finalized pack paths for the current dataset and
 source version. The first cached-embedding operation ingests compatible packs
 before deciding which provider work is missing; explicit warming uses that
-same path. Setup, lexical analysis, and opening a stream do not decode vector
-packs or contact providers. Skip other embedding identities without treating
-their presence as a project error. Newly discovered paths become visible on
-the next open; no live watcher or cache-distribution service is needed.
+same path. `quail info`, lexical analysis, and opening a stream do not decode
+vector packs or contact providers. Skip other embedding identities without
+treating their presence as a project error. Newly discovered paths become
+visible on the next open; no live watcher or cache-distribution service is
+needed.
 
 Validate each candidate pack completely: schema version; path/header and
 dataset/source agreement; embedding descriptor and identity; source field
@@ -1163,7 +1164,7 @@ This is parent/child lifetime handling, not a background supervisor.
 ## 8. Core operations and the CLI
 
 `service.py` contains plain operations for initialization, import,
-`setup(project)`, `open_session(...)`, listing, fork, fields, export,
+`info(project)`, `open_session(...)`, listing, fork, fields, export,
 and warm. It owns no kernel registry or process-global state.
 
 `open_session(project, session, dataset=None, fork_from=None, *,
@@ -1177,7 +1178,7 @@ Use this command set:
 ```text
 quail init [DIR]
 quail import CSV [--name N] [--id COL] [--embed PROVIDER/MODEL --embed-revision R]
-quail setup [--json]
+quail info [--json]
 quail exec SESSION FILE.py [--dataset D] [--fork-from S] [--json]
 quail exec SESSION --stream [--dataset D] [--fork-from S]
 quail sessions [--json]
@@ -1197,6 +1198,8 @@ Treat this as a release acceptance path, not an aspirational README example.
 It is for the implemented rebuild once available on the default branch;
 the current design-only branch cannot run it yet. The eventual README must
 name the usable revision and link to [uv installation](https://docs.astral.sh/uv/getting-started/installation/).
+README owns installation; `USING_QUAIL.md` continues with the first study
+and analysis. The combined path below must work without project inspection.
 With Git and uv installed, no separate Python, database, embedding server,
 MCP configuration, or hand-built manifest is required for lexical analysis:
 
@@ -1213,7 +1216,6 @@ n1,The parking permit is too expensive.
 n2,The staff were helpful.
 CSV
 quail import notes.csv
-quail setup --json
 quail exec first-pass --stream
 ```
 
@@ -1236,12 +1238,14 @@ send one JSONL request, read its complete response, and reuse that handle
 for later cells. The stream handles terminal input as specified below.
 A harness limited to fresh one-shot processes cannot preserve a live Python
 namespace; the file form still runs a complete saved script and preserves
-its tags. Setup supplies an absolute invocation prefix for subsequent shell
-calls, which may not retain virtual-environment activation.
+its tags. For subsequent shell calls that may not retain virtual-environment
+activation, use the installed environment's absolute executable path or
+the absolute invocation strings returned by optional `quail info`.
 
 Once Quail is installed, continuing a cloned **study repository** needs only
-`quail setup --json` and `quail exec EXISTING_SESSION --stream` from that
-project. Setup lists the actual session names and the stream invocation.
+`quail exec EXISTING_SESSION --stream` from that project. Use
+`quail info --json` when the dataset or session needs to be discovered;
+it lists actual session names and the stream invocation.
 Source indexes and tags rebuild automatically; shared packs are consumed
 when semantic search needs them. Do not ask the agent to run init, re-import
 registered CSVs, rebuild a database, or warm an already-shared corpus.
@@ -1252,8 +1256,9 @@ Explain semantic configuration as the next step after this working path:
 choose an available embedding provider/model and a fixed revision through
 import options or the manifest, then evaluate a semantic expression.
 Warming is optional preparation and parallel sharing, never an admission
-requirement. Setup should indicate whether semantics are configured without
-requiring an available provider or resolving credentials just to inspect data.
+requirement. `quail info` should indicate whether semantics are configured
+without requiring an available provider or resolving credentials just to
+inspect data.
 The cloned-checkout recipe and an installed-wheel equivalent must both work
 from a study directory outside the Quail checkout.
 
@@ -1335,45 +1340,49 @@ pipelines cannot mistake a failed analysis for success. Python variables
 persist only in the stream; tags persist in both forms. Include opening
 warnings in the file form's JSON result and human diagnostics too.
 
-### Agent orientation
+### Project inspection and the usage manual
 
-Setup returns `documentation`, configured `limits`, dataset summaries, and
-session summaries including ID/source compatibility and interrupted-append
-warnings. It never starts a kernel. Fields are included in dataset
+`info(project)` and `quail info [--json]` return configured `limits`, dataset
+summaries, and session summaries including ID/source compatibility and
+interrupted-append warnings. Inspection is optional: it creates no session
+and starts no kernel, and opening validates current state without a prior
+`info` call. The result contains project information and invocation metadata;
+it does not include the usage manual. Fields are included in dataset
 orientation; valid sessions report history counts, last activity, source
 changes, and orphan tags.
 Report a session with invalid history or incompatible source as unavailable
 with its error, without inventing an empty analysis or treating partial or
 stale counts as current. The rest of the orientation remains usable.
 
-Retain the structured CLI invocation metadata alongside `documentation`,
-`datasets`, and `sessions` in setup's JSON result (shown with a compact
-`quail` prefix here):
+Retain the structured CLI invocation metadata alongside `limits`, `datasets`,
+and `sessions` in the JSON result (shown with a compact `quail` prefix here):
 
 ```json
-{"limits":{"cpu_seconds":30,"wall_seconds":120,"memory_mb":1024,"max_limit":1000,"output_kib":64},"interface":{"setup":"quail setup --json","open":"quail exec SESSION --stream [--dataset D] [--fork-from S]","exec":{"op":"exec","code":"..."},"reset":{"op":"reset"},"close":{"op":"close"},"export":"quail export SESSION --json"}}
+{"limits":{"cpu_seconds":30,"wall_seconds":120,"memory_mb":1024,"max_limit":1000,"output_kib":64},"interface":{"info":"quail info --json","open":"quail exec SESSION --stream [--dataset D] [--fork-from S]","exec":{"op":"exec","code":"..."},"reset":{"op":"reset"},"close":{"op":"close"},"export":"quail export SESSION --json"}}
 ```
 
 This describes invocation and remains consistent with the agent document;
-it does not override that document's semantics. Setup reports the current
-manifest's resolved limits, including defaults; a running stream continues
-to use the limits in its ready record until it is closed.
+it does not override that document's semantics. `quail info` reports the
+current manifest's resolved limits, including defaults; a running stream
+continues to use the limits in its ready record until it is closed.
 
 Generate runnable invocation strings from the current absolute
 `sys.executable` plus `-m quail.cli`, quoting arguments for the supported
 shells. Support that standard module entry point alongside the `quail`
-console script. An agent following setup must launch the same installation
+console script. An agent following `info` must launch the same installation
 from a new shell without activating a venv, guessing a PATH entry, or
 rediscovering the checkout. This is command metadata, not another interface.
 
-Package the canonical `docs/api.md` as `quail/data/api.md` using Hatch's
-build inclusion. Load packaged data with a repository-tree fallback for
-development, never from the caller's working directory. Return that text
-exactly. The document explains the local stream and the language; Hosted
-may supply its own invocation wrapper later. Do not maintain a second agent
-manual or ship stale semantics with a runtime override banner. Run the
-document's examples in the test suite (section 9) so it cannot drift from
-the completed CLI.
+Package the canonical `USING_QUAIL.md` as `quail/data/USING_QUAIL.md` using
+Hatch's build inclusion. Make that exact text available with the installed
+runtime, with a repository-tree fallback for development, never loading
+from the caller's working directory. The document labels local operating
+instructions separately from the shared language and session semantics.
+Hosted may deliver the same manual through its own invocation wrapper;
+its MCP delivery mechanism is not specified here. Do not maintain a second
+agent manual or ship stale semantics with a runtime override banner. Run
+the document's examples in the test suite (section 9) so it cannot drift
+from the completed CLI.
 
 ## 9. Build and verification
 
@@ -1383,7 +1392,7 @@ semantic search.
 
 | Slice | Deliverable | Proof |
 | --- | --- | --- |
-| 1 | Packaging, minimal project/import/index, CLI setup and persistent execution, Field reads, count/retrieve, tag, log replay | Initialize a small CSV project, inspect and tag it through the actual CLI, reuse variables/functions/classes across cells, fail a cell, close, reopen, and recover the committed tags |
+| 1 | Packaging, minimal project/import/index, CLI info and persistent execution, Field reads, count/retrieve, tag, log replay | Initialize a small CSV project, inspect and tag it through the actual CLI, reuse variables/functions/classes across cells, fail a cell, close, reopen, and recover the committed tags |
 | 2 | Complete language, values/grouping, lexical search, entry behavior, fields/export/fork | Agent workflows run through the same engine with bulk database operations; another session cannot change lexical scores |
 | 3 | Limits, persistence failure recovery, locking and source/ID continuity | Concurrent local sessions work; stable-ID edits preserve sessions and positional IDs cannot reassign tags |
 | 4 | Provider adapters, one cached embedding path, exact semantic scoring, local and shared warming | Warm/cold and bounded-batch scoring agree; repeated queries reuse scores; workers produce complete mergeable shards; a slow provider does not block another session's tag commit |
@@ -1418,7 +1427,7 @@ Organize tests around these observable contracts:
 | Project identity | Safe names and paths, exact text preservation, ID resolution, source-version changes, source edited during import, non-destructive metadata publication |
 | Session scope | Stable-ID additions/edits/reorders and ID-column renames continue in the same session; deleted IDs count as final orphans and restored IDs recover tags; explicit preservation of generated IDs permits later edits; automatic positional reassignment fails; source/tag name conflicts are reported |
 | Replay | Continuation on a clock behind imported history, deterministic concurrent ties, valid forked history, rejection of any invalid complete record even with valid later cells, bad headers/numbering/duplicate identities, interrupted headers/tails including partial UTF-8, cached tail warnings, failed-cell/empty-file/tail digests |
-| Invalid history isolation | No partial materialization, new applied marker, or stale-cache fallback after validation failure; affected open/export/fork fail without changing original files; setup/listing, source rebuilds, source-only operations, and other sessions remain usable |
+| Invalid history isolation | No partial materialization, new applied marker, or stale-cache fallback after validation failure; affected open/export/fork fail without changing original files; info/listing, source rebuilds, source-only operations, and other sessions remain usable |
 | Durable completion | Child death before/after result, log append/fsync uncertainty, cache failure after log sync, host death before reply; never execute code twice |
 | Private state | Read-your-writes, disk-backed tag working tables with bounded memory, newly created fields, failed-cell rollback of tags/FTS/derived search state, variables/functions/classes retained on normal failure |
 | Concurrency | Two kernels read then tag without a shared snapshot upgrade; embedding waits coexist with another session's commit; exports see committed state |
@@ -1426,11 +1435,14 @@ Organize tests around these observable contracts:
 | Search | Isolated field/session BM25, absence/empty/nonmatch, phrase handling, equivalent warm/cold and bounded-batch scores, repeated-query reuse, precise invalidation after writes/rollback, cache eviction without changed answers |
 | Embeddings | Full-value requests, Ollama truncation disabled, input ordering, finite packed vectors, dimension races, revision separation, bounded retries |
 | Shared warming | Disjoint/balanced shard coverage, row-order-independent assignment, mixed shard-count composition, complete reused/new output, atomic publication, GitHub part sizes, cold-clone use of partial merged packs, whole-pack validation before batched ingestion, interrupted ingestion without a completion receipt, changed-file invalidation, duplicate keys, address independence and revision separation |
-| Runtime and CLI | Ready/stream/reset/close and setup invocation metadata; configured versus applied limits; bounded output; CPU/wall/RSS failure including caught interrupts; parent/child cleanup; pipes and noncanonical terminal input without echo, long Unicode requests and complete responses, terminal restoration; interrupted-append warnings and session validation errors; safe project-relative exports; exit status; actual harness variable persistence |
+| Runtime and CLI | Ready/stream/reset/close and info invocation metadata; configured versus applied limits; bounded output; CPU/wall/RSS failure including caught interrupts; parent/child cleanup; pipes and noncanonical terminal input without echo, long Unicode requests and complete responses, terminal restoration; interrupted-append warnings and session validation errors; safe project-relative exports; exit status; actual harness variable persistence |
 
 Run examples from the corrected agent document against a fixture that
 supplies their assumed fields and values. Check an explicit public namespace.
 Do not parse every inline code span as a required exported name.
+Verify that the first-run path works without `info`, that inspection creates
+no session, starts no kernel, and omits the manual, and that the packaged
+manual matches `USING_QUAIL.md` exactly.
 Include absent text/scores in the example fixture. Through the actual harness,
 reuse classes and variables across cells, recover from a normal cell error,
 reset, and close with an acknowledgment and process exit. Check that large

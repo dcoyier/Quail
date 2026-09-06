@@ -1,4 +1,4 @@
-# Quail
+# Using Quail
 
 You are analyzing one dataset inside a Quail session. A session is a
 persistent Python kernel plus a set of tags. Each cell you send runs in that
@@ -10,12 +10,53 @@ The dataset is an immutable grid: entries (rows) by fields (columns). You
 read it with `count`, `retrieve`, and `values`. You annotate it with `tag`.
 Nothing you do changes the source.
 
-## Running cells
+## Starting or continuing a study locally
 
-`quail setup --json` describes the project: this document, each dataset
-with its fields, the sessions that already exist, and under `interface` the
-exact commands to run next. It also reports configured `limits`. Run it
-once; it starts no kernel.
+Install Quail using [README.md](README.md#installation). Quail lives in its
+own checkout or environment; a study is a separate directory, normally its
+own git repository, that Quail operates on.
+
+The shell commands below assume an activated environment. In fresh shell
+calls, use the absolute `<checkout>/.venv/bin/quail` path from the README
+installation. To create a small study:
+
+```sh
+quail init ../study && cd ../study
+cat > notes.csv <<'CSV'
+id,body
+n1,The parking permit is too expensive.
+n2,The staff were helpful.
+CSV
+quail import notes.csv           # registers the dataset and builds its index
+quail exec first-pass --stream   # one foreground kernel; JSON lines in, JSON lines out
+```
+
+Keep the harness's process handle, wait for readiness, and send these cells
+through it, waiting for each response before the next request:
+
+```text
+{"op":"exec","code":"body = Field('body')\nparking = body.lexical('parking') > 0\ncount(parking)"}
+{"op":"exec","code":"tag(parking, 'topic', 'parking')\ncount(by=Field('topic'))"}
+```
+
+The first result is `1`; the second reuses `parking` and commits its tag.
+Send `{"op":"close"}` through the same handle, wait for the closing
+acknowledgment and process exit, then run `quail export first-pass` to write
+the source fields plus the session's tags to CSV.
+
+`quail info --json` describes the project: each dataset with its fields,
+the sessions that already exist, configured `limits`, and under `interface`
+the exact commands to run next. Use it when you need orientation; it starts
+no kernel and creates no session. If you know which dataset or session to
+open, go straight to `quail exec`. The reported invocation strings use
+absolute executable paths, so they work in fresh shells without activation.
+
+To continue an existing study, clone its repository, enter its directory,
+and run `quail exec EXISTING_SESSION --stream`. Use `info` if you need to
+choose a dataset or session. Indexes and tags rebuild from the text on
+first open; nothing is re-imported.
+
+## Running cells locally
 
 A session runs as one foreground process that you keep open:
 
@@ -356,7 +397,7 @@ field once. On a large dataset that can take minutes; progress is reported
 on stderr. Later searches on that field, and repeated queries, reuse the
 work, and vectors shared with the project through git make the first search
 fast too. If the dataset has no embedding model configured, `.semantic()`
-raises with a hint; `quail setup` says whether one is configured.
+raises with a hint; `quail info` says whether one is configured.
 
 ```python
 similar = Field("body").semantic("the office closes before I finish work")
@@ -414,6 +455,26 @@ explicit `id` column before editing or reordering; tags then follow those
 stable values. Numbering rows after reordering does not preserve identity.
 While ids remain generated, an existing session requires its original
 source version.
+
+## Sharing work and embeddings locally
+
+Commit and share the study's manifest, source CSVs, session logs, and
+optional `warm/` files with your own git tools. `.quail/` holds disposable
+indexes and local locks and stays gitignored. Quail never runs git.
+
+Two agents in two sessions push separate log files and merge without
+conflicts. An agent continuing another's session appends a new log file to
+the same session.
+
+Semantic search is optional. Configure an embedding model and a fixed
+revision at import (`--embed ollama/embeddinggemma --embed-revision v1`) or
+in `quail.toml`, and `.semantic()` embeds a field the first time it is
+searched. To do that work in parallel and share it, workers run
+`quail warm notes --shard 1/4` through `4/4` and commit the resulting
+`warm/` files; a fresh clone uses whatever parts have arrived.
+
+Warming is optional preparation. Ordinary semantic search fills missing
+vectors as needed.
 
 ## Rules
 

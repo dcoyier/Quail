@@ -11,7 +11,7 @@ and not yet the code.
 
 | Document | Reader | Contents |
 | --- | --- | --- |
-| [`docs/api.md`](docs/api.md) | the agent, at runtime | The analysis language and the local stream. `quail setup` returns this file verbatim. |
+| [`USING_QUAIL.md`](USING_QUAIL.md) | agents using Quail | Starting and continuing studies, the analysis language, the local stream, and sharing work. |
 | [`IMPLEMENTATION_GUIDE.md`](IMPLEMENTATION_GUIDE.md) | implementers | The implementation contract: observable behavior, module ownership, build order, and tests. |
 | [`AGENTS.md`](AGENTS.md) | coding agents | Document ownership, design rules, and implementation conventions. |
 
@@ -44,7 +44,7 @@ my-study/
   .quail/                                                      # derived index and locks, gitignored
 ```
 
-## How it is used
+## Installation
 
 Installing Quail and starting a study are different steps. Quail lives in
 its own checkout or environment; a study is a separate directory, normally
@@ -54,51 +54,11 @@ its own git repository, that Quail operates on. With git and
 ```sh
 git clone --depth 1 https://github.com/dcoyier/Quail.git
 cd Quail && uv sync --locked --no-dev --python 3.12 && . .venv/bin/activate
-
-quail init ../study && cd ../study
-cat > notes.csv <<'CSV'
-id,body
-n1,The parking permit is too expensive.
-n2,The staff were helpful.
-CSV
-quail import notes.csv           # registers the dataset and builds its index
-quail setup --json               # orientation: docs, fields, sessions, exact next commands
-quail exec first-pass --stream   # one foreground kernel; JSON lines in, JSON lines out
 ```
 
-The agent keeps the harness's process handle, waits for readiness, and sends
-these cells through it, waiting for each response before the next request:
-
-```text
-{"op":"exec","code":"body = Field('body')\nparking = body.lexical('parking') > 0\ncount(parking)"}
-{"op":"exec","code":"tag(parking, 'topic', 'parking')\ncount(by=Field('topic'))"}
-```
-
-The first result is `1`; the second reuses `parking` and commits its tag.
-Send `{"op":"close"}` through the same handle, wait for the closing
-acknowledgment and process exit, then run `quail export first-pass` to write
-the source fields plus the session's tags to CSV.
-
-Iterative analysis requires a harness that retains the process across calls;
-Quail supports both pipe and terminal handles. `quail exec SESSION FILE.py`
-runs a complete saved script in a fresh kernel and preserves its tags.
-
-Continuing someone else's work is a clone: `git clone` the study, then
-`quail setup --json` and `quail exec first-pass --stream`. Indexes and tags
-rebuild from the text on first open; nothing is re-imported. Two agents in two
-sessions push separate log files and merge without conflicts. An agent
-continuing another's session appends a new log file to the same session.
-
-Semantic search is optional. Configure an embedding model and a fixed
-revision at import (`--embed ollama/embeddinggemma --embed-revision v1`) or
-in `quail.toml`, and `.semantic()` embeds a field the first time it is
-searched. To do that work in parallel and share it, workers run
-`quail warm notes --shard 1/4` through `4/4` and commit the resulting
-`warm/` files; a fresh clone uses whatever parts have arrived.
-
-If the CSV gains, loses, or edits rows and its `id` column is stable,
-sessions continue: tags follow ids, removed entries are reported as
-orphans, and new entries start untagged.
+Continue with [USING_QUAIL.md](USING_QUAIL.md) to create or continue a study,
+run the first analysis, export tags, and share work. It is the complete
+usage manual after installation.
 
 ## Core and hosted
 

@@ -1,21 +1,22 @@
 # Quail core
 
-This branch is a from-scratch rebuild. Read `README.md` first, then the
-document that owns your change.
+This branch is a from-scratch rebuild. To use Quail for analysis, read
+`USING_QUAIL.md`. To modify Quail, read `README.md`, then the document that
+owns your change.
 
 ## Documents
 
 | Change | Owner |
 | --- | --- |
-| What the agent can write in a cell, what it gets back, how it runs cells | `docs/api.md` |
+| Starting and continuing studies, writing and running cells, sharing work | `USING_QUAIL.md` |
 | Everything else observable: project format, logs and replay, SQLite, language semantics, search, confinement, CLI, build order, tests | `IMPLEMENTATION_GUIDE.md` |
-| Installation, orientation, and the first-run workflow | `README.md` |
+| Installation and repository orientation | `README.md` |
 
-`api.md` says what happens; the guide says how, and what the code must do.
-When they disagree, fix both in the same change. `api.md` is packaged as
-`quail/data/api.md` and returned to agents verbatim by `quail setup`, so
-every sentence in it costs context: keep it short and keep it true. Do not
-add a second agent manual.
+`USING_QUAIL.md` says what happens; the guide says how, and what the code
+must do. When they disagree, fix both in the same change. The manual is
+packaged as `quail/data/USING_QUAIL.md` for installed and Hosted use. Every
+sentence in it costs context: keep it short and keep it true. Do not add a
+second agent manual.
 
 ## Design rules
 
@@ -73,7 +74,7 @@ HTTP stay in the host.
 - Tests are plain files under `tests/` using temporary projects and real
   SQLite; mock only the provider boundary. Organize them by the contracts in
   guide section 9. One test asserts the explicit public namespace of
-  `prelude.py`; do not parse `api.md` for names.
+  `prelude.py`; do not parse `USING_QUAIL.md` for names.
 - Benchmarks, generated corpora, and profiling output stay out of the
   repository.
 - Build in the guide's slice order. Every slice ships through the real
