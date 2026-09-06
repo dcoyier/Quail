@@ -13,7 +13,6 @@ and not yet the code.
 | --- | --- | --- |
 | [`USING_QUAIL.md`](USING_QUAIL.md) | agents using Quail | Starting and continuing studies, the analysis language, the local stream, and sharing work. |
 | [`IMPLEMENTATION_GUIDE.md`](IMPLEMENTATION_GUIDE.md) | implementers | The implementation contract: observable behavior, module ownership, build order, and tests. |
-| [`AGENTS.md`](AGENTS.md) | coding agents | Document ownership, design rules, and implementation conventions. |
 
 ## The model
 

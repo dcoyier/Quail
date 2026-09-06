@@ -6,7 +6,7 @@ and continue that work on another machine.
 
 This guide owns the implementation contract; `USING_QUAIL.md` owns the
 agent-facing language and operating instructions. `README.md` provides
-installation and repository orientation; `AGENTS.md` gives coding conventions.
+installation and repository orientation.
 Keep them consistent. When implementation settles a behavior differently,
 update its contract and agent-facing documentation in the same commit.
 
