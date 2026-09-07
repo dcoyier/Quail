@@ -24,9 +24,11 @@ it. The implementation details below can be improved without narrowing it.
 
 ## 1. The design
 
-An external agent drives one foreground CLI host. That host owns one Python
-kernel for the lifetime of an execution stream. The kernel evaluates the
-analysis language; the host owns durable files and embedding requests.
+An external agent submits one cell per CLI invocation. A local background
+host owns one persistent Python child for that session; the client prints
+the result and exits. The child evaluates the analysis language; the host
+owns durable files and embedding requests. Hosted owns the same `Kernel`
+directly through the Python API, without the local CLI transport.
 
 Five rules carry the design:
 
@@ -36,7 +38,7 @@ Five rules carry the design:
 2. **Tags are durable analysis state.** Python variables are working memory.
    A normal failed cell rolls back its tags and keeps its earlier assignments
    and captured output. Restarting the kernel discards working memory.
-3. **The log decides what committed.** A host acknowledges a cell only after
+3. **The log decides what committed.** A host acknowledges completion only after
    its complete result and tag delta are synced to the session log. SQLite
    caches that history; it does not compete with it as a source of truth.
 4. **A cell writes only private working tables.** Arbitrary Python and
@@ -66,7 +68,8 @@ Start with this layout; each row is a responsibility, not a framework.
 | `prelude.py` | Expression nodes, SQL compiler, verbs, private tag tables, scoring, cell execution, confinement | None |
 | `kernel.py` | Child lifetime, control exchange, limits, durable cell completion, cached embedding requests | `project.py`, `index.py`, `embed.py` |
 | `service.py` | Project operations, the shared dataset-open path, session opening, export, local and shared warming | Host modules above |
-| `cli.py` | Argument parsing, the foreground stream, presentation, exit status | `service.py` and returned kernels |
+| `local.py` | Per-session host startup, local connections, request admission, and live inspection | `project.py`, `service.py`, `kernel.py` |
+| `cli.py` | Argument parsing, presentation, exit status | `service.py`, `local.py` |
 
 Keep `quail/__init__.py` inert. The child starts with
 `[sys.executable, "-m", "quail.prelude"]`; importing the package must not
@@ -95,9 +98,9 @@ Optional `warm/` packs carry derived embedding vectors between machines.
 They may travel with the project through Git, but are not analysis truth;
 missing packs never prevent opening or analyzing the source.
 
-`.quail/` holds disposable SQLite files and local locks and is gitignored.
-Remove it only when Quail processes using the project are closed. Core never
-commits, pulls, or pushes anything.
+`.quail/` holds disposable SQLite files, local locks, and runtime sockets
+and is gitignored. Remove it only when Quail processes using the project
+are closed. Core never commits, pulls, or pushes anything.
 
 Dataset and session names are non-empty single path segments; reject `.`,
 `..`, separators, and NUL instead of rewriting them. Resolve project paths
@@ -243,7 +246,7 @@ numbering the already-reordered rows is not continuity. New sessions remain
 available when continuity is not intended. Listing identifies unavailable
 sessions without showing empty tags as if their work had disappeared.
 
-An open kernel always keeps its source snapshot. Close affected streams
+An open kernel always keeps its source snapshot. Close affected kernels
 before rebuilding changed data. If a new source field collides with a
 session's recovered tag field, do not materialize or open that session until
 the name conflict is resolved. Report it without blocking unaffected sessions
@@ -336,7 +339,7 @@ remain in the logs. Use separate named sessions or forks for independent
 coding that must remain independently inspectable. Git merges their files;
 it does not choose which analyst is right.
 
-A live stream uses the history it synchronized when opened plus its own
+A live kernel uses the history it synchronized when opened plus its own
 new records. Pulled or manually edited history is incorporated on the next
 open, not halfway through a cell. Cache digests must describe only history
 actually applied, never newly discovered records the kernel has not seen.
@@ -374,7 +377,7 @@ validation, or use an older cached materialization as fallback after that
 failure. The affected session's open, export, and fork fail. `quail info` and
 session listing report it as unavailable with its error, while other
 sessions and source-only operations remain usable. Historical listings can
-validate logs without the source. Live streams retain section 4's committed
+validate logs without the source. Live kernels retain section 4's committed
 snapshot rules; external history edits take effect on the next synchronization.
 
 Map valid historical writes to current stable IDs and report final orphan
@@ -431,8 +434,9 @@ file and directory.
 | Cell raises normally | Log the failure with no writes; keep the child and its earlier Python assignments |
 | Child dies before a complete valid result | No tag delta can commit; log a kernel-failure result, replace the child from committed state |
 | Child dies after a complete result arrives | The host can durably finish that result, then replace the child |
-| Log write or fsync has an uncertain outcome | Stop the stream, discard the child, and report a persistence failure with the run/cell identity; never append a contradictory failure record for that cell |
+| Log write or fsync has an uncertain outcome | Stop the host, discard the child, and report a persistence failure with the run/cell identity; never append a contradictory failure record for that cell |
 | Cache update fails after a synced record | The record remains committed; retry or reconstruct only the cache, never execute the code again or turn that committed cell into a rolled-back result |
+| Client disconnects after acceptance | Finish the cell under its existing limits and retain its result in the run log; delivery failure does not roll back or repeat execution |
 | Host dies before replying | Reopening recovers complete records; an unacknowledged cell may have committed, so do not automatically resubmit it |
 
 After a log I/O failure, a later opener applies the validation and tail
@@ -547,7 +551,7 @@ Opening a session then takes its session lock, checks its ID/source scope,
 synchronizes its log, and spawns the child. Validate configuration before
 creating new session metadata. Kernel reset retains its locks, index,
 source version, and resolved embedding configuration; reload configuration
-by closing and reopening the stream.
+by closing the host and opening the session again.
 
 Session summaries, fields, and export acquire and synchronize a closed
 session before reading. A validation failure returns that session's error;
@@ -558,7 +562,7 @@ source version; an owner still initializing an uncached session means
 temporarily unavailable, not an empty analysis. This may show the previous
 committed cell while the owner finishes publishing the next one. A response
 already acknowledged by its owner must be visible to a subsequent read.
-If the current source changed, require the affected streams to close before
+If the current source changed, require the affected kernels to close before
 rebuilding.
 
 ### Locks are local lifetime protection
@@ -597,7 +601,7 @@ discarding its type through `json_extract` before a typed comparison.
 ### Ordinary Python is the extension mechanism
 
 Variables, imports, functions, closures, classes, instances, and saved
-expressions persist across cells in one stream. Support nested expressions,
+expressions persist across cells in one kernel. Support nested expressions,
 comprehensions, loops, decorators, and ordinary standard-library helpers.
 An analyst can build a reusable class around the verbs without subclassing
 a Quail engine or registering a callback. `values` hands computed columns
@@ -850,7 +854,7 @@ dialect and the remainder is the provider's model name.
 Base URLs and credentials route requests and do not belong in identity.
 The revision must change when weights or embedding behavior change,
 including any externally configured preprocessing. Freeze the resolved
-embedding configuration for each open stream and record the identity in
+embedding configuration for each open kernel and record the identity in
 its run header. Core validates vectors; it does not attest remote weights.
 A revision is an explicit reproducibility obligation, not evidence that
 two arbitrary endpoints are equivalent.
@@ -923,8 +927,8 @@ neither cache eviction nor filtering may redefine the corpus or answers.
 
 Batch cold provider requests and report bounded progress on stderr for
 first-time embedding or pack ingestion, including reused/new counts. Keep
-stream stdout's one-response-per-request contract. No per-row HTTP, repeated
-full-field scoring from Entry access, eager warming of unrelated fields,
+CLI stdout's final-result contract. No per-row HTTP, repeated full-field
+scoring from Entry access, eager warming of unrelated fields,
 background worker pool, or speculative query planner is needed.
 
 ### Local and shared warming
@@ -1041,7 +1045,7 @@ use ordinary Git without requiring LFS or a second transport.
 On dataset open, discover finalized pack paths for the current dataset and
 source version. The first cached-embedding operation ingests compatible packs
 before deciding which provider work is missing; explicit warming uses that
-same path. `quail info`, lexical analysis, and opening a stream do not decode
+same path. `quail info`, lexical analysis, and opening a kernel do not decode
 vector packs or contact providers. Skip other embedding identities without
 treating their presence as a project error. Newly discovered paths become
 visible on the next open; no live watcher or cache-distribution service is
@@ -1159,7 +1163,9 @@ cache/log state. The host never retries the Python that was interrupted.
 Closing the host closes or terminates and reaps its child, then releases
 locks. The child must also exit on loss of its control channel while a cell
 is executing, so abrupt host death cannot leave an orphan kernel running.
-This is parent/child lifetime handling, not a background supervisor.
+An exiting CLI client is not host death: the local host and its child remain
+alive until explicitly closed or terminated. There is no idle expiry that
+silently discards working memory.
 
 ## 8. Core operations and the CLI
 
@@ -1172,6 +1178,7 @@ spawn=None, embed_fn=None)` returns a ready `Kernel`. The caller owns it.
 `Kernel.exec(code)`, `reset()`, and `close()` own live operations.
 The spawn and raw embedding callables are the only Hosted substitutions
 needed initially; do not generalize them into plugin registries.
+`local.py` is a local caller of this API, not another execution engine.
 
 Use this command set:
 
@@ -1179,8 +1186,10 @@ Use this command set:
 quail init [DIR]
 quail import CSV [--name N] [--id COL] [--embed PROVIDER/MODEL --embed-revision R]
 quail info [--json]
+quail exec SESSION -c CODE [--dataset D] [--fork-from S] [--json]
 quail exec SESSION FILE.py [--dataset D] [--fork-from S] [--json]
-quail exec SESSION --stream [--dataset D] [--fork-from S]
+quail exec SESSION --reset [--json]
+quail exec SESSION --close [--json]
 quail sessions [--json]
 quail fork SRC DST
 quail fields DATASET [--session S] [--json]
@@ -1189,8 +1198,10 @@ quail warm DATASET [--field F] [--shard I/N] [--json]
 ```
 
 Use `argparse`. All commands except init discover the nearest
-`quail.toml` from the working directory or its parents. One-shot commands
-delegate to the same Core operations used by a live stream.
+`quail.toml` from the working directory or its parents. Each exec invocation
+selects exactly one of `-c`, a file, `--reset`, or `--close`; dataset and fork
+options apply only to code submission. Other commands call the plain Core
+operations, with local inspection added as described below.
 
 ### From download to the first analysis
 
@@ -1216,36 +1227,25 @@ n1,The parking permit is too expensive.
 n2,The staff were helpful.
 CSV
 quail import notes.csv
-quail exec first-pass --stream
-```
-
-After the ready record, send these two cells to that same foreground process,
-waiting for each response before sending the next request:
-
-```jsonl
-{"op":"exec","code":"body = Field('body')\nparking = body.lexical('parking') > 0\ncount(parking)"}
-{"op":"exec","code":"tag(parking, 'topic', 'parking')\ncount(by=Field('topic'))"}
+quail exec first-pass -c 'body = Field("body"); parking = body.lexical("parking") > 0; count(parking)'
+quail exec first-pass -c 'tag(parking, "topic", "parking"); count(by=Field("topic"))'
+quail export first-pass
+quail exec first-pass --close
 ```
 
 The first result is `1`; the second uses the saved predicate and commits one
-tag. Finish by sending `{"op":"close"}` through the same process handle.
-After the closing acknowledgment and process exit, run
-`quail export first-pass`.
-
-An iterative harness must retain the foreground process and its input/output
-handle across tool calls, using pipes or a terminal. Wait for readiness,
-send one JSONL request, read its complete response, and reuse that handle
-for later cells. The stream handles terminal input as specified below.
-A harness limited to fresh one-shot processes cannot preserve a live Python
-namespace; the file form still runs a complete saved script and preserves
-its tags. For subsequent shell calls that may not retain virtual-environment
-activation, use the installed environment's absolute executable path or
-the absolute invocation strings returned by optional `quail info`.
+tag. Each command can be a separate shell tool call; no persistent stdin,
+terminal setup, or manual host launch is required. Wait for the current
+command's result before submitting another cell. If the harness backgrounds
+a long-running command, use its normal wait/output facility to finish
+reading that client. For shell calls that may not retain virtual-environment
+activation, use the installed environment's absolute executable path or the
+absolute invocation strings returned by optional `quail info`.
 
 Once Quail is installed, continuing a cloned **study repository** needs only
-`quail exec EXISTING_SESSION --stream` from that project. Use
+`quail exec EXISTING_SESSION -c 'fields()'` from that project. Use
 `quail info --json` when the dataset or session needs to be discovered;
-it lists actual session names and the stream invocation.
+it lists actual session names and code-submission commands.
 Source indexes and tags rebuild automatically; shared packs are consumed
 when semantic search needs them. Do not ask the agent to run init, re-import
 registered CSVs, rebuild a database, or warm an already-shared corpus.
@@ -1271,74 +1271,103 @@ aliases a registered source, the manifest, or the ignore file, or falls in
 the managed session, index/lock, or warm-pack directories. Return the path,
 rows, columns, and orphan count. Export is a report, not a lossless backup.
 
-### Foreground execution
+### Execution and results
 
-`quail exec SESSION --stream` owns one kernel. It writes a ready record,
-then processes one complete JSON object per input line:
+`-c CODE` and `FILE.py` submit one cell to the same persistent session kernel.
+The client reads a file as UTF-8 before starting or contacting the host.
+Starting a stopped session restores committed tags and creates fresh Python
+working memory; an existing host retains its namespace, source snapshot,
+configuration, and caches. Dataset and fork arguments must still obey
+section 2 when attaching. There is no separate fresh-kernel file mode.
 
-```json
-{"op":"exec","code":"x = 10\nx + 1"}
-{"op":"reset"}
-{"op":"close"}
-```
-
-Initial success is `{"ready":true,"session":"...","run":"..."}`,
-with a `warnings` list for source changes or ignored interrupted appends and
-a `limits` object containing the five resolved `[kernel]` settings actually
-applied to this stream. Reset retains these limits; closing and reopening
-loads configuration again.
-Opening failure is `{"ready":false,"error":{...}}` followed by nonzero exit.
-An execution response is:
+Default stdout is notebook output: captured prints, the final expression's
+value when not None, and the traceback on failure. Host warnings and progress
+use stderr. The client exits zero on success and nonzero on a cell or host
+failure; ordinary cell failures leave the kernel usable. With `--json`,
+stdout is one final result object instead of rendered notebook output:
 
 ```json
-{"session":"study","run":"...","cell":1,"output":"11","error":null,"tags_written":0,"truncated":false,"kernel_restarted":false}
+{"session":"study","run":"...","cell":1,"output":"11","error":null,"tags_written":0,"truncated":false,"kernel_restarted":false,"warnings":[],"limits":{"cpu_seconds":30,"wall_seconds":120,"memory_mb":1024,"max_limit":1000,"output_kib":64}}
 ```
 
-Reset returns `{"reset":true,"session":"...","run":"<new run>"}` once
-the replacement is ready. Close calls `Kernel.close()`, reaps the child,
-releases its locks, and restores any terminal settings changed by the host.
-Only then return `{"closed":true,"session":"...","run":"..."}`, flush,
-and exit zero. Close executes no Python and creates no cell record; a
-cleanup failure is a host error, not a successful closing acknowledgment.
-The caller sends close after receiving the preceding response. Malformed
-requests return one serialized error without executing or logging a cell
-and leave the stream open.
+`warnings` carries opening warnings, including source changes and ignored
+interrupted appends, plus a fresh-start notice when this invocation starts
+a kernel. Report child replacement through `kernel_restarted` and human
+diagnostics. `limits` reports the settings actually applied by the host,
+even if the manifest has since changed. Report the run/cell
+identity on execution-related host errors when known. Failures before a
+cell is accepted return an error without inventing a cell record or result.
+Invalid CLI arguments use ordinary usage errors. There is no public stdin
+protocol or terminal-mode handling.
 
-Cell failures are ordinary execution responses and keep the stream open.
-Persistence, unrecoverable cache, or protocol failures close it with a host
-error. There are no concurrent requests, request IDs, multiplexing,
-standalone reset command, socket, or background supervisor.
+Exec, reset, and close are mutually exclusive live operations. While one is
+in progress, another fails clearly as busy before executing anything;
+read-only status remains responsive, including during provider waits.
+There is no queue. `--reset` requires an existing session: replace its live
+child, or open it if stopped, and return the new run identity once ready.
+A live reset retains source, configuration, and locks; opening a stopped
+session loads them normally. Tags remain. `--close` stops the local host;
+when no owner is running it succeeds without starting one or creating a
+session. Neither operation executes a cell. Their JSON results contain
+`reset:true` with session, new run, warnings, and applied limits, or
+`closed:true` with session. Human output confirms the same outcome.
 
-The internal child protocol is equally small: ready, numbered run/result,
-and bounded embedding request/response records while a cell is in flight.
-It carries tag deltas and vector data that are never included in agent
-output. Host-assigned run/cell identity is enough to associate results;
-there is no general RPC system or retryable execution protocol.
+An accepted cell finishes under its existing limits even if the client
+disconnects, is interrupted, or loses stdout. Completion still follows
+section 3; sending the result is not its commit point. Never automatically
+resubmit Python. If the original client is still running, read its eventual
+result. Otherwise inspect live status and the run log using the run/cell
+identity and submitted code before deciding whether to execute again.
+A host failure closes the child and leaves recovery to the ordinary open
+path; a missing response never proves rollback.
 
-`cli.py` owns terminal handling. When stdin is a terminal, save its settings
-and disable `ICANON` and `ECHO`, with `VMIN=1` and `VTIME=0`, before emitting
-ready. Keep signal processing enabled and restore the saved settings on
-orderly exit, including opening failure and handled interrupts. For pipes,
-leave input settings alone. Read complete JSONL records across arbitrary
-read boundaries; a terminal's canonical line limit must not truncate a
-Python cell. Use the close request for an orderly terminal shutdown;
-Ctrl-D is not EOF with noncanonical input.
+### Local host lifetime
 
-Flush after each record. Stream stdout is JSONL only; human diagnostics
-use stderr and cell output is inside its result. Close, EOF, SIGINT, or a
-broken output pipe closes the owned child in a finally block. Never
-interpret a delivery failure after log sync as an annotation rollback.
-An agent that loses a response must check the submitted cell's run-log
-record before deciding to resubmit it, using the reported run/cell identity
-and submitted code. Reopening recovers committed history; it does not imply
-that the unanswered cell failed. If the process is still running, continue
-reading its pending response instead of submitting the code again.
+`local.py` connects the short-lived client to a host scoped to the resolved
+project and session. On demand, launch it with the same Python installation,
+detached from the client's terminal and standard descriptors. The launching
+client waits for readiness or a concrete startup error; connection retries
+must not impose a short deadline on valid indexing or replay. The host owns
+one `Kernel` through `open_session`; Hosted continues to own that API
+directly. Keep the client lightweight, loading host-only modules on host
+paths: attaching must not import NumPy, re-index data, replay history, or
+rebuild the kernel. There is no service installation or machine-wide manager.
 
-The file form opens, executes once, prints the result, and closes. It exits
-zero for a successful cell and nonzero for a cell or host failure, so shell
-pipelines cannot mistake a failed analysis for success. Python variables
-persist only in the stream; tags persist in both forms. Include opening
-warnings in the file form's JSON result and human diagnostics too.
+Use a private Unix socket beneath `.quail/`, with owner-only access. Bind
+and connect using a short name relative to its containing directory so long
+project paths do not exceed the platform's socket-address limit.
+The existing session lifetime lock is the ownership authority. Only its
+holder may publish or replace the session endpoint, after initialization.
+Concurrent starters must converge on that owner or fail clearly; they must
+not unlink its socket or create competing kernels. Connection permission
+errors, timeouts, or an owner still initializing are not proof of a stopped
+session. Preserve an unreachable owner's files and report the problem.
+Check project/session and protocol compatibility when connecting; an
+incompatible running host requires an explicit close, not replacement.
+
+Use one framed request per client connection: exec, reset, close, or private
+status. Malformed or incomplete requests execute and log nothing and do not
+disturb the kernel. Reuse Core results and errors. Before execution, send
+the host-assigned run/cell identity privately to the client for diagnostics;
+delivery failure does not cancel accepted work. Forward bounded host progress
+to client stderr without mixing it into the final stdout result. Slow or
+disconnected clients must not block completion or inspection. Bound
+connection attempts, but do not impose a fixed short response timeout on
+an accepted cell; its existing execution/provider limits govern the wait.
+No request IDs, retry protocol, or additional durable result store is needed.
+
+The internal child protocol remains ready, numbered run/result, and bounded
+embedding request/response records during a cell. Tag deltas and vector data
+never appear in agent output. `kernel.py` still assigns run/cell identities
+and owns completion; the local adapter only observes and transports them.
+
+On close, stop admitting work and remove the endpoint while still owning
+the session lock. Call `Kernel.close()` to close/reap the child, clean up
+scratch and connections, and release locks before replying successfully;
+then exit the host normally. A cleanup failure is an error, not a successful
+close. An exiting host must never remove a successor's endpoint. Closing
+the CLI connection alone does none of this. Keep hosts alive until explicit
+close or termination; do not add a supervisor that restarts failed hosts.
 
 ### Project inspection and the usage manual
 
@@ -1354,17 +1383,34 @@ Report a session with invalid history or incompatible source as unavailable
 with its error, without inventing an empty analysis or treating partial or
 stale counts as current. The rest of the orientation remains usable.
 
+The local CLI augments info and session listings with `runtime` status from
+`local.py`: `stopped`, `idle`, `busy`, or `unavailable` with a reason when an
+owner cannot be inspected. Live status includes the active `run`, current
+`cell` (null when none), `last_completed` as a run/cell pair or null, and
+applied `limits`. These are observations, not reservations for a later
+command. A completed cell becomes visible only through section 3's normal
+completion path, including for a disconnected client. Read its code/output
+from the existing run log; status is not another result store.
+
+Inspection never starts a host or runs Python. Keep live status responsive
+during execution and collect it independently of index synchronization:
+if a changed source blocks ordinary inspection, retain runtime status
+alongside that error so the agent can identify what needs closing. A missing
+socket with a held lifetime lock is unavailable, not stopped. `info(project)`
+and Hosted do not need to discover local sockets.
+
 Retain the structured CLI invocation metadata alongside `limits`, `datasets`,
 and `sessions` in the JSON result (shown with a compact `quail` prefix here):
 
 ```json
-{"limits":{"cpu_seconds":30,"wall_seconds":120,"memory_mb":1024,"max_limit":1000,"output_kib":64},"interface":{"info":"quail info --json","open":"quail exec SESSION --stream [--dataset D] [--fork-from S]","exec":{"op":"exec","code":"..."},"reset":{"op":"reset"},"close":{"op":"close"},"export":"quail export SESSION --json"}}
+{"limits":{"cpu_seconds":30,"wall_seconds":120,"memory_mb":1024,"max_limit":1000,"output_kib":64},"interface":{"info":"quail info --json","exec":"quail exec SESSION -c CODE [--dataset D] [--fork-from S] [--json]","file":"quail exec SESSION FILE.py [--dataset D] [--fork-from S] [--json]","reset":"quail exec SESSION --reset [--json]","close":"quail exec SESSION --close [--json]","export":"quail export SESSION --json"}}
 ```
 
 This describes invocation and remains consistent with the agent document;
-it does not override that document's semantics. `quail info` reports the
-current manifest's resolved limits, including defaults; a running stream
-continues to use the limits in its ready record until it is closed.
+it does not override that document's semantics. Top-level `limits` reports
+the current manifest's resolved values, including defaults; a running host
+continues using its applied limits, reported under its session's runtime
+and in execution results, until it is closed.
 
 Generate runnable invocation strings from the current absolute
 `sys.executable` plus `-m quail.cli`, quoting arguments for the supported
@@ -1392,7 +1438,7 @@ semantic search.
 
 | Slice | Deliverable | Proof |
 | --- | --- | --- |
-| 1 | Packaging, minimal project/import/index, CLI info and persistent execution, Field reads, count/retrieve, tag, log replay | Initialize a small CSV project, inspect and tag it through the actual CLI, reuse variables/functions/classes across cells, fail a cell, close, reopen, and recover the committed tags |
+| 1 | Packaging, minimal project/import/index, CLI info and persistent execution, Field reads, count/retrieve, tag, log replay | Through separate shell calls, initialize a small CSV project, reuse variables/functions/classes across inline and file cells, fail a cell, close, reopen, and recover committed tags; verify this path in the target agent harness |
 | 2 | Complete language, values/grouping, lexical search, entry behavior, fields/export/fork | Agent workflows run through the same engine with bulk database operations; another session cannot change lexical scores |
 | 3 | Limits, persistence failure recovery, locking and source/ID continuity | Concurrent local sessions work; stable-ID edits preserve sessions and positional IDs cannot reassign tags |
 | 4 | Provider adapters, one cached embedding path, exact semantic scoring, local and shared warming | Warm/cold and bounded-batch scoring agree; repeated queries reuse scores; workers produce complete mergeable shards; a slow provider does not block another session's tag commit |
@@ -1428,14 +1474,15 @@ Organize tests around these observable contracts:
 | Session scope | Stable-ID additions/edits/reorders and ID-column renames continue in the same session; deleted IDs count as final orphans and restored IDs recover tags; explicit preservation of generated IDs permits later edits; automatic positional reassignment fails; source/tag name conflicts are reported |
 | Replay | Continuation on a clock behind imported history, deterministic concurrent ties, valid forked history, rejection of any invalid complete record even with valid later cells, bad headers/numbering/duplicate identities, interrupted headers/tails including partial UTF-8, cached tail warnings, failed-cell/empty-file/tail digests |
 | Invalid history isolation | No partial materialization, new applied marker, or stale-cache fallback after validation failure; affected open/export/fork fail without changing original files; info/listing, source rebuilds, source-only operations, and other sessions remain usable |
-| Durable completion | Child death before/after result, log append/fsync uncertainty, cache failure after log sync, host death before reply; never execute code twice |
+| Durable completion | Client loss during execution and after log sync, child death before/after result, log append/fsync uncertainty, cache failure after log sync, host death before reply; recover the outcome without executing code twice |
 | Private state | Read-your-writes, disk-backed tag working tables with bounded memory, newly created fields, failed-cell rollback of tags/FTS/derived search state, variables/functions/classes retained on normal failure |
 | Concurrency | Two kernels read then tag without a shared snapshot upgrade; embedding waits coexist with another session's commit; exports see committed state |
 | Language | Method/produce pairs, nested expressions and helper classes, closures/comprehensions and dataclasses across cells, normal Python identity and rejection of bool filters, frozen literal arguments with live field reads, None and predicate negation, numeric/mixed-list comparison, recursive text conversion, container grouping, Unicode operations, standard seed types |
 | Search | Isolated field/session BM25, absence/empty/nonmatch, phrase handling, equivalent warm/cold and bounded-batch scores, repeated-query reuse, precise invalidation after writes/rollback, cache eviction without changed answers |
 | Embeddings | Full-value requests, Ollama truncation disabled, input ordering, finite packed vectors, dimension races, revision separation, bounded retries |
 | Shared warming | Disjoint/balanced shard coverage, row-order-independent assignment, mixed shard-count composition, complete reused/new output, atomic publication, GitHub part sizes, cold-clone use of partial merged packs, whole-pack validation before batched ingestion, interrupted ingestion without a completion receipt, changed-file invalidation, duplicate keys, address independence and revision separation |
-| Runtime and CLI | Ready/stream/reset/close and info invocation metadata; configured versus applied limits; bounded output; CPU/wall/RSS failure including caught interrupts; parent/child cleanup; pipes and noncanonical terminal input without echo, long Unicode requests and complete responses, terminal restoration; interrupted-append warnings and session validation errors; safe project-relative exports; exit status; actual harness variable persistence |
+| Local lifetime | Separate clients reuse one host/child; concurrent startup and stale endpoints cannot create competing owners; connection errors do not replace live owners; busy exec/reset/close and responsive status during execution/provider waits; reset preserves the live snapshot/configuration; close cleans up before success and never starts a stopped host; host death cleans up its child |
+| Runtime and CLI | Inline/file equivalence and info invocation metadata; configured versus applied limits; bounded output; CPU/wall/RSS failure including caught interrupts; fresh-start/replacement and interrupted-append warnings; long Unicode files and complete results; private socket access and long project paths; session validation errors; safe project-relative exports; exit status; actual harness variable persistence |
 
 Run examples from the corrected agent document against a fixture that
 supplies their assumed fields and values. Check an explicit public namespace.
@@ -1443,12 +1490,14 @@ Do not parse every inline code span as a required exported name.
 Verify that the first-run path works without `info`, that inspection creates
 no session, starts no kernel, and omits the manual, and that the packaged
 manual matches `USING_QUAIL.md` exactly.
-Include absent text/scores in the example fixture. Through the actual harness,
-reuse classes and variables across cells, recover from a normal cell error,
-reset, and close with an acknowledgment and process exit. Check that large
-requests are received exactly, output contains complete JSON responses
-without echoed input, and close releases the child and locks. These are
-ordinary regression and integration checks using small temporary fixtures.
+Include absent text/scores in the example fixture. Through separate calls
+in the actual harness, reuse classes and variables across inline and file
+cells, recover from a normal cell error, wait for a long-running client,
+reset, and close. Verify exact multiline Unicode input, complete text/JSON
+results, and cleanup of the host, child, endpoint, and locks. Terminate a
+client mid-cell and recover its outcome through inspection and logs without
+resubmitting it. These are ordinary regression and integration checks using
+small temporary fixtures; they do not require a separate probe framework.
 
 Keep standard regression tests in the repository, using small temporary
 fixtures. Cover avoidable repeated work: unchanged search chains within the
@@ -1456,7 +1505,9 @@ cache budget reuse embeddings and scores; displaying entries does not query
 per displayed value; bulk tags do not SELECT per entry; unchanged history
 does not replay; known packs do not decode again. Use test-side counters
 where useful, checking reuse and scaling behavior rather than fixing an exact
-SQL statement count or a machine-specific latency threshold.
+SQL statement count or a machine-specific latency threshold. Reattaching a
+client must preserve the host/child and their initialized caches, without
+reopening the dataset or replaying history for every cell.
 
 Performance benchmarking is ephemeral development work outside the checkout.
 Use temporary scripts and generated data when needed to investigate startup,
@@ -1475,5 +1526,6 @@ annotate, recover from interrupted appends, export, share warming work, and
 continue a session from its text project, including source edits with stable
 IDs. Build order does not make later slices optional. Automatic salvage of
 invalid complete log records, identity remapping, a worker coordinator,
-distributed conflict resolution tools, a daemon, extra backend/provider
-frameworks, and Hosted policy remain outside Core.
+distributed conflict resolution tools, a machine-wide service manager,
+extra backend/provider frameworks, and Hosted policy remain outside Core.
+The per-session local host in section 8 is the full background-process scope.

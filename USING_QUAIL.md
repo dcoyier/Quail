@@ -82,90 +82,101 @@ n1,The parking permit is too expensive.
 n2,The staff were helpful.
 CSV
 quail import notes.csv           # registers the dataset and builds its index
-quail exec first-pass --stream   # one foreground kernel; JSON lines in, JSON lines out
 ```
 
-The CSV stays where it is; import never copies or rewrites it. The stream
-prints a ready record, then answers one request at a time. Send these two
-cells through the same process:
+The CSV stays where it is; import never copies or rewrites it. Submit these
+two cells as separate commands:
 
-```text
-{"op":"exec","code":"body = Field('body')\nparking = body.lexical('parking') > 0\ncount(parking)"}
-{"op":"exec","code":"tag(parking, 'topic', 'parking')\ncount(by=Field('topic'))"}
+```sh
+quail exec first-pass -c 'body = Field("body"); parking = body.lexical("parking") > 0; count(parking)'
+quail exec first-pass -c 'tag(parking, "topic", "parking"); count(by=Field("topic"))'
 ```
 
 The first result is `1`; the second reuses `parking` and commits one tag.
-Send `{"op":"close"}`, wait for the closing acknowledgment and the process
-to exit, and `quail export first-pass` writes the source fields and the
-session's tags to `exports/first-pass.csv`.
+Each command exits after its result; the kernel stays alive between them.
+Export the source fields and tags to `exports/first-pass.csv`, then close
+the session:
+
+```sh
+quail export first-pass
+quail exec first-pass --close
+```
 
 ### Continue a study
 
-Clone the study, enter it, and run `quail exec EXISTING_SESSION --stream`.
+Clone the study, enter it, and run `quail exec EXISTING_SESSION -c 'fields()'`.
 Indexes and tags rebuild from the text on first open; nothing is
 re-imported. To choose a dataset or session first, `quail info --json`
 describes the study: each dataset with its fields, the sessions that exist
 with their history and last activity, the configured `limits`, and under
 `interface` the exact commands to run next, as absolute invocations that
-work from any shell. It starts no kernel and creates no session.
+work from any shell. Session listings also show local runtime state: stopped,
+idle, busy, or unavailable with a reason. Live status includes the active
+run/cell, latest completed cell, and applied limits. Inspection starts no
+kernel and creates no session.
 
 A new name starts a fresh session. To build on existing work instead,
-`quail exec NEW --fork-from OLD --stream` starts `NEW` from a copy of the
+`quail exec NEW --fork-from OLD -c 'fields()'` starts `NEW` from a copy of the
 tags and history of `OLD`, which must be closed and is left untouched.
 
-### The stream
+### Executing cells
 
 ```text
-quail exec SESSION --stream [--dataset D] [--fork-from S]
+quail exec SESSION -c CODE [--dataset D] [--fork-from S] [--json]
+quail exec SESSION FILE.py [--dataset D] [--fork-from S] [--json]
 ```
 
 Naming an existing session continues it. A new name starts one, on the
-study's only dataset or the one named by `--dataset`. The process prints
-one JSON line when it is ready, then answers each JSON line on its stdin
-with one JSON line on its stdout. Send one request at a time and wait for
-its response:
+study's only dataset or the one named by `--dataset`. Each command submits
+one cell, prints its result, and exits. Quail starts the session's local
+host when needed and keeps its Python kernel alive between commands.
+Variables, functions, and classes remain available until the kernel is
+reset, closed, or lost; tags survive those events.
 
-```text
-stdout  {"ready":true,"session":"study","run":"...","warnings":[],"limits":{"cpu_seconds":30,"wall_seconds":120,"memory_mb":1024,"max_limit":1000,"output_kib":64}}
-stdin   {"op":"exec","code":"n = count()\nn"}
-stdout  {"session":"study","run":"...","cell":1,"output":"1204","error":null,"tags_written":0,"truncated":false,"kernel_restarted":false}
-stdin   {"op":"reset"}
-stdout  {"reset":true,"session":"study","run":"..."}
-stdin   {"op":"close"}
-stdout  {"closed":true,"session":"study","run":"..."}
+Stdout is what a notebook would show: everything you print, then the value
+of the last expression when it is not `None`, then the traceback if the cell
+raised. The command exits zero on success and nonzero on failure. An ordinary
+cell error leaves the kernel usable. With `--json`, stdout is one result
+object instead:
+
+```json
+{"session":"study","run":"...","cell":1,"output":"1204","error":null,"tags_written":0,"truncated":false,"kernel_restarted":false,"warnings":[],"limits":{"cpu_seconds":30,"wall_seconds":120,"memory_mb":1024,"max_limit":1000,"output_kib":64}}
 ```
 
-`output` is what a notebook would show: everything you print, then the
-value of the last expression when it is not `None`, then the traceback if
-the cell raised. `error` is `null` or an object with `type`, `message`, and
-`hint`. `tags_written` is the number of entry/field pairs the cell
-committed. `reset` replaces the kernel: variables are gone, tags remain.
-`close` shuts the kernel down and exits; always finish with it, through a
-pipe or a terminal alike (in a terminal, Ctrl-D is not end of input). A
-malformed request gets one error response and the stream stays open. If
-the session cannot be opened, the first line is
-`{"ready":false,"error":{...}}` and the process exits nonzero.
+`output` contains that notebook text. `error` is `null` or an object with
+`type`, `message`, and `hint`. `tags_written` counts the entry/field pairs
+committed by the cell. Warnings and host progress appear on stderr too.
+
+Wait for each command's result before submitting the next. If the harness
+backgrounds a long command, use its normal wait/output tool to finish
+reading that command. A competing exec, reset, or close fails as busy;
+inspection remains available while a cell runs.
+
+`quail exec SESSION --reset` replaces the kernel: variables are gone, tags
+remain. It requires an existing session and starts its kernel if stopped.
+`quail exec SESSION --close` shuts the host and kernel down and releases
+their resources; finish with it when done. Closing an already-stopped session
+succeeds without starting one. A kernel has no automatic idle expiry.
 
 **Limits.** By default a cell may produce 64 KiB of output and use 30 seconds
 of CPU and 120 seconds of wall time, the kernel may hold 1 GiB of memory,
 and `retrieve` returns at most 1000 entries per call. Output past its limit
 is cut with a note and `truncated` is set. Time spent waiting for an
 embedding provider does not count against the wall budget. The values are
-configurable in `quail.toml`; the ready record reports those applied to
-this stream, and they hold until you close it.
+configurable in `quail.toml`; execution results and live status report the
+applied values, which hold until you close the host.
 
-**Warnings.** The ready record's `warnings` tell you when the source CSV has
-changed since the session last ran, or when an earlier run was interrupted
+**Warnings.** Execution results' `warnings` report a fresh kernel start,
+source changes since the session last ran, or an earlier run interrupted
 mid-write. An unfinished final line is ignored; earlier complete records
 apply if the history validates. A session whose history does not validate
 is reported as unavailable, with the reason; other sessions and new ones
 still work.
 
-**One file as one cell.** `quail exec SESSION FILE.py` opens the session, runs
-the file as a single cell in a fresh kernel, prints the result, and exits:
-zero on success, nonzero on any failure. Its tags persist like any cell's;
-its variables do not. Use it for a complete saved script, or when the
-harness cannot hold a process open between calls.
+**One file as one cell.** `quail exec SESSION FILE.py` reads the file as UTF-8
+and submits it to the same session kernel as `-c`. Its variables and helpers
+remain available to later commands. Use it for multiline analysis and saved
+helper definitions.
 
 ### Commands
 
@@ -176,10 +187,12 @@ directory or its parents.
 | --- | --- |
 | `quail init [DIR]` | Create an empty study: a minimal `quail.toml`, `sessions/`, and `.quail/` in the ignore file. |
 | `quail import CSV [--name N] [--id COL] [--embed PROVIDER/MODEL --embed-revision R]` | Register a CSV as a dataset and build its index. |
-| `quail info [--json]` | Describe datasets, fields, sessions, limits, and the commands to run next. |
-| `quail exec SESSION --stream [--dataset D] [--fork-from S]` | Open a session as a foreground kernel. |
-| `quail exec SESSION FILE.py [--dataset D] [--fork-from S] [--json]` | Run one file as one cell and exit. |
-| `quail sessions [--json]` | List sessions with their history, last activity, and availability. |
+| `quail info [--json]` | Describe datasets, fields, sessions and local runtime state, limits, and the commands to run next. |
+| `quail exec SESSION -c CODE [--dataset D] [--fork-from S] [--json]` | Run one cell, starting the session's host if needed. |
+| `quail exec SESSION FILE.py [--dataset D] [--fork-from S] [--json]` | Run a file as one cell on the same persistent kernel. |
+| `quail exec SESSION --reset [--json]` | Replace an existing session's kernel; retain tags. |
+| `quail exec SESSION --close [--json]` | Stop the session's local host and kernel. |
+| `quail sessions [--json]` | List sessions with their history, last activity, availability, and local runtime state. |
 | `quail fork SRC DST` | Copy a closed session's tags and history into a new session. |
 | `quail fields DATASET [--session S] [--json]` | List a dataset's fields, with a session's tag fields when one is named. |
 | `quail export SESSION [--out PATH] [--json]` | Write source fields and tags to `exports/SESSION.csv`. |
@@ -508,17 +521,18 @@ base_url = "https://your-provider.example/v1"
 api_key = "env:OPENAI_API_KEY"
 ```
 
-Replace the URL with the endpoint's base URL. Export `OPENAI_API_KEY` in the
-shell that starts Quail; keep only the environment reference in the manifest.
+Replace the URL with the endpoint's base URL. Export `OPENAI_API_KEY` before
+starting the session; keep only the environment reference in the manifest.
 Omit `api_key` if the endpoint needs no credentials. The selected model must
 be available at its provider when missing embeddings are needed.
 
 The revision labels fixed weights and embedding behavior, including
 preprocessing. Change it when those change; vectors from different revisions
-are kept apart. Close and reopen the stream after configuration changes;
-`reset` retains the old configuration. Without an embedding configuration,
-`.semantic()` raises with a hint, and `quail info` says whether one is
-configured.
+are kept apart. After configuration changes, close the session with
+`quail exec SESSION --close`; the next exec opens it with the new settings.
+Reset retains a live kernel's configuration. Without an embedding
+configuration, `.semantic()` raises with a hint, and `quail info` says
+whether one is configured.
 
 The first semantic search on a field embeds every distinct value of that
 field once. On a large dataset that can take minutes; progress is reported
@@ -533,7 +547,7 @@ choose weights by reading the top results, not by assumption.
 
 Ordinary Python is the extension mechanism, with the libraries and
 capability restrictions described under [Cells](#cells). Reuse your code in
-later cells of the stream: a class or function that wraps the verbs, a
+later cells of the kernel: a class or function that wraps the verbs, a
 coding scheme kept as a dict of predicates, a loop that tags entry by entry.
 
 ```python
@@ -619,7 +633,7 @@ with `--id` at import. Tags are stored by id. If the CSV is edited and the
 session continues, tags follow their ids: entries that were removed keep
 their tags out of sight (the session reports them as orphans), entries that
 return get them back, and new entries start untagged. Edited text is not
-re-examined for you; the ready record warns that the source changed so you
+re-examined for you; opening warns that the source changed so you
 can review the affected work.
 
 If the CSV had no id column, ids were generated in file order
@@ -634,8 +648,8 @@ source version.
 
 Locally, a study is a directory you commit and share with your own git
 tools: the manifest, the source CSVs, the session logs, and any `warm/`
-files. `.quail/` holds disposable indexes and local locks and stays
-gitignored. Quail never runs git.
+files. `.quail/` holds disposable indexes, local locks, and runtime sockets
+and stays gitignored. Quail never runs git.
 
 Sessions are the unit of parallel work. Two agents in two sessions push
 separate log files and merge without conflict; an agent continuing
@@ -651,12 +665,13 @@ four workers each embed a quarter and commit the resulting `warm/` files. A
 fresh clone uses whatever parts have arrived, and ordinary search fills in
 the rest. Warming is preparation, never a requirement.
 
-Before pulling or editing source CSVs, close streams using those datasets.
-After pulling source, logs, or `warm/` files, reopen affected streams to see
-the changes. A live stream keeps its source snapshot and synchronized
-history; new pack paths are discovered on open. `reset` retains that source
-snapshot and configuration, so use close and reopen to synchronize. Python
-variables are gone after reopening; resubmit saved helper definitions.
+Before editing source CSVs or pulling changes to source, logs, or `warm/`
+files, close affected sessions with `quail exec SESSION --close`.
+The next exec opens the updated study. A live kernel keeps its source
+snapshot and synchronized history; new pack paths are discovered on open.
+Reset retains that source snapshot and configuration, so use close and
+reopen to synchronize. Python variables are gone after reopening; resubmit
+saved helper definitions.
 
 ## Errors and restarts
 
@@ -668,18 +683,24 @@ For a normal cell error, read the traceback, fix the cell, and run again.
 A cell that runs out of CPU or wall time fails with no tag writes; catching
 the interrupt does not turn it into a success. If the kernel itself is
 replaced (it ran out of memory, ignored the interrupt, its process died, or
-you sent `reset`), the response says so with `kernel_restarted` or `reset`.
+you reset it), the result reports the replacement in diagnostics and in
+JSON through `kernel_restarted` or `reset`.
 Variables are gone; every committed tag is intact. A hard process death can
 also lose output still buffered in the kernel. Resubmit your helper
 definitions and continue. Nothing you sent is ever run twice on your behalf.
 
-Losing the stream, or receiving a host persistence error, is different: a
-cell may have committed before its response reached you. If the process is
-still running, keep reading its pending response. Otherwise reopen the
-session to recover its committed history, and look for the cell's record
-under `sessions/SESSION/log/` by its reported run, cell number, and code
-before deciding whether to resubmit. An unanswered cell is not necessarily
-a failed cell.
+Losing a command's response, or receiving a host persistence error, is
+different: an accepted cell can still be running or already committed.
+Interrupting the client does not cancel the cell. If the client is still
+running, keep reading its eventual result. Otherwise use `quail info --json`
+to check local runtime state; a live host reports its current or latest
+completed run/cell.
+Look for the corresponding record under `sessions/SESSION/log/`, checking
+its run, cell number, and submitted code before deciding whether to resubmit.
+Completed results remain in that log even when their client disappeared.
+A stopped host's next exec restores tags into a fresh kernel and reports
+the empty Python working state. An unanswered cell is not necessarily a
+failed cell; Quail never automatically repeats it.
 
 If you have shadowed a verb (`count = 0` is the usual accident), the
 originals are available as `quail.count`, `quail.retrieve`, and so on:

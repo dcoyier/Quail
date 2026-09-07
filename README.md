@@ -8,7 +8,7 @@ inspected, continued, and shared.
 
 | Document | Reader | Contents |
 | --- | --- | --- |
-| [`USING_QUAIL.md`](USING_QUAIL.md) | anyone using Quail, agents first | The manual: starting and continuing a study, the analysis language, the local stream, and sharing work. |
+| [`USING_QUAIL.md`](USING_QUAIL.md) | anyone using Quail, agents first | The manual: starting and continuing a study, the analysis language, the local CLI, and sharing work. |
 | [`IMPLEMENTATION_GUIDE.md`](IMPLEMENTATION_GUIDE.md) | implementers | The implementation contract: observable behavior, module ownership, build order, and tests. |
 
 ## How it works
@@ -68,8 +68,8 @@ runs the first cells, exports tags, and explains how agents share work.
 ## Core and hosted
 
 Core is this repository: the language, the kernel, the study format, and a
-CLI that a harness drives as one foreground process, JSON lines in and JSON
-lines out. Core is the workbench, not the analyst: it runs no agent, calls
+CLI that submits one cell per invocation to a persistent local session.
+Core is the workbench, not the analyst: it runs no agent, calls
 no language model, never runs git, and opens no network connection except
 to a configured embedding provider. Authentication, an MCP server,
 containers, and anything about who is calling or where a server is
