@@ -58,32 +58,75 @@ There is no Core MCP dependency.
 
 ### Ownership
 
-Start with this layout; each row is a responsibility, not a framework.
+Organize around the boundaries that must stay independent: durable project
+state, derived storage, analysis execution, and the adapters that invoke it.
+A new transport should not change the language or commit path; a new
+expression should not change process management. Start with these areas,
+splitting cohesive responsibilities when that makes them easier to reason
+about and test. The filenames are a starting layout, not a fixed file count.
 
-| Module | Owns | Dependencies within Core |
+All areas may use `contracts.py`; the final column lists other Core
+dependencies. Imports follow this direction, without cycles.
+
+| Area | Owns | Other Core dependencies |
 | --- | --- | --- |
-| `project.py` | Project configuration, paths, metadata, locks, run-log writing and parsing, replay | None |
-| `index.py` | CSV import, source indexes, materialized tags, vector storage, warm-pack validation and ingestion, cache synchronization | `project.py` |
-| `embed.py` | The two embedding HTTP dialects, timeouts, retries, response validation | `project.py` |
-| `prelude.py` | Expression nodes, SQL compiler, verbs, private tag tables, scoring, cell execution, confinement | None |
-| `kernel.py` | Child lifetime, control exchange, limits, durable cell completion, cached embedding requests | `project.py`, `index.py`, `embed.py` |
-| `service.py` | Project operations, the shared dataset-open path, session opening, export, local and shared warming | Host modules above |
+| `contracts.py` | Shared JSON value rules and text rendering, result/error and control records, pure codecs | None |
+| `project.py` | Project configuration, paths, metadata publication, local locks | None |
+| `history.py` | Run-log writing and validation, ordered replay, history digests and summaries | `project.py` |
+| `index.py` | CSV import, source indexes, materialized tags, vector storage, warm-pack validation and ingestion, cache synchronization | `project.py`, `history.py` |
+| `embed.py` | The two embedding HTTP dialects and the shared cached-embedding operation | `project.py`, `index.py` |
+| `language/` | Expression construction and SQL compilation, evaluator, verbs, entries, private tag state, search preparation and scoring | None |
+| `prelude.py` | Child bootstrap, control I/O, persistent namespace and cell runner, confinement | `language/` |
+| `kernel.py` | Child lifetime, control exchange, limits, durable cell completion | `project.py`, `history.py`, `index.py`, `embed.py` |
+| `service.py` | Project operations, the shared dataset-open path, session opening, export, local and shared warming | `project.py`, `history.py`, `index.py`, `embed.py`, `kernel.py` |
 | `local.py` | Per-session host startup, local connections, request admission, and live inspection | `project.py`, `service.py`, `kernel.py` |
 | `cli.py` | Argument parsing, presentation, exit status | `service.py`, `local.py` |
 
-Keep `quail/__init__.py` inert. The child starts with
-`[sys.executable, "-m", "quail.prelude"]`; importing the package must not
-load the host graph.
+`contracts.py` is a small dependency-free vocabulary, not a general utilities
+module. Share the value conversion and wire definitions used on both sides
+instead of maintaining matching copies. Configuration belongs in
+`project.py`, run schemas in `history.py`, and pack schemas in `index.py`.
+They use the shared value rules, but retain their own format versions and
+validation. Use small typed records and ordinary functions, not a schema
+framework or an object hierarchy for every JSON shape.
 
-`prelude.py` is self-contained so that Hosted can place it in a confined
-process. It does not parse manifests or logs, perform provider HTTP, or
-write durable files. Replay has one implementation, in `project.py`.
-The host initializes the child's working tags from the synchronized index.
+Keep `quail/__init__.py` inert. The child still starts with
+`[sys.executable, "-m", "quail.prelude"]`. Its dependency closure is
+self-contained; it need not be one large file. Separate expression/compiler
+code, evaluator/verb state, and search preparation within `language/`.
+`prelude.py` delegates to them and loads the needed modules before installing
+the audit hook. None imports host modules, parses manifests or logs,
+performs provider HTTP, or writes durable files. Hosted can place this same
+child package in its confined process. Replay has one implementation in
+`history.py`; the host initializes working tags from the synchronized index.
 
-SQL belongs in `index.py` for host operations and `prelude.py` for
-language execution. Transport code calls those operations; it does not
-reimplement their queries. A few small wire/error records may exist on both
-sides of the process boundary and must share contract fixtures.
+SQL belongs in `index.py` for host storage and `language/` for the child's
+queries and TEMP state. Transport code calls operations; it does not build
+queries, replay logs, or decide tag commits. Sharing a wire codec does not
+make a received message trusted: validate it at the process boundary and
+check its scope in the owning operation.
+
+### State and resource lifetime
+
+Keep resolved configuration and source identity in immutable records.
+Keep mutable state on its owner, with explicit references to the few
+collaborators it needs. There is no process-global current project, session,
+database connection, or search cache, and no general context/service locator.
+
+`service.py` acquires resources for an operation and releases them when it
+ends. A successful `open_session` transfers its connections, locks, and
+run resources to the returned `Kernel`; a failed open unwinds what it
+acquired. Use ordinary context managers for this ownership transfer and
+cleanup. The local adapter separately owns its listener and client sockets.
+
+Inside the child, one evaluator owns the connection, field catalog,
+working tags, and derived search state. The namespace's verbs and
+constructors, and its Entry handles, refer to that evaluator. The cell runner
+owns the namespace, compiler flags, bounded output, and cell transaction;
+it invokes the evaluator without embedding its query logic. Cell-local
+write tracking and output end with the cell; the namespace, working tags,
+and reusable caches remain until reset or close. Sections 3–7 define their
+commit, rollback, and invalidation rules.
 
 ## 2. Projects and source versions
 
@@ -332,6 +375,13 @@ clock: a run continuing observed history always writes after that history,
 even when the machine's wall clock moves backward. No timestamp comparison,
 vector clock, or distributed lock is needed.
 
+Stream validation and replay rather than loading all historical code,
+output, and deltas into a Python list to sort. Each run is already ordered;
+`history.py` merges ordered run iterators and computes summaries.
+`index.py` stages the resulting tags in private disk-backed state and
+publishes them only after complete validation. This preserves the replay
+policy without making memory grow with the entire transcript.
+
 Concurrent runs on separate machines may choose equal logical orders;
 the run ID breaks ties deterministically. This is a defined merge policy,
 not a claim that concurrent coding decisions agree. All original writes
@@ -344,7 +394,7 @@ new records. Pulled or manually edited history is incorporated on the next
 open, not halfway through a cell. Cache digests must describe only history
 actually applied, never newly discovered records the kernel has not seen.
 
-### Parsing and cache markers
+### Parsing and validation
 
 Validate every newline-terminated header and cell: UTF-8 and JSON, supported
 schema, scope, numbering, logical order, and tag values. Any invalid complete
@@ -384,6 +434,8 @@ Map valid historical writes to current stable IDs and report final orphan
 tags separately. An ID missing from the current source is not a malformed
 record. New child results are still checked against their live source before
 logging. Source/tag name conflicts follow section 2's compatibility rule.
+
+### History digests and materialization
 
 The session digest is SHA-256 of canonical JSON containing sorted
 `[log_filename, sha256_of_exact_file_bytes]` pairs. Include valid failed-cell
@@ -459,6 +511,13 @@ and a finite busy timeout. Build replacements at a temporary path and
 publish only after validation and clean closure of the temporary database.
 Checkpoint and close a replacement's WAL before publishing its main file.
 
+Set SQLite's transaction mode explicitly. The operation that owns an atomic
+change owns its begin/commit/rollback; helpers must not silently commit a
+caller's transaction. Connection lifetime and transaction lifetime are
+different: keeping a kernel open does not require keeping a read transaction
+open. Use the standard SQLite driver directly, with a small number of
+explicit storage operations rather than an ORM or generic repository layer.
+
 The shared index contains:
 
 | Data | Representation and lifetime |
@@ -506,18 +565,32 @@ shared database, but it never upgrades that snapshot to a shared write
 transaction. Host vector inserts or another session's tag commits can
 therefore proceed while the child evaluates.
 
+Finish bootstrap and cell transactions explicitly, on success and failure,
+and consume or close internal cursors before returning. Saved expressions
+and Entry handles must not retain open SQL cursors between cells. The dataset
+lock preserves the source snapshot; an idle read transaction merely pins
+old WAL pages and prevents checkpoint progress. Allow ordinary
+[WAL checkpoints](https://www.sqlite.org/wal.html#concurrency) to advance
+between cells without adding a checkpoint service.
+
 The child may read vectors already visible in its read snapshot. Missing
 vectors are obtained from the host and used directly from its response:
 do not expect a long-lived read snapshot to see the host's new inserts.
 The host checks the shared cache again when servicing a request.
 
-A tag write updates its private value and any existing field FTS index
-in the same transaction. Invalidate cached semantic mappings, matrices,
-and score tables for that field. A failed cell rolls back values and FTS,
-restores the field catalog, and discards affected derived state, including
-TEMP score tables, before continuing. Never reuse a cache revision for a
-different field state after rollback or clear/recreation. Avoid a second
-journal for those disposable caches.
+One evaluator write path updates private tag values, present counts, any
+existing field FTS index, and the cell's final write set in the same
+transaction. It also advances affected field revisions and invalidates
+cached Entry tag reads, semantic mappings, matrices, and score tables for
+those fields. Every form of `tag` uses this path; verbs and search helpers
+must not each invent their own invalidation rules.
+
+A failed cell rolls back values, counts, and FTS, restores the field catalog,
+and discards derived state for fields touched by the cell, including TEMP
+score tables. Use monotonically advancing field generations; rollback or
+clear/recreation must not reuse a generation for different values. Unrelated
+source caches remain reusable. Track affected fields, not an inverse journal
+for disposable caches.
 
 Read-only host operations use materialized committed tags. They never
 inspect the child's TEMP tables, so export cannot see a half-finished cell.
@@ -588,15 +661,31 @@ cache keys are not.
 
 Keep the compact shape in `USING_QUAIL.md`: `Field`, `Random`, ordinary
 numeric expressions, predicates, `count`, `retrieve`, `values`, `tag`,
-and `fields`. There is one expression-to-SQL engine in `prelude.py`.
-Python UDFs implement individual operations SQLite cannot faithfully
-provide; they are not a second row-by-row execution engine.
+and `fields`. There is one expression-to-SQL engine in `language/`.
+
+### One query path
+
+Separate describing a question from preparing and executing it. Constructors
+produce inert expression nodes. When a verb or `entry[expr]` evaluates them,
+the evaluator checks their current scope and field dependencies, prepares
+each distinct search dependency, and uses the compiler to build SQL over
+those prepared results. Search preparation may ask for embeddings; scalar
+SQL UDFs must not perform I/O or recursively invoke verbs.
 
 Compile expressions to parameterized SQL and reuse joins within a query.
 Carry the value's kind and encoding with its compiled fragment: source
 text, SQL numbers, and JSON-encoded tag/list values are distinct. Decode
 JSON at explicit boundaries, never by guessing from string contents or by
 discarding its type through `json_extract` before a typed comparison.
+Python UDFs implement individual operations SQLite cannot faithfully
+provide; they are not a second row-by-row execution engine.
+
+Share selection, ordering, parameter binding, and result decoding across
+the verbs and Entry expression reads. A verb chooses its projection and
+result shape; it does not maintain its own interpretation of an expression.
+A small query record containing SQL, parameters, and dependencies is enough.
+Keep the compiler inspectable and directly testable, without an optimizer
+framework, multiple intermediate languages, or per-backend implementations.
 
 ### Ordinary Python is the extension mechanism
 
@@ -793,7 +882,11 @@ Entry-list/literal writes use the same write path. Repeated `tag(entry, ...)`
 calls in a Python loop are also supported: they share the cell transaction,
 field indexes, and one final log fsync. This makes custom Python annotation
 practical without adding a second bulk-write API or arbitrary Python UDF
-registration. The final delta still has to fit the cell's memory budget.
+registration. Reuse staging tables and parameterized statements instead
+of creating and dropping tables for each Entry write. Maintain counts and
+the final write set incrementally through section 4's shared mutation path;
+do not rescan all tags after each call or diff the entire session to discover
+the cell's delta. The final delta still has to fit the cell's memory budget.
 
 ## 6. Search and embeddings
 
@@ -877,17 +970,20 @@ Validate response count, finite coordinates, nonzero dimension and norm,
 and the little-endian float32 representation after packing. An existing
 key wins a concurrent insertion; return that stored vector to both callers.
 
-`embed.py` performs HTTP only. Use the standard-library client for Ollama
-and OpenAI-compatible endpoints, preserve request order (including indexed
-OpenAI response items), and use finite request timeouts with a small fixed
-retry bound for transport, rate-limit, and server failures. Do not retry
+Within `embed.py`, keep the raw provider call separate from the cached
+operation that composes it with `index.py`. The two HTTP adapters use the
+standard-library client, preserve request order (including indexed OpenAI
+response items), and use finite request timeouts with a small fixed retry
+bound for transport, rate-limit, and server failures. Do not retry
 authentication, invalid-input, dimension, or schema errors.
 
-`index.py` owns cache reads, validation at insertion, and writes. A plain
-host function in `kernel.py` composes it with `embed.py`; both kernel
-execution and `service.py` warming call that function without requiring a
-child. A cache batch may survive a failed cell: vectors are derived
-operational state, not annotations.
+`index.py` owns cache reads, vector validation, and writes; `embed.py` owns
+the miss/batch/provider orchestration. Both `kernel.py` and `service.py`
+call that cached operation. Warming needs no `Kernel` instance, child,
+or process-lifecycle import. Hosted's `embed_fn` substitutes only the raw
+provider call and still uses the same cache and validation. A cache batch
+may survive a failed cell: vectors are derived operational state, not
+annotations.
 
 ### Reuse and bounded scoring
 
@@ -915,6 +1011,15 @@ bytes as well as item count. Carry base64 packed float32 vectors over the
 internal channel instead of expanding a corpus into JSON numbers. Use host
 responses directly when the child's read snapshot predates cache inserts.
 
+Budget retained matrices, mappings, Entry data, SQLite page caches, and
+temporary normalization/batch allocations together, leaving room for the
+analyst's Python objects. Several separately "bounded" caches must not each
+assume the whole allowance is theirs. Check sizes before allocating; the
+bounded path reads and scores batches without first building a full matrix.
+Use the same normalization and scoring functions for resident and streamed
+batches. Internal batch sizes and eviction policy are tuning choices, not
+new public settings or alternative engines.
+
 Prepare each distinct search node once for a verb and reuse its scores in
 filtering, ranking, and value reads. Keep a bounded cache of recent score
 tables across cells: `count(score > cutoff)`, `retrieve(rank=score)`, and
@@ -924,12 +1029,15 @@ Tag writes invalidate only affected field mappings/scores, and rollback
 discards affected derived state. Updating `topic` must not rebuild a source
 `body` matrix. Lexical corpus statistics still use the complete field;
 neither cache eviction nor filtering may redefine the corpus or answers.
+Keep a verb's prepared tables valid until its queries finish; eviction must
+not remove a table still referenced by that operation.
 
 Batch cold provider requests and report bounded progress on stderr for
 first-time embedding or pack ingestion, including reused/new counts. Keep
 CLI stdout's final-result contract. No per-row HTTP, repeated full-field
-scoring from Entry access, eager warming of unrelated fields,
-background worker pool, or speculative query planner is needed.
+scoring from Entry access, eager warming of unrelated fields, or speculative
+query planner is needed. Section 7's bounded provider I/O serves requested
+work; it does not schedule background warming.
 
 ### Local and shared warming
 
@@ -1086,14 +1194,49 @@ manifest, alternate cache engine, or remote-cache API is required.
 
 ## 7. Kernel execution and confinement
 
-The child opens the read-only index, initializes private tables, loads RE2
-and NumPy, registers UDFs, and creates the user namespace before
-confinement. Pass only the control descriptors it needs; it inherits no
-host locks, run-log handles, or provider connections and receives no
-provider credentials.
+### Host execution ownership
 
-Use a scrubbed environment. Disable the cell-facing file API and install
-the subtractive audit hook before reporting the child ready:
+Keep `Kernel.exec`, `reset`, and `close` synchronous and serialized. One
+execution owner manages a Kernel and its SQLite connections through open,
+execution, and close. Local connection handling may run separately, but
+must not give every client thread direct access to that mutable state or
+disable SQLite's thread checks to make it work. Publish small immutable
+runtime snapshots for inspection, updated at the normal lifecycle and
+completion transitions; inspection does not enter the executing child.
+
+Blocking provider I/O must not prevent limit monitoring, child-liveness
+checks, or local status responses. Use bounded standard-library workers
+where needed; a provider worker returns data to the execution owner, which
+validates and writes the cache. Keep at most one provider batch in flight
+per Kernel initially. This supplies responsiveness without making the Core
+API asynchronous, adding a cell queue, or sharing connections across workers.
+
+### Child bootstrap and confinement
+
+Pass only the control descriptors the child needs; it inherits no host
+locks, run-log handles, or provider connections and receives no provider
+credentials. Use a scrubbed environment.
+
+On Linux attempt `os.unshare(CLONE_NEWUSER | CLONE_NEWNET)` while the child
+is still single-threaded, before loading numerical libraries or starting
+monitor threads, and record whether it succeeded. The
+[user-namespace operation](https://man7.org/linux/man-pages/man2/unshare.2.html)
+requires a non-threaded caller; trying only after NumPy initializes can
+defeat this protection unnecessarily.
+
+Choose a small, deliberate native-thread budget before importing NumPy.
+Its [BLAS backend](https://numpy.org/doc/stable/reference/global_state.html#number-of-threads-used-for-linear-algebra)
+may otherwise allocate a machine-sized pool for every kernel. Tune this
+internal default using concurrent-kernel throughput and CPU use as well as
+single-cell latency; a faster isolated multiply can make several sessions
+slower together. No thread-pool controller dependency or public tuning API
+is needed.
+
+Then load the child package, RE2 and NumPy, create the evaluator on the
+read-only index with its private tables, register UDFs, and create the
+user namespace.
+Disable the cell-facing file API and install the subtractive audit hook
+before reporting the child ready:
 
 - For `open`, permit only read access under resolved standard-library roots
   and the package roots of the preloaded NumPy and RE2 modules. Reject
@@ -1110,10 +1253,8 @@ the subtractive audit hook before reporting the child ready:
 NumPy is available to analysis code from the preloaded module; its file
 and network operations receive no additional capabilities. SQLite uses the
 connection opened during bootstrap and manages its private temporary files
-below Python's audit layer. On Linux attempt
-`os.unshare(CLONE_NEWUSER | CLONE_NEWNET)` and report whether it succeeded.
-Do not introduce a Python module allow-list, import-state framework, or
-general syntax allow-list.
+below Python's audit layer. Do not introduce a Python module allow-list,
+import-state framework, or general syntax allow-list.
 
 Open SQLite read-only and install its authorizer before user code. Permit
 the runtime's TEMP operations; deny main-schema writes, attach/detach,
@@ -1121,6 +1262,8 @@ extension loading, and writable pragmas. Kernel internals are outside the
 public namespace. Core's confinement prevents ordinary accidental access;
 determined Python introspection is outside its trust boundary. Hosted
 supplies OS isolation for untrusted execution.
+
+### Cell execution and errors
 
 The cell runner parses once, executes statements, and displays the last
 expression's repr when it is not None. Capture stdout, stderr, display,
@@ -1131,8 +1274,10 @@ Do not accumulate unlimited output and truncate it afterward.
 
 Quail errors have type `QuailError`, a message, and an optional actionable hint.
 Ordinary Python exceptions retain their type name and message, with a null
-hint. Format tracebacks with the prelude's own frames removed, preserving
+hint. Format tracebacks with the runtime's own frames removed, preserving
 cell and user-helper frames so the agent can locate its error.
+
+### Limits and shutdown
 
 Use the configurable `[kernel]` defaults from section 2:
 
@@ -1261,6 +1406,8 @@ without requiring an available provider or resolving credentials just to
 inspect data.
 The cloned-checkout recipe and an installed-wheel equivalent must both work
 from a study directory outside the Quail checkout.
+
+### Export
 
 Export source fields in import order with canonical ID first, then tag
 fields in deterministic name order. Preserve text and JSON-encode compound
@@ -1450,6 +1597,8 @@ than licensing an unsafe first implementation. Create files as needed,
 not as empty placeholders. Get a working CLI path before investing in
 warming optimizations.
 
+### Engineering checks
+
 Use PEP 621 and Hatchling, a generated committed `uv.lock`, and
 `quail = "quail.cli:main"` as the entry point. Use pytest, Ruff, and mypy
 for development. CI installs the lock, runs checks and tests, and builds
@@ -1458,25 +1607,46 @@ and smoke-test it. Exercise the small platform-dependent lifecycle and
 confinement surface on both supported OSes before claiming support;
 no broad dependency or version matrix is needed.
 
+Apply linting and type checking from the first slice. Type the internal
+operation boundaries and use strict mypy checking for Core; keep unavoidable
+dynamic typing at the user-namespace and external-library boundaries instead
+of propagating unstructured dictionaries or `Any` through the implementation.
+Use narrow, explained exceptions to checks, not whole-module exclusions.
+
+Keep format decoding, domain validation, execution, and presentation
+distinct. Catch expected failures where they can be handled; convert them
+to result/error records at the owning boundary. Unexpected implementation
+failures must remain diagnosable, not become empty query results, absent
+values, or a successful operation. Comments should explain ownership,
+transaction, and invalidation decisions where they are implemented.
+
 Install the locked NumPy dependency normally. Keep a scalar cosine reference
 in tests for correctness, without shipping a fallback engine or acceleration
 extra. Source installs must not rely on a coincidentally named PyPI project;
 the checkout and built wheel are the tested distribution until a release
 location is explicitly established.
 
+### Contract tests
+
 Tests use temporary projects and real SQLite. Mock the provider boundary
 and inject time, process failure, or placement only where needed.
+Test pure value rules and expression construction directly, and compiled
+queries against explicit expected results in SQLite. Reserve subprocess
+tests for the boundaries that need them: bootstrap, confinement, durability,
+limits, and the CLI. Do not require a running daemon for every language test
+or assert one exact SQL spelling as a substitute for correct query results.
 Organize tests around these observable contracts:
 
 | Contract | Essential cases |
 | --- | --- |
+| Architecture | Shared contracts import without host dependencies; child bootstrap loads no host graph; cached warming works without process-lifecycle imports; independent evaluators and Kernels do not share mutable session state |
 | Project identity | Safe names and paths, exact text preservation, ID resolution, source-version changes, source edited during import, non-destructive metadata publication |
 | Session scope | Stable-ID additions/edits/reorders and ID-column renames continue in the same session; deleted IDs count as final orphans and restored IDs recover tags; explicit preservation of generated IDs permits later edits; automatic positional reassignment fails; source/tag name conflicts are reported |
-| Replay | Continuation on a clock behind imported history, deterministic concurrent ties, valid forked history, rejection of any invalid complete record even with valid later cells, bad headers/numbering/duplicate identities, interrupted headers/tails including partial UTF-8, cached tail warnings, failed-cell/empty-file/tail digests |
+| Replay | Streaming replay agrees with a small sorted reference, including concurrent ties, failed cells, and clears; continuation on a clock behind imported history, valid forked history, rejection of any invalid complete record even with valid later cells, bad headers/numbering/duplicate identities, interrupted headers/tails including partial UTF-8, cached tail warnings, failed-cell/empty-file/tail digests |
 | Invalid history isolation | No partial materialization, new applied marker, or stale-cache fallback after validation failure; affected open/export/fork fail without changing original files; info/listing, source rebuilds, source-only operations, and other sessions remain usable |
 | Durable completion | Client loss during execution and after log sync, child death before/after result, log append/fsync uncertainty, cache failure after log sync, host death before reply; recover the outcome without executing code twice |
-| Private state | Read-your-writes, disk-backed tag working tables with bounded memory, newly created fields, failed-cell rollback of tags/FTS/derived search state, variables/functions/classes retained on normal failure |
-| Concurrency | Two kernels read then tag without a shared snapshot upgrade; embedding waits coexist with another session's commit; exports see committed state |
+| Private state | Read-your-writes through the same bulk/Entry mutation path, disk-backed tag working tables with bounded memory, newly created fields, failed-cell rollback of tags/counts/FTS and invalidation of Entry/search caches, variables/functions/classes retained on normal failure |
+| Concurrency | Two kernels read then tag without a shared snapshot upgrade; embedding waits coexist with another session's commit; exports see committed state; completed and failed cells release read snapshots so idle kernels do not prevent WAL checkpoint progress |
 | Language | Method/produce pairs, nested expressions and helper classes, closures/comprehensions and dataclasses across cells, normal Python identity and rejection of bool filters, frozen literal arguments with live field reads, None and predicate negation, numeric/mixed-list comparison, recursive text conversion, container grouping, Unicode operations, standard seed types |
 | Search | Isolated field/session BM25, absence/empty/nonmatch, phrase handling, equivalent warm/cold and bounded-batch scores, repeated-query reuse, precise invalidation after writes/rollback, cache eviction without changed answers |
 | Embeddings | Full-value requests, Ollama truncation disabled, input ordering, finite packed vectors, dimension races, revision separation, bounded retries |
@@ -1499,15 +1669,19 @@ client mid-cell and recover its outcome through inspection and logs without
 resubmitting it. These are ordinary regression and integration checks using
 small temporary fixtures; they do not require a separate probe framework.
 
+### Execution cost and temporary experiments
+
 Keep standard regression tests in the repository, using small temporary
 fixtures. Cover avoidable repeated work: unchanged search chains within the
 cache budget reuse embeddings and scores; displaying entries does not query
-per displayed value; bulk tags do not SELECT per entry; unchanged history
-does not replay; known packs do not decode again. Use test-side counters
-where useful, checking reuse and scaling behavior rather than fixing an exact
-SQL statement count or a machine-specific latency threshold. Reattaching a
-client must preserve the host/child and their initialized caches, without
-reopening the dataset or replaying history for every cell.
+per displayed value; bulk tags do not SELECT per entry; annotation loops
+do not rebuild staging tables or rescan the catalog on every write;
+unchanged history does not replay; known packs do not decode again. Use
+test-side counters where useful, checking reuse and scaling behavior rather
+than fixing an exact SQL statement count or a machine-specific latency
+threshold. Reattaching a client must preserve the host/child and their
+initialized caches, without reopening the dataset or replaying history
+for every cell.
 
 Performance benchmarking is ephemeral development work outside the checkout.
 Use temporary scripts and generated data when needed to investigate startup,
@@ -1518,8 +1692,14 @@ and timing baselines out of the repository and package. They are not part of
 what an agent downloads or the committed CI configuration.
 
 Use those measurements to fix execution bottlenecks and retain appropriate
-standard regression tests for the behavior corrected. Add further indexes
-or planner machinery only for an identified bottleneck.
+standard regression tests for the behavior corrected. Measure the complete
+local path, including serialization, SQLite work, cache publication, and
+multiple live kernels, before optimizing a numerical inner loop. Compare
+resident and bounded scoring, cold and reused state, and bulk and ordinary
+Python annotation. Record corpus dimensions and resource settings alongside
+temporary results; a speedup on one fixture is evidence for a choice, not
+a universal latency promise. Add further indexes or planner machinery only
+for an identified bottleneck.
 
 The initial Core is complete when an agent can import, inspect, search,
 annotate, recover from interrupted appends, export, share warming work, and
