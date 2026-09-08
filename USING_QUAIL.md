@@ -4,9 +4,9 @@ This document assumes you've read [`README.md`](README.md). Go back
 and do so if you haven't.
 
 Quail is meant to give you freedom to *explore*. If you're an agent, try to really take
-advantage of that freedom unless otherwise specified. In Quail, you work in a persistent 
-Python kernel, one cell at a time, as in a notebook. You can count, read, search, and 
-compare data with the analysis language, and you can also save results as tags. 
+advantage of that freedom unless otherwise specified. In Quail, you work in a persistent
+Python kernel, one cell at a time, as in a notebook. You can count, read, search, and
+compare data with the analysis language, and you can also save results as tags.
 
 As a first example, suppose you are exploring parking concerns in a staff survey.
 The following cells assume an open session with survey responses in `body`,
@@ -19,12 +19,14 @@ body    = Field("body")
 parking = body.lexical("parking permit") > 0             # keyword match, per entry
 nearby  = body.semantic("no place to park near work")    # closeness in meaning, per entry
 ```
-Note that `parking` and `nearby` are descriptions, not results. They cost practically 
-nothing until one of the four verbs (`count`, `retrieve`, `values`, `tag`) runs them, 
-so you could cheaply hold them in variables, combine them, wrap them in functions and classes, 
-and use them again in later cells. Keyword search with `.lexical()` works on any
-dataset; `.semantic()` needs an embedding model configured for it, as described under 
-[Search](#search).
+
+Note that `parking` and `nearby` are descriptions, not results. Constructing
+them does not search the dataset. They are evaluated by one of the four verbs
+(`count`, `retrieve`, `values`, `tag`) or by an entry lookup (`entry[expr]`,
+explained under [Entries](#entries)). You can hold them in variables, combine
+them, wrap them in functions and classes, and use them again in later cells.
+Keyword search with `.lexical()` works on any dataset; `.semantic()` needs an
+embedding model configured for it, as described under [Search](#search).
 
 ```python
 print(count(parking))                                    # how many
@@ -32,20 +34,21 @@ print(count(where=parking, by=Field("dept")))            # and who says it
 retrieve(rank=nearby, limit=5)                           # read the five closest
 ```
 
-And later on, after settling on a 0.55 threshold:
+After inspecting results, choose a threshold for this corpus and model;
+`0.55` below is only an example. In a later cell:
 
 ```python
 tag(parking | (nearby > 0.55), "topic", "parking")       # keep the decision
 ```
 
-Here's a larger and more abstract example. Backed by Python and the analysis language, 
-a session has capacity for the whole arc of a study: 
+Here's a larger and more abstract example. Backed by Python and the analysis language,
+a session has capacity for the whole arc of a study:
 
-1. Look at the fields and a few rows. 
+1. Look at the fields and a few rows.
 2. Find a theme by keyword and by meaning, and discover where the two
-  disagree. 
+  disagree.
 3. Code entries with a scheme, check it against a random sample,
-  and revise it. 
+  and revise it.
 4. Cross-tabulate a tag against a source field. Compute a
   number per entry and hand the column to `statistics` or `numpy`.
 5. Fork the session to try a different scheme without disturbing
@@ -53,7 +56,7 @@ a session has capacity for the whole arc of a study:
   continue directly.
 
 Regarding this second example, it crucially is just **one** way to navigate inside
-Quail; the point of Quail is never to constrain you to a single workflow such as this. 
+Quail; the point of Quail is never to constrain you to a single workflow such as this.
 It is to provide the medium to *explore* and journey through the data.
 
 Now let's dive deeper.
@@ -78,9 +81,10 @@ And also some vocab, reiterating some core details from the [`README.md`](README
 - A **dataset** is an immutable grid of entries (rows) by fields (columns),
   imported once from a CSV. Every entry has a durable `id`, and nothing you do
   changes the source.
-- A **session** is your workspace on one dataset: a persistent kernel plus
-  the tags you have written. Sessions are named, and a dataset can have
-  many. A session can also have many different kernels.
+- A **session** is your persistent workspace on one dataset, with its tags
+  and recorded analysis history. Sessions are named, and a dataset can have
+  many. Each local copy of a session has at most one live Python kernel,
+  but can have successive kernel runs as you close, reopen, or reset it.
 - A **cell** is one block of code submitted to the kernel. Variables, functions,
   classes, and imports persist from cell to cell while the kernel runs.
 - A **tag** is a value you write onto entries, in a field you name. Tags
@@ -119,7 +123,7 @@ quail exec first-pass -c 'body = Field("body"); parking = body.lexical("parking"
 quail exec first-pass -c 'tag(parking, "topic", "parking"); count(by=Field("topic"))'
 ```
 
-If the first result is `1`, the second reuses `parking` and commits one tag.
+The first result is `1`; the second reuses `parking` and commits one tag.
 Each command exits after its result, and the kernel stays alive between them.
 You can export the source fields and tags to `exports/first-pass.csv`, then close
 the session:
@@ -131,9 +135,10 @@ quail exec first-pass --close
 
 ### Continue a study
 
-To continue a study, clone it and place it in the proper location.
-Then run `quail exec EXISTING_SESSION -c 'fields()'`.
+To continue a study, clone it, enter its directory, and run
+`quail exec EXISTING_SESSION -c 'fields()'`.
 Indexes and tags rebuild from the text files on this first open.
+There is no need to run `init` or re-import its CSVs.
 To choose a dataset or session first, `quail info --json`
 describes the study: each dataset with its fields, the sessions that exist
 with their history and last activity, the configured `limits`, and under
@@ -203,7 +208,8 @@ still work.
 
 **One file as one cell.** `quail exec SESSION FILE.py` reads the file as UTF-8
 and submits it to the same session kernel as `-c`. Its variables and helpers
-remain available to later commands. 
+remain available to later commands. Use it for multiline analysis and saved
+helper definitions.
 
 ### Commands
 
@@ -267,8 +273,8 @@ are `None`. Every dataset has an `id` field.
 ## Expressions
 
 `Field(name)` is the value of one column, per entry. It is the simplest
-`Expression`, and every method below returns another. Nothing is read
-until a verb runs.
+`Expression`, and every method below returns another. Construction does not
+read entry values; a verb or `entry[expr]` evaluates an expression.
 
 Source cells are text. Tag cells are whatever you wrote (`bool`, `int`,
 `float`, `str`, `list`, `dict`).
@@ -347,12 +353,13 @@ score = Field("body").semantic("parking is hard to find") + 0.2 * Field("title")
 
 One expression serves as a filter (`score > 0.5`), an ordering
 (`rank=score`), and a readable value (`entry[score]`). An expression is a
-description, not a result: it reads the current values every time a verb
-runs it, and literal arguments are copied when it is built.
+description, not a result: it reads the current values each time it is
+evaluated, and literal arguments are copied when it is built.
 
 ## Verbs
 
-Four verbs read and write the dataset, and `fields()` describes it.
+Four verbs query the dataset and write session tags; `fields()` describes
+the available fields.
 
 ### `count`
 
@@ -604,7 +611,7 @@ Variables live in the kernel and die with it. Keep helper definitions you
 care about in a script in the study, and resubmit them as a cell after a
 restart.
 
-## One last example
+## An example session
 
 ```python
 # cell 1: look
