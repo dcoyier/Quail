@@ -8,41 +8,8 @@ advantage of that freedom unless otherwise specified. In Quail, you work in a pe
 Python kernel, one cell at a time, as in a notebook. You can count, read, search, and
 compare data with the analysis language, and you can also save results as tags.
 
-As a first example, suppose you are exploring parking concerns in a staff survey.
-The following cells assume an open session with survey responses in `body`,
-a `dept` field, and semantic search configured. They illustrate how an
-analysis can begin; [Working locally](#working-locally) below walks through
-starting your own first study.
-
-```python
-body    = Field("body")
-parking = body.lexical("parking permit") > 0             # keyword match, per entry
-nearby  = body.semantic("no place to park near work")    # closeness in meaning, per entry
-```
-
-Note that `parking` and `nearby` are descriptions, not results. Constructing
-them does not search the dataset. They are evaluated by one of the four verbs
-(`count`, `retrieve`, `values`, `tag`) or by an entry lookup (`entry[expr]`,
-explained under [Entries](#entries)). You can hold them in variables, combine
-them, wrap them in functions and classes, and use them again in later cells.
-Keyword search with `.lexical()` works on any dataset; `.semantic()` needs an
-embedding model configured for it, as described under [Search](#search).
-
-```python
-print(count(parking))                                    # how many
-print(count(where=parking, by=Field("dept")))            # and who says it
-retrieve(rank=nearby, limit=5)                           # read the five closest
-```
-
-After inspecting results, choose a threshold for this corpus and model;
-`0.55` below is only an example. In a later cell:
-
-```python
-tag(parking | (nearby > 0.55), "topic", "parking")       # keep the decision
-```
-
-Here's a larger and more abstract example. Backed by Python and the analysis language,
-a session has capacity for the whole arc of a study:
+Backed by Python and the analysis language, a session has capacity for the
+whole arc of a study. Here's one example:
 
 1. Look at the fields and a few rows.
 2. Find a theme by keyword and by meaning, and discover where the two
@@ -55,7 +22,7 @@ a session has capacity for the whole arc of a study:
   the first. Export the result, or leave the session for another agent to
   continue directly.
 
-Regarding this second example, it crucially is just **one** way to navigate inside
+Regarding this example, it crucially is just **one** way to navigate inside
 Quail; the point of Quail is never to constrain you to a single workflow such as this.
 It is to provide the medium to *explore* and journey through the data.
 
@@ -139,14 +106,9 @@ To continue a study, clone it, enter its directory, and run
 `quail exec EXISTING_SESSION -c 'fields()'`.
 Indexes and tags rebuild from the text files on this first open.
 There is no need to run `init` or re-import its CSVs.
-To choose a dataset or session first, `quail info --json`
-describes the study: each dataset with its fields, the sessions that exist
-with their history and last activity, the configured `limits`, and under
-`interface` the exact commands to run next, as absolute invocations that
-work from any shell. Session listings also show local runtime state: stopped,
-idle, busy, or unavailable with a reason. Live status includes the active
-run/cell, latest completed cell, and applied limits. Inspection starts no
-kernel and creates no session.
+To choose a dataset or session first, `quail info --json` describes the
+study's datasets and sessions and gives exact commands to run next.
+Inspection starts no kernel and creates no session.
 
 A new name starts a fresh session. To build on existing work instead,
 `quail exec NEW --fork-from OLD -c 'fields()'` starts `NEW` from a copy of the
@@ -159,12 +121,29 @@ quail exec SESSION -c CODE [--dataset D] [--fork-from S] [--json]
 quail exec SESSION FILE.py [--dataset D] [--fork-from S] [--json]
 ```
 
+**One file as one cell.** `quail exec SESSION FILE.py` reads the file as UTF-8
+and submits it to the same session kernel as `-c`. Its variables and helpers
+remain available to later commands.
+
 Naming an existing session continues it. A new name starts one, on the
 study's only dataset or the one named by `--dataset`. Each command submits
 one cell, prints its result, and exits. Quail starts the session's local
 host when needed and keeps its Python kernel alive between commands.
 Variables, functions, and classes remain available until the kernel is
 reset, closed, or lost; tags survive those events.
+
+Wait for each command's result before submitting the next. If the harness
+backgrounds a long command, use its normal wait/output tool to finish
+reading that command. A competing exec, reset, or close fails as busy;
+inspection remains available while a cell runs.
+
+`quail exec SESSION --reset` replaces the kernel: variables are gone, tags
+remain. It requires an existing session and starts its kernel if stopped.
+`quail exec SESSION --close` shuts the host and kernel down and releases
+their resources; finish with it when done. Closing an already-stopped session
+succeeds without starting one. A kernel has no automatic idle expiry.
+
+### Results and status
 
 Stdout is what a notebook would show: everything you print, then the value
 of the last expression when it is not `None`, then the traceback if the cell
@@ -180,16 +159,12 @@ object instead:
 `type`, `message`, and `hint`. `tags_written` counts the entry/field pairs
 committed by the cell. Warnings and host progress appear on stderr too.
 
-Wait for each command's result before submitting the next. If the harness
-backgrounds a long command, use its normal wait/output tool to finish
-reading that command. A competing exec, reset, or close fails as busy;
-inspection remains available while a cell runs.
-
-`quail exec SESSION --reset` replaces the kernel: variables are gone, tags
-remain. It requires an existing session and starts its kernel if stopped.
-`quail exec SESSION --close` shuts the host and kernel down and releases
-their resources; finish with it when done. Closing an already-stopped session
-succeeds without starting one. A kernel has no automatic idle expiry.
+**Inspection.** `quail info --json` describes each dataset with its fields,
+the sessions that exist with their history and last activity, the configured
+`limits`, and under `interface` the exact commands to run next, as absolute
+invocations that work from any shell. Session listings also show local
+runtime state: stopped, idle, busy, or unavailable with a reason. Live status
+includes the active run/cell, latest completed cell, and applied limits.
 
 **Limits.** By default a cell may produce 64 KiB of output and use 30 seconds
 of CPU and 120 seconds of wall time, the kernel may hold 1 GiB of memory,
@@ -204,11 +179,8 @@ source changes since the session last ran, or an earlier run interrupted
 mid-write. An unfinished final line is ignored; earlier complete records
 apply if the history validates. A session whose history does not validate
 is reported as unavailable, with the reason; other sessions and new ones
-still work.
-
-**One file as one cell.** `quail exec SESSION FILE.py` reads the file as UTF-8
-and submits it to the same session kernel as `-c`. Its variables and helpers
-remain available to later commands.
+still work. For recovery after errors or a lost response, see
+[Errors and restarts](#errors-and-restarts).
 
 ### Commands
 
@@ -258,11 +230,24 @@ Two things are not ordinary:
   object. `Field("topic") == None` is the predicate "this cell is blank".
   Use the first in helpers (`if where is None:`) and the second in queries.
 
+The code blocks in the reference below illustrate individual operations.
+They use example fields and may reuse expressions from earlier snippets;
+adapt them to your dataset. [An example session](#an-example-session) gives
+a continuous walkthrough with numbered cells.
+
 ## Expressions
 
 `Field(name)` is the value of one column, per entry. It is the simplest
-`Expression`, and every method below returns another. Construction does not
-read entry values; a verb or `entry[expr]` evaluates an expression.
+`Expression`, and every method below returns another.
+
+Expressions are descriptions, not results. Constructing them does not read
+entry values or search the dataset. You can hold them in variables, combine
+them, wrap them in functions and classes, and use them again in later cells.
+A verb or an entry lookup (`entry[expr]`, explained under [Entries](#entries))
+evaluates them.
+
+Keyword search with `.lexical()` works on any dataset; `.semantic()` needs an
+embedding model configured for it, as described under [Search](#search).
 
 Source cells are text. Tag cells are whatever you wrote (`bool`, `int`,
 `float`, `str`, `list`, `dict`).
@@ -518,6 +503,17 @@ similar = Field("body").semantic("the office closes before I finish work")
 retrieve(rank=similar, limit=10)
 ```
 
+The first semantic search on a field embeds every distinct value of that
+field once. On a large dataset that can take minutes; progress is reported
+on stderr. Later searches on that field, and repeated queries, reuse the
+work, and vectors shared with the study through git make the first search
+fast too (see [Sharing work](#sharing-work)).
+
+Lexical and semantic scores live on different scales. When you sum them,
+choose weights by reading the top results, not by assumption.
+
+### Configuring semantic search
+
 Semantic search needs an embedding model. Locally, choose one at import
 (`--embed ollama/embeddinggemma --embed-revision v1`) or in `quail.toml`.
 For an existing dataset, edit its table; keep its source and ID settings.
@@ -556,15 +552,6 @@ Reset retains a live kernel's configuration. Without an embedding
 configuration, `.semantic()` raises with a hint, and `quail info` says
 whether one is configured.
 
-The first semantic search on a field embeds every distinct value of that
-field once. On a large dataset that can take minutes; progress is reported
-on stderr. Later searches on that field, and repeated queries, reuse the
-work, and vectors shared with the study through git make the first search
-fast too (see [Sharing work](#sharing-work)).
-
-Lexical and semantic scores live on different scales. When you sum them,
-choose weights by reading the top results, not by assumption.
-
 ## Reusable Python
 
 Ordinary Python is the extension mechanism, with the libraries and
@@ -601,6 +588,10 @@ restart.
 
 ## An example session
 
+Suppose you are exploring parking concerns in a staff survey. The following
+cells assume an open session with survey responses in `body`, a `dept`
+field, and [semantic search configured](#configuring-semantic-search).
+
 Begin with a first look at the dataset: its fields, size, and a few entries.
 
 ```python
@@ -629,27 +620,27 @@ for e in retrieve(where=sem != None, rank=sem, limit=8):
 
 ```python
 # cell 4: code the theme, then inspect the counts
-# 0.55 is illustrative; choose a cutoff after reading the results.
+# 0.55 is illustrative; choose a cutoff for this corpus and model after inspection.
 parking = kw | (sem > 0.55)
 tag(parking, "topic", "parking")
 count(by=Field("topic"))
 ```
 
 ```python
-# cell 5: a derived number, then statistics in plain Python
-tag(None, "characters", Field("body").length())
-lengths = [n for n in values(Field("characters")) if n is not None]
-statistics.quantiles(lengths, n=4)
-```
-
-```python
-# cell 6: read the disagreements between the two signals
+# cell 5: read the disagreements between the two signals
 only_kw = kw & ~(sem > 0.55)
 only_sem = (sem > 0.55) & ~kw
 for e in retrieve(only_kw, limit=5):
     print("keyword only", e.id, e["body"][:200])
 for e in retrieve(only_sem, limit=5):
     print("semantic only", e.id, e["body"][:200])
+```
+
+```python
+# cell 6: a derived number, then statistics in plain Python
+tag(None, "characters", Field("body").length())
+lengths = [n for n in values(Field("characters")) if n is not None]
+statistics.quantiles(lengths, n=4)
 ```
 
 If cell 4 raised normally after assigning `parking`, the tags would return
