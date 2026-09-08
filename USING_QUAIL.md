@@ -208,8 +208,7 @@ still work.
 
 **One file as one cell.** `quail exec SESSION FILE.py` reads the file as UTF-8
 and submits it to the same session kernel as `-c`. Its variables and helpers
-remain available to later commands. Use it for multiline analysis and saved
-helper definitions.
+remain available to later commands.
 
 ### Commands
 

@@ -45,11 +45,11 @@ git clone --depth 1 https://github.com/dcoyier/Quail.git
 cd Quail && uv sync --locked --no-dev --python 3.12 && . .venv/bin/activate
 ```
 
-Quail lives in its own checkout; a study is a separate directory, usually
-its own git repository. Keyword search works as is. Semantic search also
-needs Ollama or an OpenAI-compatible endpoint, configured in `quail.toml`
-for the dataset. You're now ready to read [`USING_QUAIL.md`](USING_QUAIL.md).
-
+Semantic search through the **analysis language** requires also
+setting up Ollama locally or an OpenAI-compatible endpoint, configured per study
+and per dataset. You're now ready to read [`USING_QUAIL.md`](USING_QUAIL.md).
+\
+\
 The goal of Quail is to provide a medium to *explore* a dataset, usually one with
 plenty of text.
 
