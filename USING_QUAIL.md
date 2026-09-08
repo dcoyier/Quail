@@ -258,17 +258,6 @@ Two things are not ordinary:
   object. `Field("topic") == None` is the predicate "this cell is blank".
   Use the first in helpers (`if where is None:`) and the second in queries.
 
-## First look
-
-```python
-fields()            # every field: name, kind ("source" or "tag"), present count
-count()             # entries in the dataset
-retrieve(limit=3)   # three entries in import order
-```
-
-Field names differ per dataset; look before assuming a schema. Blank cells
-are `None`. Every dataset has an `id` field.
-
 ## Expressions
 
 `Field(name)` is the value of one column, per entry. It is the simplest
@@ -612,10 +601,17 @@ restart.
 
 ## An example session
 
+Begin with a first look at the dataset: its fields, size, and a few entries.
+
 ```python
 # cell 1: look
-fields()
+print(fields())     # every field: name, kind ("source" or "tag"), present count
+print(count())      # entries in the dataset
+retrieve(limit=3)   # three entries in import order
 ```
+
+Field names differ per dataset; look before assuming a schema. Blank cells
+are `None`. Every dataset has an `id` field.
 
 ```python
 # cell 2: the shape of one column
