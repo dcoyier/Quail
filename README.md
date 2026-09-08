@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="quail.png" alt="Quail">
+</p>
+
 # Quail v0.94
 
 Quail is an environment for agentic qualitative analysis. An agent (or human!)
