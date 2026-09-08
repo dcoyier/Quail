@@ -8,9 +8,6 @@ Anyone using Quail should also read [`USING_QUAIL.md`](USING_QUAIL.md) completel
 It is the manual for using Quail and details how to start and continue studies, the
 analysis language, the local CLI, and how to share work.
 
-For implementers, [`IMPLEMENTATION_GUIDE.md`](IMPLEMENTATION_GUIDE.md) is the
-implementation contract.
-
 Here's some vocab about Quail to provide an initial understanding:
 
 - A **dataset** is an immutable grid of entries by fields (rows x columns),
@@ -23,7 +20,7 @@ Here's some vocab about Quail to provide an initial understanding:
 - A **cell** is one block of code that is submitted to the kernel.
   While the kernel is open, variables persist across cells. **Tags** are
   even more durable, lasting across kernel runs in a **session**. A cell's tag
-  writes commit together or not at all, and are logged before you see its result.
+  writes commit together or not at all.
 - **Cells** use ordinary Python plus the **analysis language**: `Field`,
   reusable expressions and predicates, and four core verbs (`count`,
   `retrieve`, `values`, `tag`). Expressions are lightweight recipes you
