@@ -288,6 +288,10 @@ entries: `~(Field("topic") == "billing")` is every entry whose topic is not
 `"billing"`, including entries with no topic. `None` sorts last under
 `rank`. `count(by=...)` groups it under the key `None`.
 
+`Field("topic") != "billing"` excludes blanks, unlike the negated equality
+above. Likewise, `Field("body").length() == 0` excludes blanks; test
+`Field("body") == None` to find them.
+
 ### Comparisons and predicates
 
 Comparing an expression yields a `Predicate`, a true-or-false per entry.
@@ -347,7 +351,9 @@ With `by`: a `collections.Counter` from value to count, most common first
 list gives tuple keys, a cross-tab. Blank values count under `None`. A
 list-valued cell counts once per item and an empty list counts nothing, so
 the total need not equal the entry count. A dict or nested list is keyed as
-`("json", <its JSON text>)`.
+`("json", <its canonical JSON text>)`, with sorted object keys and no extra
+whitespace. Scalar keys follow Python's equality: `True`, `1`, and `1.0`
+share one Counter key.
 
 ```python
 count(long)
@@ -474,6 +480,12 @@ Keyword relevance (BM25) of the cell against `query`. Write plain words;
 wrap a phrase in double quotes to require adjacency. There are no other
 operators, and a query must contain at least one word. Words are stemmed,
 so `parking` matches `parked`.
+
+Unquoted punctuation separates words: `front-desk` searches for either
+word. Quoting `"front-desk"` requires adjacency, just like `"front desk"`;
+both phrases match either spelling in the source. Colons introduce no
+column syntax. Matching ignores case and folds common Latin diacritics,
+so `cafe` matches `café`.
 
 The score is `None` when the cell is blank, `0` for a present nonmatch,
 and greater than `0` when any unquoted query word or complete quoted phrase

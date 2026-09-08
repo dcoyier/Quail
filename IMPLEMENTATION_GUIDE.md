@@ -203,6 +203,9 @@ manifest, writes only the minimal `[project]` table, ensures `sessions/`
 exists, and adds `.quail/` to the existing ignore file without replacing
 unrelated content. Lock directories may be created as needed; init creates
 no dataset, example data, or kernel.
+A cloned project may have no `sessions/` directory because Git does not
+track empty directories. Treat that as no sessions and create it when needed;
+no placeholder file is required.
 
 `quail import CSV` registers a new dataset and builds its index. Resolve
 the CSV from the invoking working directory and require its resolved path
@@ -211,15 +214,18 @@ Do not copy or rewrite the CSV. Refuse an existing dataset name.
 
 Validate the complete CSV and prospective configuration before atomically
 appending one safely quoted dataset table to the manifest. Preserve other
-tables and comments. If indexing subsequently fails, the valid registration
-remains and the next open can build its cache. Use `tomllib`; no TOML writer
-dependency is needed for this one append operation.
+tables and comments. Quote the dataset name as one key: `notes.backup.csv`
+becomes `[datasets."notes.backup"]`. Escape generated keys and string values,
+ensure a separating newline, and parse the complete proposed manifest with
+`tomllib` before publication. No TOML writer dependency is needed for this
+one append operation. If indexing subsequently fails, the valid registration
+remains and the next open can build its cache.
 
 ### CSV and identity
 
 Read UTF-8 CSV with a header; accept a UTF-8 BOM. Preserve cell text exactly,
 including leading whitespace and numeric-looking strings. An empty cell is
-`None`. Do not infer types.
+`None`, including a quoted empty cell (`""`). Do not infer types.
 
 Expose one canonical source field named `id`:
 
@@ -240,15 +246,20 @@ Define `source_hash` as SHA-256 of the exact CSV bytes, prefixed `sha256:`.
 Define `source_version` as the same hash of canonical JSON containing:
 
 ```json
-{"import_format":1,"source_hash":"sha256:...","id_column":"id"}
+{"id_column":"id","import_format":1,"source_hash":"sha256:..."}
 ```
 
 `id_column` is the resolved original column name, or JSON null for generated
 IDs. Canonical JSON means UTF-8, sorted object keys, compact separators,
-unescaped Unicode, and no non-finite numbers. The descriptor uses effective
-import behavior, so explicitly selecting the already-selected `id` column
-changes nothing. Changing source bytes or the selected ID column creates
-a new version.
+unescaped Unicode, and no non-finite numbers. Use the shared Python codec for
+these bytes, with `allow_nan=False` when encoding. On decoding, reject
+NaN/Infinity tokens through `parse_constant` and validate all decoded numbers
+as finite, including overflow from numeric literals. Reject strings that
+cannot be encoded as UTF-8.
+
+The descriptor uses effective import behavior, so explicitly selecting the
+already-selected `id` column changes nothing. Changing source bytes or the
+selected ID column creates a new version.
 
 Hash and import the same byte stream. Never record a hash of one read and
 publish rows from a different read. Detect a source edit during import and
@@ -513,10 +524,12 @@ Checkpoint and close a replacement's WAL before publishing its main file.
 
 Set SQLite's transaction mode explicitly. The operation that owns an atomic
 change owns its begin/commit/rollback; helpers must not silently commit a
-caller's transaction. Connection lifetime and transaction lifetime are
-different: keeping a kernel open does not require keeping a read transaction
-open. Use the standard SQLite driver directly, with a small number of
-explicit storage operations rather than an ORM or generic repository layer.
+caller's transaction. Do not use `executescript()` inside an owned transaction:
+Python's legacy transaction mode commits pending work before running it.
+Connection lifetime and transaction lifetime are different: keeping a kernel
+open does not require keeping a read transaction open. Use the standard
+SQLite driver directly, with a small number of explicit storage operations
+rather than an ORM or generic repository layer.
 
 The shared index contains:
 
@@ -530,12 +543,17 @@ The shared index contains:
 | Embedding vectors | `vectors(embedding_id, text_hash, vec)`, keyed by identity and exact text hash |
 | Ingested packs | Local path/content-hash receipts for completed ingestion; disposable shortcuts for repeat ingestion |
 
-Use foreign keys for tag IDs, an index on `(session, field)`, and
-parameter binding for values. Generated FTS table names derive from field
-names through a collision-resistant hash; CSV names never become
-unquoted SQL. Tag caches exist only for sessions compatible with the indexed
-source: supplied stable IDs preserve identity across versions, while
-automatic positional identity requires the initial generated-ID version.
+Use a foreign key from shared `tags.entry` to `entries.id`. Enable
+`PRAGMA foreign_keys=ON` on each connection before starting a transaction;
+setting it inside one has no effect. Materialize tags only for live source
+IDs. Orphan values remain in the logs, with their final count in `applied`;
+source-version changes trigger replay and restore tags for returning IDs.
+Keep an index on `(session, field)` and bind values as parameters.
+Generated FTS table names use `fts_` plus a collision-resistant hash of the
+field name in hex, avoiding digit-leading identifiers and raw CSV names.
+Quote SQL identifiers. Tag caches exist only for sessions compatible with
+the indexed source: supplied stable IDs preserve identity across versions,
+while automatic positional identity requires the initial generated-ID version.
 
 There is no shared `tags_fts`, passage table, or durable semantic mapping
 format. Derive per-entry semantic mappings from immutable source text or
@@ -548,8 +566,9 @@ read-only mode and copies its session's tags into indexed TEMP tables.
 Use disk-backed TEMP storage (`temp_store=FILE`) with a bounded page cache;
 do not require the entire tag set to fit in Python or SQLite memory. The
 host supplies a private scratch directory beneath `.quail/` through SQLite's
-`SQLITE_TMPDIR` environment variable before startup. SQLite manages its
-temporary files; the host removes the directory after the child exits.
+`SQLITE_TMPDIR` in the child's exec environment, before Python starts.
+SQLite manages its temporary files; the host removes the directory after
+the child exits.
 Verify that the SQLite build permits file-backed TEMP storage, following
 [SQLite's temporary-file rules](https://www.sqlite.org/tempfiles.html).
 Abandoned scratch is disposable when its owning processes are closed.
@@ -797,7 +816,9 @@ for membership in list-valued cells. Reject non-scalar `.isin` literals.
 Use Python Unicode `lower`, `upper`, `strip`, and `len` through UDFs
 where SQLite differs. Numeric arithmetic returns finite numbers or None;
 absence propagates and division by zero is None. Regex patterns use RE2,
-with only the documented `re.I`, `re.M`, and `re.S` flags.
+with only the documented `re.I`, `re.M`, and `re.S` flags. Translate them to
+RE2 options or inline flags and reject any other flag bits; do not pass a
+Python `re` flag mask as RE2's options argument.
 
 ### Verbs and entries
 
@@ -898,7 +919,8 @@ one indexing path. Query strings must contain non-whitespace text.
 
 ### Lexical corpus boundaries
 
-Use FTS5 with `porter unicode61`, and one single-column corpus per field.
+Use FTS5 with `porter unicode61 remove_diacritics 1`, making Unicode61's
+existing default explicit, and one single-column corpus per field.
 Source corpora are built at import. Tag corpora are private to a kernel
 and built lazily from that session's working tags.
 
@@ -907,10 +929,27 @@ document rowids correspond to source rowids. Include present empty text
 as an empty document; absent values have no document. Restrict BM25
 statistics to this field and, for tags, this session. Another field's
 contents or another session's work cannot change its scores.
+CSV empties are absent; present empty documents arise from tags such as
+`""` or `[]`, whose text conversion is empty.
 
 Sanitize queries into quoted tokens and quoted phrases joined with OR.
-Do not pass user FTS syntax through. There is no cross-column filter
-expression to get wrong because each corpus has one text column.
+Double-quoted spans preserve token order and adjacency. Split unquoted
+spans using Unicode61's token boundaries, so `front-desk` becomes
+`"front" OR "desk"`; `"front-desk"` remains a phrase and also matches
+`front desk` in the source. Colons, hyphens, and other separators introduce
+no FTS operators. Reject an unclosed quote or a query with no tokens.
+Bind the generated MATCH string as a value; never pass user FTS syntax
+through. Each corpus still has only one text column.
+
+Keep tokenization consistent with the index rather than approximating it
+with Python `\w`. A reusable TEMP FTS5 table for query text, using
+`unicode61 remove_diacritics 1` and an associated `fts5vocab` virtual table
+in `instance` mode, can supply ordered query tokens without reading the
+corpus or adding a tokenizer dependency. Do this during search preparation,
+keeping expression construction inert. Apply Porter stemming only through
+the final MATCH, not once when extracting tokens and again when querying.
+Reuse the prepared query with its search node.
+
 Negate FTS5's BM25 score so higher is better. Absent values score None,
 present nonmatches score zero, and matches score positively.
 
@@ -940,7 +979,7 @@ provider configurations must honor rejection instead of silent truncation.
 ### Embedding identity and one cache path
 
 An embedding identity is SHA-256, prefixed `sha256:`, of canonical JSON
-`{"format":1,"embed":<exact configured string>,"revision":<embed_revision>}`.
+`{"embed":<exact configured string>,"format":1,"revision":<embed_revision>}`.
 Split `embed` at its first slash: `ollama` or `openai` selects the wire
 dialect and the remainder is the provider's model name.
 
@@ -967,8 +1006,11 @@ Infer dimensions from an existing vector for that identity, or establish
 them with its first inserted batch. Recheck inside the writer transaction,
 so simultaneous first requests cannot establish different dimensions.
 Validate response count, finite coordinates, nonzero dimension and norm,
-and the little-endian float32 representation after packing. An existing
-key wins a concurrent insertion; return that stored vector to both callers.
+and the little-endian float32 representation after packing. Norm validation
+uses numerically safe accumulation on those packed values, as scoring does;
+float32 sum-of-squares can underflow or overflow for finite nonzero vectors.
+An existing key wins a concurrent insertion; return that stored vector to
+both callers.
 
 Within `embed.py`, keep the raw provider call separate from the cached
 operation that composes it with `index.py`. The two HTTP adapters use the
@@ -1242,13 +1284,18 @@ before reporting the child ready:
   and the package roots of the preloaded NumPy and RE2 modules. Reject
   writes and other paths; disable bytecode writes. These read permissions
   let ordinary imports and NumPy's lazily imported submodules work.
-- Deny filesystem mutation events, including `os.remove`, `os.rename`,
-  `os.mkdir`, `os.rmdir`, and `shutil.*`; new connections through
-  `sqlite3.connect`; and `socket.*`.
+- Deny filesystem mutation events, including removal/renaming, directory
+  or link creation, truncation, permission/ownership changes, and `shutil.*`;
+  new connections through `sqlite3.connect`; SQLite's Python extension APIs
+  (`sqlite3.enable_load_extension`, `sqlite3.load_extension`); and `socket.*`.
 - Deny process creation through `subprocess.Popen`, `os.system`, `os.fork`,
   `os.exec`, and `os.posix_spawn`; native access through `ctypes.*`; and
   instrumentation through `sys.addaudithook`, `sys.setprofile`, and
   `sys.settrace`.
+
+Disable unaudited file-creation helpers (`os.mkfifo` and `os.mknod`, where
+available) along with the cell-facing file API; an audit deny-list alone
+cannot intercept them.
 
 NumPy is available to analysis code from the preloaded module; its file
 and network operations receive no additional capabilities. SQLite uses the
@@ -1257,11 +1304,13 @@ below Python's audit layer. Do not introduce a Python module allow-list,
 import-state framework, or general syntax allow-list.
 
 Open SQLite read-only and install its authorizer before user code. Permit
-the runtime's TEMP operations; deny main-schema writes, attach/detach,
-extension loading, and writable pragmas. Kernel internals are outside the
-public namespace. Core's confinement prevents ordinary accidental access;
-determined Python introspection is outside its trust boundary. Hosted
-supplies OS isolation for untrusted execution.
+the runtime's TEMP operations, including FTS5's shadow-table and TEMP schema
+updates; deny main-schema writes, attach/detach, the SQL `load_extension`
+function, and writable pragmas. Leave extension loading disabled at bootstrap;
+the authorizer does not intercept the Python extension APIs denied above.
+Kernel internals are outside the public namespace. Core's confinement
+prevents ordinary accidental access; determined Python introspection is
+outside its trust boundary. Hosted supplies OS isolation for untrusted execution.
 
 ### Cell execution and errors
 
@@ -1640,18 +1689,20 @@ Organize tests around these observable contracts:
 | Contract | Essential cases |
 | --- | --- |
 | Architecture | Shared contracts import without host dependencies; child bootstrap loads no host graph; cached warming works without process-lifecycle imports; independent evaluators and Kernels do not share mutable session state |
-| Project identity | Safe names and paths, exact text preservation, ID resolution, source-version changes, source edited during import, non-destructive metadata publication |
+| Project identity | Safe names and paths, dotted file stems and escaped TOML keys/values, append after a missing final newline, exact text preservation including leading whitespace and CSV empties, ID resolution, source-version changes, source edited during import, non-destructive metadata publication, a cloned study without empty directories |
+| Shared codecs | Fixed expected canonical bytes and hashes for source versions, embedding identities, and warm plans, including Unicode and reordered object keys; reject non-finite decoded numbers and unencodable strings without coercing values |
 | Session scope | Stable-ID additions/edits/reorders and ID-column renames continue in the same session; deleted IDs count as final orphans and restored IDs recover tags; explicit preservation of generated IDs permits later edits; automatic positional reassignment fails; source/tag name conflicts are reported |
 | Replay | Streaming replay agrees with a small sorted reference, including concurrent ties, failed cells, and clears; continuation on a clock behind imported history, valid forked history, rejection of any invalid complete record even with valid later cells, bad headers/numbering/duplicate identities, interrupted headers/tails including partial UTF-8, cached tail warnings, failed-cell/empty-file/tail digests |
 | Invalid history isolation | No partial materialization, new applied marker, or stale-cache fallback after validation failure; affected open/export/fork fail without changing original files; info/listing, source rebuilds, source-only operations, and other sessions remain usable |
 | Durable completion | Client loss during execution and after log sync, child death before/after result, log append/fsync uncertainty, cache failure after log sync, host death before reply; recover the outcome without executing code twice |
 | Private state | Read-your-writes through the same bulk/Entry mutation path, disk-backed tag working tables with bounded memory, newly created fields, failed-cell rollback of tags/counts/FTS and invalidation of Entry/search caches, variables/functions/classes retained on normal failure |
 | Concurrency | Two kernels read then tag without a shared snapshot upgrade; embedding waits coexist with another session's commit; exports see committed state; completed and failed cells release read snapshots so idle kernels do not prevent WAL checkpoint progress |
-| Language | Method/produce pairs, nested expressions and helper classes, closures/comprehensions and dataclasses across cells, normal Python identity and rejection of bool filters, frozen literal arguments with live field reads, None and predicate negation, numeric/mixed-list comparison, recursive text conversion, container grouping, Unicode operations, standard seed types |
-| Search | Isolated field/session BM25, absence/empty/nonmatch, phrase handling, equivalent warm/cold and bounded-batch scores, repeated-query reuse, precise invalidation after writes/rollback, cache eviction without changed answers |
-| Embeddings | Full-value requests, Ollama truncation disabled, input ordering, finite packed vectors, dimension races, revision separation, bounded retries |
+| Language | Method/produce pairs, nested expressions and helper classes, closures/comprehensions and dataclasses across cells, normal Python identity and rejection of bool filters, frozen literal arguments with live field reads, None propagation, absent length and inequality versus negation, numeric/mixed-list comparison, Python scalar equality including True/1/1.0 in comparisons and Counter grouping, recursive text conversion, canonical container grouping, Unicode operations, RE2 flag translation/rejection, standard seed types |
+| Search | Isolated field/session BM25, absent CSV cells versus present empty tags and nonmatches, phrase adjacency versus unquoted punctuation (hyphens, underscores, colons), literal operator words, unclosed/wordless queries, Unicode61 diacritics and single-pass stemming, equivalent warm/cold and bounded-batch scores, repeated-query reuse, precise invalidation after writes/rollback, cache eviction without changed answers |
+| Embeddings | Full-value requests, Ollama truncation disabled, input ordering, finite packed vectors and safe norms at small/large magnitudes, dimension races, revision separation, bounded retries |
 | Shared warming | Disjoint/balanced shard coverage, row-order-independent assignment, mixed shard-count composition, complete reused/new output, atomic publication, GitHub part sizes, cold-clone use of partial merged packs, whole-pack validation before batched ingestion, interrupted ingestion without a completion receipt, changed-file invalidation, duplicate keys, address independence and revision separation |
 | Local lifetime | Separate clients reuse one host/child; concurrent startup and stale endpoints cannot create competing owners; connection errors do not replace live owners; busy exec/reset/close and responsive status during execution/provider waits; reset preserves the live snapshot/configuration; close cleans up before success and never starts a stopped host; host death cleans up its child |
+| Confinement | Read-only main with working TEMP/FTS and rollback; denied ATTACH and SQL/Python extension loading; denied filesystem mutations including link creation and unaudited creation helpers; ordinary permitted imports and NumPy computation still work |
 | Runtime and CLI | Inline/file equivalence and info invocation metadata; configured versus applied limits; bounded output; CPU/wall/RSS failure including caught interrupts; fresh-start/replacement and interrupted-append warnings; long Unicode files and complete results; private socket access and long project paths; session validation errors; safe project-relative exports; exit status; actual harness variable persistence |
 
 Run examples from the corrected agent document against a fixture that
