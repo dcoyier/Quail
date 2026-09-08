@@ -1,80 +1,48 @@
-# Quail
+# Quail v0.94
 
-Quail is an environment for agentic qualitative analysis. An agent works in
-a persistent Python kernel to study a corpus of text. It decides for itself
-what to look for and how to check it, and writes its judgments back as tags.
-Tags and the cell log preserve the analysis history so the study can be
-inspected, continued, and shared.
+Quail is an environment for agentic qualitative analysis. An agent (or human!)
+works in a Python kernel to study a corpus of text. This works similar to a
+notebook.
 
-| Document | Reader | Contents |
-| --- | --- | --- |
-| [`USING_QUAIL.md`](USING_QUAIL.md) | anyone using Quail, agents first | The manual: starting and continuing a study, the analysis language, the local CLI, and sharing work. |
-| [`IMPLEMENTATION_GUIDE.md`](IMPLEMENTATION_GUIDE.md) | implementers | The implementation contract: observable behavior, module ownership, build order, and tests. |
+Anyone using Quail should also read [`USING_QUAIL.md`](USING_QUAIL.md) completely. 
+It is the manual for using Quail and details how to start and continue studies, the 
+analysis language, the local CLI, and how to share work.
 
-## How it works
+Here's some vocab about Quail to provide an initial understanding: 
+- A **dataset** is an immutable grid of entries by fields (rows x columns), 
+  and it's imported from a CSV. Every entry has an `id` field, which is 
+  either provided or assigned by Quail. 
+- A **session** is a persistent Python kernel on one **dataset** plus its
+  **tags**, values the user writes onto entries that are scoped to that session.
+- A **cell** is one block of code that is submitted to the kernel. 
+  While the kernel is open, variables persist across cells. **tags** are
+  even more durable, lasting across kernels in a **session**.
+- **cells** rely on the **analysis language**, a Pythonic DSL of four functions
+  (`count`, `retrieve`, `values`, `tag`) and a few classes, to communicate 
+  with the dataset. The classes are lightweight, reusable recipes used
+  for the four funcions, and the functions themselves are like calling an API. 
+  These functions are processed into SQLite queries outside of the kernel. This
+  setup means that no kernel execution can ever modify the **dataset**.
+- The last layer is a **study**, a directory of text files to keep things organized.
+  It contains a concise config (`quail.toml`), **dataset(s)**, a log from each 
+  kernel inside each **session**, and optional vector embeddings. This structure was 
+  designed to easily transport work through git.
 
-- A **dataset** is an immutable grid of entries by fields, imported from a
-  CSV. Every entry has a durable `id`, and the source is never modified.
-- A **session** is a persistent Python kernel on one dataset plus its
-  **tags**: values the agent writes onto entries, in fields it names. Tags
-  are durable annotations; variables are working memory.
-- A **cell** is one submission to the kernel. Variables persist across
-  cells. A cell's tags commit together or not at all, and are in the
-  session log before the agent sees the result.
-- The language is `Field`, expressions (`Field("body").length()`),
-  predicates (`… >= 500`), and four verbs: `count`, `retrieve`, `values`,
-  `tag`. Expressions compile to SQL. Keyword and semantic search are
-  expressions that yield a number, so they filter, rank, and combine like
-  any other.
-- A **study** is a directory of text: a manifest, CSVs, one append-only log
-  per kernel run, and optional shared embedding vectors. Git moves it
-  between agents and machines, and sessions merge as separate files. SQLite
-  is a derived index that is never committed.
-
-## A study on disk
-
-```text
-my-study/
-  quail.toml
-  notes.csv
-  sessions/first-pass/session.toml
-  sessions/first-pass/log/20260901T210000Z-<uuid>.jsonl
-  exports/first-pass.csv                                       # from quail export
-  warm/notes/<source-version>/<plan>/part-0001-of-0004.jsonl   # optional shared vectors
-  .quail/                                                      # derived index and locks, gitignored
-```
-
-## Installation
-
-Quail runs on Linux and macOS with Python 3.12 or later. Installing it and
-starting a study are separate steps: Quail lives in its own checkout, and a
-study is a directory of its own, normally its own git repository, that
-Quail operates on. With git and
-[uv](https://docs.astral.sh/uv/getting-started/installation/) installed:
+Quail runs on Linux and macOS with Python 3.12 or later. To install (with
+git and [uv](https://docs.astral.sh/uv/getting-started/installation/) 
+already installed):
 
 ```sh
 git clone --depth 1 https://github.com/dcoyier/Quail.git
 cd Quail && uv sync --locked --no-dev --python 3.12 && . .venv/bin/activate
 ```
 
-This installs Core from the default branch and puts `quail` on the path of
-the activated shell. Keyword search works as is. Semantic search also needs
-an embedding provider, a local Ollama or an OpenAI-compatible endpoint,
-configured per dataset.
-
-Continue with [USING_QUAIL.md](USING_QUAIL.md): it starts a first study,
-runs the first cells, exports tags, and explains how agents share work.
-
-## Core and hosted
-
-Core is this repository: the language, the kernel, the study format, and a
-CLI that submits one cell per invocation to a persistent local session.
-Core is the workbench, not the analyst: it runs no agent, calls
-no language model, never runs git, and opens no network connection except
-to a configured embedding provider. Authentication, an MCP server,
-containers, and anything about who is calling or where a server is
-reachable from belong to Quail hosted, a separate repository that wraps
-Core's `open_session` and substitutes its own kernel spawn and embedding
-calls.
+Semantic search through the **analysis language** requires also
+setting up Ollama locally or an OpenAI-compatible endpoint, configured per study
+and per dataset. You're now ready to read [`USING_QUAIL.md`](USING_QUAIL.md).
+\
+\
+The goal of Quail is to provide a medium to *explore* a dataset, usually one with 
+plenty of text. 
 
 Apache-2.0 · Python 3.12+

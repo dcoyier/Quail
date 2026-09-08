@@ -1,78 +1,105 @@
 # Using Quail
 
-You work in a persistent Python kernel, one cell at a time, as in a
-notebook. You count, read, search, compare, and write your judgments back as
-tags. What to look for, how to define it, and how to check yourself are your
-calls; Quail makes each question cheap to ask and each answer easy to show.
+This document assumes you've read [`README.md`](README.md). Go back
+and do so if you haven't.
 
-For example, suppose you are exploring parking concerns in a staff survey.
+Quail is meant to give you freedom to *explore*. If you're an agent, try to really take
+advantage of that freedom unless otherwise specified. In Quail, you work in a persistent 
+Python kernel, one cell at a time, as in a notebook. You can count, read, search, and 
+compare data with the analysis language, and you can also save results as tags. 
+
+As a first example, suppose you are exploring parking concerns in a staff survey.
 The following cells assume an open session with survey responses in `body`,
 a `dept` field, and semantic search configured. They illustrate how an
 analysis can begin; [Working locally](#working-locally) below walks through
-starting your first study.
+starting your own first study.
 
 ```python
 body    = Field("body")
 parking = body.lexical("parking permit") > 0             # keyword match, per entry
 nearby  = body.semantic("no place to park near work")    # closeness in meaning, per entry
+```
+Note that `parking` and `nearby` are descriptions, not results. They cost practically 
+nothing until one of the four verbs (`count`, `retrieve`, `values`, `tag`) runs them, 
+so you could cheaply hold them in variables, combine them, wrap them in functions and classes, 
+and use them again in later cells. Keyword search with `.lexical()` works on any
+dataset; `.semantic()` needs an embedding model configured for it, as described under 
+[Search](#search).
 
+```python
 print(count(parking))                                    # how many
 print(count(where=parking, by=Field("dept")))            # and who says it
 retrieve(rank=nearby, limit=5)                           # read the five closest
 ```
 
-After inspecting results, choose a threshold for this corpus and model;
-`0.55` below is only an example. In a later cell:
+And later on, after settling on a 0.55 threshold:
 
 ```python
 tag(parking | (nearby > 0.55), "topic", "parking")       # keep the decision
 ```
 
-This is ordinary Python plus a small vocabulary: `Field`, comparisons that
-yield a true-or-false per entry, and four verbs. `parking` and `nearby` are
-descriptions, not results. They cost nothing until a verb runs them, so you
-can hold them in variables, combine them, wrap them in functions and
-classes, and use them again in later cells. Keyword search works on any
-dataset; `.semantic()` needs an embedding model configured for it, as
-described under [Search](#search).
+Here's a larger and more abstract example. Backed by Python and the analysis language, 
+a session has capacity for the whole arc of a study: 
 
-A session has room for the whole arc of a study. Look at the fields and a
-few rows. Find a theme by keyword and by meaning, and read where the two
-disagree. Code entries with a scheme, check it against a random sample,
-and revise it. Cross-tabulate a tag against a source field. Compute a
-number per entry and hand the column to `statistics` or `numpy`. Keep a
-shortlist. Fork the session to try a different scheme without disturbing
-the first. Export the result, or leave the session for another agent to
-continue.
+1. Look at the fields and a few rows. 
+2. Find a theme by keyword and by meaning, and discover where the two
+  disagree. 
+3. Code entries with a scheme, check it against a random sample,
+  and revise it. 
+4. Cross-tabulate a tag against a source field. Compute a
+  number per entry and hand the column to `statistics` or `numpy`.
+5. Fork the session to try a different scheme without disturbing
+  the first. Export the result, or leave the session for another agent to
+  continue directly.
+
+Regarding this second example, it crucially is just **one** way to navigate inside
+Quail; the point of Quail is never to constrain you to a single workflow such as this. 
+It is to provide the medium to *explore* and journey through the data.
+
+Now let's dive deeper.
 
 ## The shape of a study
 
+Here's an example of a study on disk:
+
+```text
+my-study/
+  quail.toml
+  notes.csv
+  sessions/first-pass/session.toml
+  sessions/first-pass/log/20260901T210000Z-<uuid>.jsonl
+  exports/first-pass.csv                                       # from quail export (command explained later)
+  warm/notes/<source-version>/<plan>/part-0001-of-0004.jsonl   # optional shared vectors
+  .quail/                                                      # derived index and locks, gitignored
+```
+
+And also some vocab, reiterating some core details from the [`README.md`](README.md).
+
 - A **dataset** is an immutable grid of entries (rows) by fields (columns),
-  imported once from a CSV. Every entry has a durable `id`. Nothing you do
+  imported once from a CSV. Every entry has a durable `id`, and nothing you do
   changes the source.
 - A **session** is your workspace on one dataset: a persistent kernel plus
   the tags you have written. Sessions are named, and a dataset can have
-  many.
-- A **cell** is one submission to the kernel. Variables, functions,
+  many. A session can also have many different kernels.
+- A **cell** is one block of code submitted to the kernel. Variables, functions,
   classes, and imports persist from cell to cell while the kernel runs.
 - A **tag** is a value you write onto entries, in a field you name. Tags
   are durable annotations: they are in the session log before you see
   the cell's result, they outlive the kernel, and they travel with the
   study through git. The log also preserves submitted code and captured output.
 
-A study is a directory of text, and git carries it between agents and
-machines. If a harness has already opened a session for you, skip to
-[Cells](#cells). To start or continue a study yourself, read on.
+At a high level, a study is a directory of text, and git can carry it between agents and
+machines.
 
 ## Working locally
 
-Quail is installed as described in the [README](README.md#installation); a
-study is a separate directory, normally its own git repository. The
+Quail can be installed as described in the [README](README.md#installation); a
+study is a separate directory, usually its own git repository. The
 commands below assume that environment is active. When a shell call does
 not carry the activation, use the absolute `<checkout>/.venv/bin/quail`
 path instead.
 
-### Start a study
+### Start a study (example)
 
 ```sh
 quail init ../study && cd ../study
@@ -92,9 +119,9 @@ quail exec first-pass -c 'body = Field("body"); parking = body.lexical("parking"
 quail exec first-pass -c 'tag(parking, "topic", "parking"); count(by=Field("topic"))'
 ```
 
-The first result is `1`; the second reuses `parking` and commits one tag.
-Each command exits after its result; the kernel stays alive between them.
-Export the source fields and tags to `exports/first-pass.csv`, then close
+If the first result is `1`, the second reuses `parking` and commits one tag.
+Each command exits after its result, and the kernel stays alive between them.
+You can export the source fields and tags to `exports/first-pass.csv`, then close
 the session:
 
 ```sh
@@ -104,9 +131,10 @@ quail exec first-pass --close
 
 ### Continue a study
 
-Clone the study, enter it, and run `quail exec EXISTING_SESSION -c 'fields()'`.
-Indexes and tags rebuild from the text on first open; nothing is
-re-imported. To choose a dataset or session first, `quail info --json`
+To continue a study, clone it and place it in the proper location.
+Then run `quail exec EXISTING_SESSION -c 'fields()'`.
+Indexes and tags rebuild from the text files on this first open.
+To choose a dataset or session first, `quail info --json`
 describes the study: each dataset with its fields, the sessions that exist
 with their history and last activity, the configured `limits`, and under
 `interface` the exact commands to run next, as absolute invocations that
@@ -175,8 +203,7 @@ still work.
 
 **One file as one cell.** `quail exec SESSION FILE.py` reads the file as UTF-8
 and submits it to the same session kernel as `-c`. Its variables and helpers
-remain available to later commands. Use it for multiline analysis and saved
-helper definitions.
+remain available to later commands. 
 
 ### Commands
 
@@ -203,7 +230,7 @@ directory or its parents.
 A cell is a transaction for tags. If it finishes, its tag writes are
 committed together and written to the session log before you see the
 result. If it raises normally, none of its tag writes are kept, but Python
-assignments and mutations made before the error remain, as in a notebook.
+assignments and mutations made before the error remain, just like a notebook.
 Fix the error with that working state in mind. Completed embedding work
 may remain cached even when the cell fails.
 
@@ -546,7 +573,7 @@ choose weights by reading the top results, not by assumption.
 ## Reusable Python
 
 Ordinary Python is the extension mechanism, with the libraries and
-capability restrictions described under [Cells](#cells). Reuse your code in
+capability restrictions described under [Cells](#cells). You can reuse your code in
 later cells of the kernel: a class or function that wraps the verbs, a
 coding scheme kept as a dict of predicates, a loop that tags entry by entry.
 
@@ -577,7 +604,7 @@ Variables live in the kernel and die with it. Keep helper definitions you
 care about in a script in the study, and resubmit them as a cell after a
 restart.
 
-## An example session
+## One last example
 
 ```python
 # cell 1: look
@@ -710,7 +737,7 @@ originals are available as `quail.count`, `quail.retrieve`, and so on:
 
 Six facts hold everywhere in Quail:
 
-1. The source is frozen. Only tags change, and only in this session.
+1. The source is frozen. Only tags change, and only for the session.
 2. Absence is `None`. Value methods propagate it; predicates return
    booleans; comparisons with it are false except `== None` and `!= None`;
    it sorts last.
@@ -721,3 +748,5 @@ Six facts hold everywhere in Quail:
 5. Expressions and predicates have no truth value. Use `&` `|` `~`, and
    `== None` for blank cells.
 6. No network, no files, no subprocesses. Otherwise it is Python.
+
+Go *explore*!
