@@ -18,7 +18,8 @@ Here's some vocab about Quail to provide an initial understanding:
   either provided or assigned by Quail.
 - A **session** is a persistent workspace on one **dataset**, with its
   **tags** and recorded analysis history. Tags are values the user writes
-  onto entries, scoped to that session. Its Python kernel holds working memory.
+  onto entries, scoped to that session. Its Python kernel holds your variables,
+  functions, and classes.
 - A **cell** is one block of code that is submitted to the kernel.
   While the kernel is open, variables persist across cells. **Tags** are
   even more durable, lasting across kernel runs in a **session**. A cell's tag
@@ -32,7 +33,7 @@ Here's some vocab about Quail to provide an initial understanding:
 - The last layer is a **study**, a directory of text files to keep things organized.
   It contains a concise config (`quail.toml`), **datasets**, one log per kernel
   run in each **session**, and optional shared embedding vectors. Tags and
-  recorded history travel with the study through git.
+  recorded history are designed to travel with the study through git.
 
 ## Installation
 
