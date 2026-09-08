@@ -728,7 +728,7 @@ originals are available as `quail.count`, `quail.retrieve`, and so on:
 
 ## Always true
 
-Six facts hold everywhere in Quail:
+These facts hold everywhere in Quail:
 
 1. The source is frozen. Only tags change, and only for the session.
 2. Absence is `None`. Value methods propagate it; predicates return
