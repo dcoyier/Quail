@@ -28,22 +28,9 @@ It is to provide the medium to *explore* and journey through the data.
 
 Now let's dive deeper.
 
-## The shape of a study
+## Studies, datasets, and sessions
 
-Here's an example of a study on disk:
-
-```text
-my-study/
-  quail.toml
-  notes.csv
-  sessions/first-pass/session.toml
-  sessions/first-pass/log/20260901T210000Z-<uuid>.jsonl
-  exports/first-pass.csv                                       # from quail export (command explained later)
-  warm/notes/<source-version>/<plan>/part-0001-of-0004.jsonl   # optional shared vectors
-  .quail/                                                      # derived index and locks, gitignored
-```
-
-And also some vocab, reiterating some core details from the [`README.md`](README.md).
+Here's some vocab, reiterating some core details from the [`README.md`](README.md).
 
 - A **dataset** is an immutable grid of entries (rows) by fields (columns),
   imported once from a CSV. Every entry has a durable `id`, and nothing you do
@@ -61,6 +48,19 @@ And also some vocab, reiterating some core details from the [`README.md`](README
 
 At a high level, a study is a directory of text, and git can carry it between agents and
 machines.
+
+Here's an example of a study on disk:
+
+```text
+my-study/
+  quail.toml
+  notes.csv
+  sessions/first-pass/session.toml
+  sessions/first-pass/log/20260901T210000Z-<uuid>.jsonl
+  exports/first-pass.csv                                       # from quail export (command explained later)
+  warm/notes/<source-version>/<plan>/part-0001-of-0004.jsonl   # optional shared vectors
+  .quail/                                                      # derived index and locks, gitignored
+```
 
 ## Working locally
 
