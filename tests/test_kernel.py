@@ -155,3 +155,68 @@ def test_persistent_resource_monitor_failure_fails_open(study, monkeypatch):
     with study.lock("session", "review"), study.lock("dataset", "notes"):
         pass
     assert not list(study.path(".quail", "children").glob("kernel-*"))
+
+
+def test_child_loss_before_and_after_a_valid_reply(live, monkeypatch):
+    before = live.exec('import os; tag(None, "lost", True); os._exit(9)')
+    assert before.reply.error is not None and not before.reply.tags
+    assert before.kernel_restarted
+    child = live._child
+    receive = child.receive
+
+    def die_after_reply(tick):
+        reply = receive(tick)
+        child.process.kill()
+        child.process.wait(timeout=3)
+        return reply
+
+    monkeypatch.setattr(child, "receive", die_after_reply)
+    after = live.exec('tag(None, "kept", True)')
+    assert after.reply.error is None and after.kernel_restarted
+    assert live.exec('count(Field("kept") == True)').reply.output == "2\n"
+    assert live.exec('Field("lost")').reply.error is not None
+
+
+def test_permanent_cache_failure_identifies_the_committed_cell(live, study, monkeypatch):
+    path = live._log.path
+
+    def failed(*args):
+        raise sqlite3.OperationalError("injected persistent storage failure")
+
+    monkeypatch.setattr(live.index, "complete", failed)
+    monkeypatch.setattr(live.index, "synchronize", failed)
+    with pytest.raises(QuailError, match="is committed") as failure:
+        live.exec('tag(None, "kept", True)')
+    assert str(path) in str(failure.value)
+    assert len(path.read_text().splitlines()) == 2
+    with service.open_session(study, "review") as reopened:
+        assert reopened.exec('count(Field("kept") == True)').reply.output == "2\n"
+
+
+def test_two_kernels_commit_without_snapshot_upgrade_and_release_wal(live, study):
+    with service.open_session(study, "other") as other:
+        assert (
+            live.exec('body = Field("body"); retrieve(rank=body.lexical("parking"))').reply.error
+            is None
+        )
+        assert other.exec('count(); tag(None, "second", True)').reply.error is None
+        assert live.exec('tag(None, "first", True)').reply.error is None
+        assert other.exec('tag(None, "rollback", True); 1 / 0').reply.error is not None
+        # Every child is idle. Neither its bootstrap nor a completed/failed cell
+        # may pin a read snapshot that prevents this ordinary checkpoint.
+        live.index.checkpoint()
+        assert service.fields(study, "notes", "other")[-1]["name"] == "second"
+
+
+def test_rss_recovery_preserves_only_committed_state(study, monitored):
+    with service.open_session(study, "review"):
+        pass
+    limited = replace(study, limits=replace(study.limits, memory_mb=128))
+    with service.open_session(limited, "review") as live:
+        result = live.exec(
+            'import time; tag(None, "lost", True); '
+            "buffer = bytearray(256 * 1024 * 1024); time.sleep(1)"
+        )
+        assert result.reply.error is not None and "RSS" in result.reply.error.message
+        assert result.kernel_restarted and not result.reply.tags
+        assert live.exec("count()").reply.output == "2\n"

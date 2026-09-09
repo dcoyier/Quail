@@ -11,7 +11,7 @@ import hashlib
 import math
 import re
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from functools import lru_cache
 from typing import Literal, Protocol, cast
 
@@ -216,11 +216,25 @@ def _random(salt: str, entry: str) -> float:
     return (int.from_bytes(digest[:8], "big") >> 11) / 2**53
 
 
-def register(connection: sqlite3.Connection) -> None:
-    connection.create_function("q_compare", 6, _comparison, deterministic=True)
-    connection.create_function("q_arithmetic", 5, _arithmetic, deterministic=True)
-    connection.create_function("q_value", -1, _value, deterministic=True)
-    connection.create_function(
-        "q_json", 2, lambda value, kind: encode(decode(value, kind), "json"), deterministic=True
-    )
-    connection.create_function("q_random", 2, _random, deterministic=True)
+def _json(value: SQLValue, kind: str) -> SQLValue:
+    return encode(decode(value, kind), "json")
+
+
+def register(connection: sqlite3.Connection, failed: Callable[[BaseException], None]) -> None:
+    def guarded[**P](function: Callable[P, SQLValue]) -> Callable[P, SQLValue]:
+        def call(*args: P.args, **kwargs: P.kwargs) -> SQLValue:
+            try:
+                return function(*args, **kwargs)
+            except BaseException as error:
+                # sqlite3 replaces callback exceptions with an opaque SQL error.
+                # Keep the cause on this evaluator for its outer query boundary.
+                failed(error)
+                raise
+
+        return call
+
+    connection.create_function("q_compare", 6, guarded(_comparison), deterministic=True)
+    connection.create_function("q_arithmetic", 5, guarded(_arithmetic), deterministic=True)
+    connection.create_function("q_value", -1, guarded(_value), deterministic=True)
+    connection.create_function("q_json", 2, guarded(_json), deterministic=True)
+    connection.create_function("q_random", 2, guarded(_random), deterministic=True)

@@ -121,7 +121,7 @@ class Evaluator:
         as_json: bool = False,
     ) -> Generator[tuple[sqlite3.Cursor, Query], None, None]:
         nodes = [*projections, *(item for item in (where, rank) if item is not None)]
-        with self.searches.prepare(nodes) as prepared:
+        with self.state.evaluation(), self.searches.prepare(nodes) as prepared:
             query = Compiler(self.state.source.fields, prepared).select(
                 projections,
                 where=where,
@@ -232,9 +232,12 @@ class Evaluator:
         connection.execute("DELETE FROM temp.tag_stage")
         # Stage directly from the shared compiler's SELECT. No SELECT per target,
         # and no Python copy of the full target/value set before writing it.
-        with self.searches.prepare(
-            [node, *([selected] if selected is not None else [])]
-        ) as prepared:
+        with (
+            self.state.evaluation(),
+            self.searches.prepare(
+                [node, *([selected] if selected is not None else [])]
+            ) as prepared,
+        ):
             query = Compiler(self.state.source.fields, prepared).select(
                 [node],
                 where=selected,
@@ -243,7 +246,7 @@ class Evaluator:
                 as_json=True,
             )
             connection.execute("INSERT INTO temp.tag_stage " + query.sql, query.parameters)
-        result = self.state.apply(field)
+            result = self.state.apply(field)
         if result:
             self.searches.invalidate(field)
         return result

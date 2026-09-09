@@ -8,6 +8,8 @@ to the host. The catalog is small metadata, restored alongside SQL on failure.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 
 from quail.contracts import (
@@ -37,6 +39,7 @@ class State:
         self.touched: set[str] = set()
         self._saved_counts: dict[str, int] | None = None
         self._saved_fts: dict[str, str] = {}
+        self._callback_error: BaseException | None = None
         try:
             self._bootstrap(session)
         except BaseException:
@@ -55,7 +58,7 @@ class State:
         connection.execute(f"PRAGMA temp.cache_size=-{page_kib}")
         if hasattr(connection, "enable_load_extension"):
             connection.enable_load_extension(False)
-        register(connection)
+        register(connection, self._failed_callback)
         for statement in (
             "CREATE TEMP TABLE working_tags (entry TEXT, field TEXT, value TEXT NOT NULL, "
             "PRIMARY KEY(entry, field)) WITHOUT ROWID",
@@ -88,6 +91,22 @@ class State:
             return "any"
         choices = ", ".join((*self.source.fields, *sorted(self.counts)))
         raise QuailError(f"Unknown field: {name!r}", f"Available fields: {choices}")
+
+    def _failed_callback(self, error: BaseException) -> None:
+        self._callback_error = error
+
+    @contextmanager
+    def evaluation(self) -> Generator[None, None, None]:
+        """Preserve a scalar callback's exception across SQLite's C boundary."""
+        self._callback_error = None
+        try:
+            yield
+        except sqlite3.Error:
+            if self._callback_error is not None:
+                raise self._callback_error from None
+            raise
+        finally:
+            self._callback_error = None
 
     def fields(self) -> list[JSONObject]:
         result: list[JSONObject] = [

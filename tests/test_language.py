@@ -69,6 +69,21 @@ def test_retrieve_preserves_the_full_source_column_allowance(analysis):
     assert rows[1]["body"] == "Helpful desk"
 
 
+def test_scalar_failures_remain_diagnosable_at_each_query_boundary(analysis):
+    engine, field, _ = analysis
+    invalid = field("body").sub("Parking", r"\9")
+    for operation in (
+        lambda: engine.values(invalid),
+        lambda: engine.tag(None, "broken", invalid),
+        lambda: engine.retrieve()[0][invalid],
+    ):
+        with pytest.raises(IndexError, match="bad group"):
+            operation()
+        # A handled failure must not leak its exception into the next query.
+        assert engine.count() == 8
+    assert not any(item["name"] == "broken" for item in engine.fields())
+
+
 def test_absence_numeric_conversion_and_python_identity(analysis):
     engine, field, _ = analysis
     amount = field("amount")

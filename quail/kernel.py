@@ -386,12 +386,14 @@ class Kernel:
         self._runtime = replace(self._runtime, state="idle", run=header.run, cell=None, reason=None)
 
     def _discard_run(self) -> None:
-        if self._child is not None:
-            child, self._child = self._child, None
-            child.close()
-        if self._log is not None:
-            log, self._log = self._log, None
-            log.close()
+        child, self._child = self._child, None
+        log, self._log = self._log, None
+        try:
+            if child is not None:
+                child.close()
+        finally:
+            if log is not None:
+                log.close()
 
     def exec(
         self, code: str, *, on_accept: Callable[[CellIdentity], None] | None = None

@@ -147,24 +147,28 @@ def _existing(project: Project, session: str) -> socket.socket | None:
 
 def _start(project: Project, session: str, dataset: str | None, fork_from: str | None) -> None:
     """Wait for readiness or an actual startup failure, however long replay takes."""
-    config_read, config_write = os.pipe()
-    ready_read, ready_write = os.pipe()
-    environment = dict(os.environ)
-    environment.update(QUAIL_LOCAL_IN=str(config_read), QUAIL_LOCAL_OUT=str(ready_write))
-    try:
-        process = subprocess.Popen(
-            [sys.executable, "-m", "quail.local"],
-            env=environment,
-            pass_fds=(config_read, ready_write),
-            start_new_session=True,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    finally:
-        os.close(config_read)
-        os.close(ready_write)
-    with os.fdopen(config_write, "wb") as outgoing, os.fdopen(ready_read, "rb") as incoming:
+    with ExitStack() as channels:
+        config_read, config_write = os.pipe()
+        child_input = channels.enter_context(os.fdopen(config_read, "rb"))
+        outgoing = channels.enter_context(os.fdopen(config_write, "wb"))
+        ready_read, ready_write = os.pipe()
+        incoming = channels.enter_context(os.fdopen(ready_read, "rb"))
+        child_output = channels.enter_context(os.fdopen(ready_write, "wb"))
+        environment = dict(os.environ)
+        environment.update(QUAIL_LOCAL_IN=str(config_read), QUAIL_LOCAL_OUT=str(ready_write))
+        try:
+            process = subprocess.Popen(
+                [sys.executable, "-m", "quail.local"],
+                env=environment,
+                pass_fds=(config_read, ready_write),
+                start_new_session=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        finally:
+            child_input.close()
+            child_output.close()
         try:
             wire.send(
                 outgoing,
@@ -290,7 +294,10 @@ class _Delivery:
         except queue.Full:
             # Progress is disposable. Preserve the final response by dropping an
             # old notification, without blocking the execution owner.
-            self.events.get_nowait()
+            try:
+                self.events.get_nowait()
+            except queue.Empty:
+                pass  # The delivery thread consumed it between these operations.
             self.events.put_nowait(record)
 
     def forward(self, stream: wire.Writer) -> None:
