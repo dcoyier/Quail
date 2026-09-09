@@ -14,7 +14,7 @@ import itertools
 import os
 import sqlite3
 import sys
-from collections.abc import Buffer, Generator
+from collections.abc import Buffer, Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -266,6 +266,43 @@ class Index:
                 )
             )
         return result
+
+    def copy_vectors(self, previous: Index) -> None:
+        """Preserve the current cache format across source-only rebuilds.
+
+        Exact text hashes and embedding identities remain valid independently of
+        row IDs. Pack receipts are not copied: their paths describe source versions.
+        """
+        cursor = previous.connection.execute("SELECT embedding_id, text_hash, vec FROM vectors")
+        try:
+            while rows := cursor.fetchmany(256):
+                with transaction(self.connection):
+                    self.connection.executemany(
+                        "INSERT OR IGNORE INTO vectors VALUES (?, ?, ?)", rows
+                    )
+        finally:
+            cursor.close()
+
+    def export_rows(self, session: str, tag_fields: list[str]) -> Iterator[list[str | None]]:
+        """Merge two ordered cursors; no per-entry queries or extra-wide SQL rows."""
+        sources = self.connection.execute("SELECT * FROM entries ORDER BY rowid")
+        tags = self.connection.execute(
+            "SELECT t.entry, t.field, t.value FROM tags AS t "
+            "JOIN entries AS e ON e.id=t.entry WHERE t.session=? ORDER BY e.rowid, t.field",
+            (session,),
+        )
+        try:
+            current = next(tags, None)
+            for source in sources:
+                values: dict[str, str | None] = {}
+                while current is not None and current[0] == source[0]:
+                    value = decode_json(current[2])
+                    values[current[1]] = value if isinstance(value, str) else canonical_json(value)
+                    current = next(tags, None)
+                yield [*source, *(values.get(field) for field in tag_fields)]
+        finally:
+            sources.close()
+            tags.close()
 
     def checkpoint(self) -> None:
         busy, _, _ = self.connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()

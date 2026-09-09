@@ -1,6 +1,7 @@
 import csv
 import operator
 import re
+import sqlite3
 from collections import Counter
 
 import pytest
@@ -53,6 +54,19 @@ def test_construction_is_inert_and_method_pairs_fail_early(analysis):
         field("id").semantic("a")
     with pytest.raises(QuailError, match="Unknown field"):
         field("missing")
+
+
+def test_retrieve_preserves_the_full_source_column_allowance(analysis):
+    engine, _, _ = analysis
+    engine.state.connection.setlimit(sqlite3.SQLITE_LIMIT_COLUMN, 4)
+    rows = engine.retrieve(limit=2)
+    assert dict(rows[0]) == {
+        "id": "a",
+        "body": "Parking and front-desk",
+        "amount": "1",
+        "other": "1",
+    }
+    assert rows[1]["body"] == "Helpful desk"
 
 
 def test_absence_numeric_conversion_and_python_identity(analysis):

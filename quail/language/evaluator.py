@@ -180,17 +180,16 @@ class Evaluator:
             print(f"[retrieve limit clamped from {count} to {self.state.limits.max_limit}]")
             count = self.state.limits.max_limit
         ranking = self._rank(rank)
-        columns = [Field(self.state, name)._node for name in self.state.source.fields[1:]]
         with self._query(
-            [*columns, ranking if ranking is not None else literal(None)],
+            [ranking if ranking is not None else literal(None)],
             where=self._where(where),
             rank=ranking,
             limit=count,
             offset=skip,
             identity=True,
         ) as (cursor, query):
-            # Source values are immutable. Fetch only selected rows and load their
-            # tags in bounded batches, before printing can request individual cells.
+            # Sort only identities and ranks. Fetching source cells afterward avoids
+            # sorting large text values and works at SQLite's full column limit.
             rows = cast(list[tuple[SQLValue, ...]], cursor.fetchall())
         self._populate(rows)
         result = []
@@ -256,6 +255,12 @@ class Evaluator:
             tags: dict[str, dict[str, JSONValue]] = {}
             sizes: dict[str, int] = {}
             placeholders = ",".join("?" for _ in ids)
+            sources = {
+                row[0]: tuple(row)
+                for row in self.state.connection.execute(
+                    f"SELECT * FROM main.entries WHERE id IN ({placeholders})", ids
+                )
+            }
             cursor = self.state.connection.execute(
                 f"SELECT entry,field,value FROM temp.working_tags WHERE entry IN ({placeholders})",
                 ids,
@@ -269,7 +274,7 @@ class Evaluator:
             for row in batch:
                 rowid, entry = row[:2]
                 assert isinstance(rowid, int) and isinstance(entry, str)
-                source = cast(tuple[str | None, ...], row[1:-1])
+                source = sources[entry]
                 size = (
                     sizes.get(entry, 0)
                     + sum(len(value.encode()) if value is not None else 0 for value in source)
@@ -290,7 +295,7 @@ class Evaluator:
             _, removed = self._entries.popitem(last=False)
             self._entry_bytes -= removed.size
 
-    def _row(self, entry: str) -> Row:
+    def _row(self, entry: str, rowid: int) -> Row:
         current = self._entries.get(entry)
         if current is not None and current.epoch == self.state.epoch:
             self._entries.move_to_end(entry)
@@ -298,11 +303,11 @@ class Evaluator:
         # One bulk refresh for an Entry, not one lookup for each field it displays.
         if current is None:
             source = self.state.connection.execute(
-                "SELECT rowid,* FROM main.entries WHERE id=?", (entry,)
+                "SELECT * FROM main.entries WHERE id=?", (entry,)
             ).fetchone()
             if source is None:
                 raise QuailError("Entry is outside this source snapshot")
-            rowid, source_values = source[0], tuple(source[1:])
+            source_values = tuple(source)
         else:
             rowid, source_values = current.rowid, current.source
         tags = {
@@ -371,14 +376,14 @@ class Entry(Mapping[str, JSONValue]):
         state = self._evaluator.state
         if key not in state.source.fields and key not in state.counts:
             raise KeyError(key)
-        row = self._evaluator._row(self.id)
+        row = self._evaluator._row(self.id, self._rowid)
         if key in state.source.fields:
             return row.source[state.source.fields.index(key)]
         # Reading a list/dict never grants a reference into the annotation cache.
         return json_value(row.tags.get(key))
 
     def __repr__(self) -> str:
-        row = self._evaluator._row(self.id)
+        row = self._evaluator._row(self.id, self._rowid)
         values = dict(zip(self._evaluator.state.source.fields, row.source, strict=True)) | row.tags
         rendered = ", ".join(f"{name!r}: {_preview(values.get(name))}" for name in self)
         return f"Entry({{{rendered}}}, score={self.score!r})"

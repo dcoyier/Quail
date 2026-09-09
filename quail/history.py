@@ -267,6 +267,19 @@ def snapshot(directory: Path) -> Snapshot:
     return Snapshot(tuple(files))
 
 
+def sync_recovered(files: Snapshot) -> None:
+    """Make observed history durable before a new owner acknowledges the session.
+
+    A previous host may have lost the outcome of fsync. Recovery validates the
+    bytes present, leaves every file untouched, and syncs those same files.
+    """
+    for item in files.files:
+        with item.path.open("rb") as stream:
+            os.fsync(stream.fileno())
+    if files.files:
+        sync_directory(files.files[0].path.parent)
+
+
 @dataclass
 class Summary:
     runs: int = 0
@@ -399,6 +412,10 @@ class RunLog:
     @property
     def digest(self) -> str:
         return "sha256:" + self._hash.hexdigest()
+
+    @property
+    def next_cell(self) -> int:
+        return self._next_cell
 
     def append(self, cell: CellRecord) -> None:
         if cell.n != self._next_cell or cell.order <= self._last_order:
