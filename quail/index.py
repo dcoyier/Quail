@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import itertools
 import os
 import sqlite3
 import sys
@@ -202,12 +203,17 @@ class Index:
         for field, entries in tags.items():
             if field in self.source.fields:
                 raise QuailError(f"Cannot tag source field {field!r}")
-            for entry in entries:
-                if (
-                    self.connection.execute("SELECT 1 FROM entries WHERE id=?", (entry,)).fetchone()
-                    is None
-                ):
-                    raise QuailError(f"Tag entry is outside the live source: {entry!r}")
+            for batch in itertools.batched(entries, 256):
+                placeholders = ",".join("?" for _ in batch)
+                live = {
+                    row[0]
+                    for row in self.connection.execute(
+                        f"SELECT id FROM entries WHERE id IN ({placeholders})", batch
+                    )
+                }
+                missing = set(batch) - live
+                if missing:
+                    raise QuailError(f"Tag entry is outside the live source: {min(missing)!r}")
 
     def complete(self, session: str, tags: TagDelta, applied: Applied) -> None:
         """Publish an already-synced log result and its cache marker atomically."""
