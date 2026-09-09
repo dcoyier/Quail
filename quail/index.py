@@ -61,7 +61,9 @@ def connect(path: Path, *, readonly: bool = False) -> sqlite3.Connection:
         connection.execute("PRAGMA temp_store=FILE")
         connection.execute("PRAGMA cache_size=-8192")
         connection.execute("PRAGMA temp.cache_size=-8192")
-        connection.enable_load_extension(False)
+        # Some macOS Python builds omit extension loading entirely.
+        if hasattr(connection, "enable_load_extension"):
+            connection.enable_load_extension(False)
         if not readonly:
             connection.execute("PRAGMA journal_mode=WAL")
         return connection
