@@ -19,7 +19,6 @@ from typing import BinaryIO
 from quail.contracts import (
     ErrorInfo,
     JSONObject,
-    JSONValue,
     QuailError,
     TagDelta,
     canonical_json,
@@ -29,6 +28,7 @@ from quail.contracts import (
     embedding_identity,
     json_object,
     source_version,
+    tag_delta,
 )
 from quail.project import SessionMetadata, sync_directory, validate_name
 
@@ -158,17 +158,6 @@ class RunHeader:
             embedding=embedding,
             confinement=confinement,
         )
-
-
-def tag_delta(value: JSONValue) -> TagDelta:
-    result: TagDelta = {}
-    for name, entries in json_object(value, "tags").items():
-        if not name or "\0" in name:
-            raise QuailError("Invalid tag field name")
-        result[name] = json_object(entries, "tag entries")
-        if any(not entry for entry in result[name]):
-            raise QuailError("Invalid tag entry ID")
-    return result
 
 
 @dataclass(frozen=True)

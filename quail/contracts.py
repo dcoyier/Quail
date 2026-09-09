@@ -274,3 +274,78 @@ class ErrorInfo:
         if record.keys() != {"type", "message", "hint"}:
             raise QuailError("Invalid error fields")
         return cls(name, message, hint)
+
+
+def tag_delta(value: JSONValue) -> TagDelta:
+    """Validate the shared delta shape; its receiver still checks live scope."""
+    result: TagDelta = {}
+    for name, entries in json_object(value, "tags").items():
+        if not name or "\0" in name:
+            raise QuailError("Invalid tag field name")
+        result[name] = json_object(entries, "tag entries")
+        if any(not entry for entry in result[name]):
+            raise QuailError("Invalid tag entry ID")
+    return result
+
+
+@dataclass(frozen=True)
+class CellReply:
+    n: int
+    output: str
+    error: ErrorInfo | None
+    truncated: bool
+    tags: TagDelta
+
+    def to_record(self) -> JSONObject:
+        return {
+            "type": "result",
+            "n": self.n,
+            "output": self.output,
+            "error": self.error.to_record() if self.error else None,
+            "truncated": self.truncated,
+            "tags": {name: entries for name, entries in self.tags.items()},
+        }
+
+    @classmethod
+    def from_record(cls, record: JSONObject, expected: int) -> CellReply:
+        if record.keys() != {"type", "n", "output", "error", "truncated", "tags"}:
+            raise QuailError("Invalid child result fields")
+        if record["type"] != "result" or type(record["n"]) is not int or record["n"] != expected:
+            raise QuailError("Child result does not match the accepted cell")
+        output, truncated = record["output"], record["truncated"]
+        if not isinstance(output, str) or not isinstance(truncated, bool):
+            raise QuailError("Invalid child output")
+        error_value = record["error"]
+        error = ErrorInfo.from_record(json_object(error_value)) if error_value is not None else None
+        tags = tag_delta(record["tags"])
+        if error is not None and tags:
+            raise QuailError("A failed cell cannot write tags")
+        return cls(expected, output, error, truncated, tags)
+
+
+@dataclass(frozen=True)
+class Execution:
+    session: str
+    run: str
+    reply: CellReply
+    limits: Limits
+    warnings: tuple[str, ...] = ()
+    kernel_restarted: bool = False
+
+    @property
+    def cell(self) -> int:
+        return self.reply.n
+
+    def to_record(self) -> JSONObject:
+        return {
+            "session": self.session,
+            "run": self.run,
+            "cell": self.cell,
+            "output": self.reply.output,
+            "error": self.reply.error.to_record() if self.reply.error else None,
+            "tags_written": sum(map(len, self.reply.tags.values())),
+            "truncated": self.reply.truncated,
+            "kernel_restarted": self.kernel_restarted,
+            "warnings": list(self.warnings),
+            "limits": self.limits.to_record(),
+        }
