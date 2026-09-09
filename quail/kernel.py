@@ -233,7 +233,8 @@ class _Child:
     def check(self) -> None:
         if self.monitor is not None and self.monitor.failure:
             raise QuailError(self.monitor.failure)
-        if self.process is None or self.process.poll() is not None:
+        process = self.process
+        if process is None or process.poll() is not None:
             raise QuailError("Kernel process exited before completing the operation")
 
     def send(self, payload: bytes, tick: Callable[[], None]) -> None:
@@ -317,7 +318,10 @@ class Kernel:
         self._child: _Child | None = None
         self._log: history.RunLog | None = None
         self._runtime = Runtime("idle", limits=project.limits)
-        self._warnings = list(applied.summary.warnings)
+        self._warnings = [
+            "Started a fresh Python kernel; committed tags were restored.",
+            *applied.summary.warnings,
+        ]
         previous = applied.summary.last_source_version or session.source_version
         if previous != index.source.version:
             self._warnings.append(

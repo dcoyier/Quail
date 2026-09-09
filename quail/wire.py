@@ -8,11 +8,21 @@ from an empty record and incomplete frames never become submitted cells.
 from __future__ import annotations
 
 import struct
-from typing import BinaryIO
+from collections.abc import Buffer
+from typing import Protocol
 
 from quail.contracts import JSONObject, QuailError, canonical_json, decode_json, json_object
 
 DEFAULT_MAX_FRAME = 64 * 1024 * 1024
+
+
+class Reader(Protocol):
+    def read(self, count: int, /) -> bytes | None: ...
+
+
+class Writer(Protocol):
+    def write(self, data: Buffer, /) -> int | None: ...
+    def flush(self) -> None: ...
 
 
 def encode(record: JSONObject, max_bytes: int = DEFAULT_MAX_FRAME) -> bytes:
@@ -22,7 +32,7 @@ def encode(record: JSONObject, max_bytes: int = DEFAULT_MAX_FRAME) -> bytes:
     return struct.pack("!I", len(payload)) + payload
 
 
-def send(stream: BinaryIO, record: JSONObject, max_bytes: int = DEFAULT_MAX_FRAME) -> None:
+def send(stream: Writer, record: JSONObject, max_bytes: int = DEFAULT_MAX_FRAME) -> None:
     payload = memoryview(encode(record, max_bytes))
     while payload:
         written = stream.write(payload)
@@ -32,7 +42,7 @@ def send(stream: BinaryIO, record: JSONObject, max_bytes: int = DEFAULT_MAX_FRAM
     stream.flush()
 
 
-def _exact(stream: BinaryIO, count: int) -> bytes:
+def _exact(stream: Reader, count: int) -> bytes:
     result = bytearray()
     while len(result) < count:
         part = stream.read(count - len(result))
@@ -42,7 +52,7 @@ def _exact(stream: BinaryIO, count: int) -> bytes:
     return bytes(result)
 
 
-def receive(stream: BinaryIO, max_bytes: int = DEFAULT_MAX_FRAME) -> JSONObject:
+def receive(stream: Reader, max_bytes: int = DEFAULT_MAX_FRAME) -> JSONObject:
     size = struct.unpack("!I", _exact(stream, 4))[0]
     if size > max_bytes:
         raise QuailError(f"Control frame exceeds its {max_bytes}-byte memory allowance")

@@ -17,6 +17,7 @@ import tempfile
 from collections.abc import Generator
 from contextlib import ExitStack, contextmanager
 from dataclasses import replace
+from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -117,6 +118,14 @@ def open_dataset(project: Project, dataset: str) -> Generator[Index, None, None]
 
 def initialize(directory: Path) -> Project:
     return projects.initialize(directory)
+
+
+def usage_manual() -> str:
+    """The installed canonical manual, with a checkout-relative development fallback."""
+    packaged = files("quail").joinpath("data", "USING_QUAIL.md")
+    if packaged.is_file():
+        return packaged.read_text(encoding="utf-8")
+    return (Path(__file__).resolve().parent.parent / "USING_QUAIL.md").read_text(encoding="utf-8")
 
 
 def import_csv(

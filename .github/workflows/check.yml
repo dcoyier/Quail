@@ -31,3 +31,8 @@ jobs:
           uv run --locked pytest
       - name: Build the distribution
         run: uv build
+      - name: Exercise the installed wheel outside the checkout
+        run: |
+          uv venv "$RUNNER_TEMP/quail-wheel" --python 3.12
+          uv pip install --python "$RUNNER_TEMP/quail-wheel/bin/python" dist/*.whl
+          QUAIL_TEST_EXECUTABLE="$RUNNER_TEMP/quail-wheel/bin/python" uv run --locked pytest tests/test_cli.py
