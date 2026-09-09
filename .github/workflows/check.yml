@@ -1,0 +1,33 @@
+name: Check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the locked environment
+        run: |
+          python -m pip install uv
+          uv sync --locked --python 3.12
+      - name: Check formatting, types, and behavior
+        run: |
+          uv run --locked ruff format --check quail tests
+          uv run --locked ruff check quail tests
+          uv run --locked mypy quail
+          uv run --locked pytest
+      - name: Build the distribution
+        run: uv build
