@@ -1,3 +1,3 @@
-"""Quail v0.11 — analysis product (scaffold)."""
+"""Quail's package root is intentionally inert, including in the confined child."""
 
-__version__ = "0.11.0a0"
+__version__ = "0.94.0a0"

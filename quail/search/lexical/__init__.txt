@@ -1,3 +1,0 @@
-This package re-exports LeafKind, Leaf, BooleanExpression, OrExpression,
-Expression, parse_queries, compile_query, collect_prefixes, prepare_text,
-prepare_prefix_text, tokenize, and LexicalService.

@@ -1,9 +1,0 @@
-acquire_deployment_lease(config):
-  Build lock file paths beside core.database and, when set, core.search_database
-  (each path name plus ".quail.lock").
-  Sort the unique lock paths and take exclusive non-blocking fcntl.flock on each
-  in that order (POSIX local filesystems only).
-  If any flock is busy, raise QuailRuntimeError telling the operator to stop the
-  other Quail process, then retry.
-  Used by process_config, serve, and apply_config.
-  Yield the lock paths for the with-block lifetime, then unlock and close.

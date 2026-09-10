@@ -1,2 +1,0 @@
-ProviderError means an embedding provider configuration or HTTP failure.
-It may remember an optional repair_hint for MCP diagnostics.

@@ -1,52 +1,47 @@
 [project]
 name = "quail"
-version = "0.11.0a0"
-description = "Inspectable qualitative analysis over corpora"
+version = "0.94.0a0"
+description = "An environment for agentic qualitative analysis"
 readme = "README.md"
-requires-python = ">=3.12,<3.14"
-license = { text = "Apache-2.0" }
+requires-python = ">=3.12"
+license = "Apache-2.0"
 authors = [{ name = "Dashiell Coyier" }]
-dependencies = [
-  "google-re2==1.1.20251105",
-  "mcp==2.1.1",
-  "pyjwt[crypto]==2.13.0",
-  "pyturso==0.7.0",
-]
+dependencies = ["google-re2>=1.1", "numpy>=2,<3"]
 
 [project.scripts]
 quail = "quail.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["quail"]
 
-# Canonical source stays at docs/api.md; ship a copy inside the wheel for installs.
+# Keep one canonical manual; include its exact text in installed distributions.
 [tool.hatch.build.targets.wheel.force-include]
-"docs/api.md" = "quail/data/api.md"
+"USING_QUAIL.md" = "quail/data/USING_QUAIL.md"
 
 [dependency-groups]
-dev = [
-  "pytest>=8.3,<9",
-  "ruff>=0.12,<0.13",
-  "mypy>=1.16,<2",
-]
+dev = ["pytest>=8.3", "ruff>=0.12", "mypy>=1.16"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+addopts = "-ra"
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
 
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
 [tool.mypy]
 python_version = "3.12"
-check_untyped_defs = true
-warn_unused_ignores = true
+strict = true
+files = ["quail"]
 
 [[tool.mypy.overrides]]
-module = ["re2"]
+module = "re2"
+# The native package supplies no stubs; its use is isolated in language values.
 ignore_missing_imports = true

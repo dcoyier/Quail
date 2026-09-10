@@ -1,6 +1,0 @@
-There is a RESERVED_NAMES set shared with bindings persistence.
-
-api_namespace():
-  Give back the documented injected type and factory names for quail_exec.
-  Live retrieve, count, create_field, tag, untag, and print come from the
-  worker runtime, not this inventory helper.
