@@ -4,12 +4,13 @@ import sqlite3
 import subprocess
 import threading
 import time
+from contextlib import nullcontext
 from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
 
-from quail import kernel, project, service
+from quail import embed, kernel, packs, project, service
 from quail.contracts import Limits, QuailError
 
 
@@ -330,3 +331,71 @@ def test_provider_wait_pauses_only_its_wall_time_and_allows_another_commit(study
         entered.set()
         worker.join(timeout=12)
     assert not worker.is_alive() and not errors
+
+
+@pytest.mark.parametrize("failure", ["deadline", "liveness"])
+def test_aborted_provider_wait_cannot_start_an_overlapping_batch(study, monkeypatch, failure):
+    study = configured(study)
+    release = threading.Event()
+    calls = []
+
+    def raw(config, texts):
+        calls.append(texts)
+        assert release.wait(timeout=5)
+        return [[1, 0] for _ in texts]
+
+    def check():
+        if failure == "liveness":
+            raise QuailError("Kernel process exited")
+
+    monkeypatch.setattr(embed, "ATTEMPT_SECONDS", 0)
+    monkeypatch.setattr(embed, "REQUEST_TIMEOUT", 0)
+    provider = kernel._Provider(raw)
+    budget = SimpleNamespace(provider_wait=nullcontext, tick=check, expired=None)
+    config = study.dataset("notes").embedding
+    reason = "deadline" if failure == "deadline" else "process exited"
+    try:
+        with pytest.raises(QuailError, match=reason):
+            provider.call(config, ["query"], budget)
+        with pytest.raises(QuailError, match="previous provider request"):
+            provider.call(config, ["another query"], budget)
+        assert len(calls) == 1
+    finally:
+        release.set()
+    assert provider.pending.result(timeout=2) == [[1, 0]]
+    budget.tick = lambda: None
+    monkeypatch.setattr(embed, "ATTEMPT_SECONDS", 1)
+    assert provider.call(config, ["next cell"], budget) == [[1, 0]]
+    assert len(calls) == 2
+
+
+def test_pack_preparation_consumes_wall_budget_without_disabling_a_valid_pack(
+    study, monitored, monkeypatch
+):
+    study = configured(study)
+    service.warm(study, "notes", field="body", shard="1/1", embed_fn=lambda c, t: [[1, 0]] * len(t))
+    limited = replace(study, limits=replace(study.limits, wall_seconds=5))
+    inventory = packs.Packs.inventory
+
+    def elapsed(self, fields):
+        result = inventory(self, fields)
+        # Advance just this cell's clock at the host storage boundary. Provider
+        # latency is covered separately; no sleeping or large fixture is needed.
+        live._budget.started -= 6
+        return result
+
+    def offline(config, texts):
+        pytest.fail("An expired cell must stop before making a provider request")
+
+    monkeypatch.setattr(packs.Packs, "inventory", elapsed)
+    with service.open_session(limited, "review", embed_fn=offline) as live:
+        result = live.exec(
+            'kept = 7; tag(None, "lost", True); count(Field("body").semantic("new query") > 0)'
+        )
+        assert result.reply.error.type == "QuailError"
+        assert "Wall" in result.reply.error.message and not result.reply.tags
+        assert not live._embeddings.packs.warnings
+        assert live.index.connection.execute("SELECT count(*) FROM ingested").fetchone()[0] == 0
+        assert live.exec('(kept, count(), "lost" in [f.name for f in fields()])').reply.output == (
+            "(7, 2, False)\n"
+        )

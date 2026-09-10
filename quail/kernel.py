@@ -358,6 +358,10 @@ class _CellBudget:
             self.wait_started = None
 
 
+class _EmbeddingInterrupted(Exception):
+    """Stop host cache work without misclassifying cancellation as an invalid pack."""
+
+
 class _Provider:
     """At most one raw batch in flight; only the owner ever touches SQLite.
 
@@ -432,7 +436,13 @@ class Kernel:
         self._progress: embed.Progress | None = None
         config = project.dataset(session.dataset).embedding
         self._embeddings = (
-            embed.Cache(index, config, raw=self._raw_embed, progress=self._report_progress)
+            embed.Cache(
+                index,
+                config,
+                raw=self._raw_embed,
+                progress=self._report_progress,
+                checkpoint=self._check_embedding_work,
+            )
             if config is not None
             else None
         )
@@ -627,13 +637,21 @@ class Kernel:
         return self._provider.call(config, texts, self._budget)
 
     def _report_progress(self, message: str) -> None:
-        assert self._budget is not None
-        self._budget.tick()
+        self._check_embedding_work()
         if self._progress is not None:
             try:
                 self._progress(message[:2048])
             except OSError:
                 pass  # A disconnected progress observer does not cancel the cell.
+
+    def _check_embedding_work(self) -> None:
+        assert self._budget is not None
+        try:
+            self._budget.tick()
+        except QuailError as error:
+            raise _EmbeddingInterrupted(str(error)) from error
+        if self._budget.expired:
+            raise _EmbeddingInterrupted(self._budget.expired)
 
     def _embedding_exchange(
         self, child: _Child, request: EmbeddingRequest, budget: _CellBudget
@@ -643,12 +661,16 @@ class Kernel:
                 raise QuailError("Semantic search requires an embedding provider")
             vectors = self._embeddings.get(request.texts).vectors
             payload = wire.encode(EmbeddingReply(request.n, vectors).to_record(), child.maximum)
-        except (QuailError, sqlite3.Error, OSError) as error:
+        except (QuailError, sqlite3.Error, OSError, _EmbeddingInterrupted) as error:
             # Provider/configuration/validation failures are ordinary cell errors;
             # liveness or limit failure still wins before sending the response.
+            failure = (
+                ErrorInfo("QuailError", str(error))
+                if isinstance(error, _EmbeddingInterrupted)
+                else ErrorInfo.from_exception(error)
+            )
             payload = wire.encode(
-                EmbeddingReply(request.n, error=ErrorInfo.from_exception(error)).to_record(),
-                child.maximum,
+                EmbeddingReply(request.n, error=failure).to_record(), child.maximum
             )
         child.send(payload, budget.tick)
 

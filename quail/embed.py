@@ -174,16 +174,24 @@ class Cache:
         *,
         raw: RawEmbed | None = None,
         progress: Progress | None = None,
+        checkpoint: Callable[[], None] | None = None,
     ) -> None:
         self.index, self.config = index, config
         self.raw = raw or provider
         self.progress = progress
-        self.packs = Packs(index, index.warm_paths) if index.warm_paths is not None else None
+        self.checkpoint = checkpoint or (lambda: None)
+        self.packs = (
+            Packs(index, index.warm_paths, checkpoint=self.checkpoint)
+            if index.warm_paths is not None
+            else None
+        )
 
     def get(self, texts: Sequence[str]) -> Embedded:
         # Callers pass bounded working batches, not a Python list of the corpus.
+        self.checkpoint()
         if self.packs is not None:
             self.packs.ingest(self.config, self.progress)
+        self.checkpoint()
         unique: dict[str, str] = {}
         order = []
         for text in texts:
@@ -202,12 +210,14 @@ class Cache:
                     f"Embedding {len(batch)} values: {reused} reused, {created} new so far"
                 )
             raw = self.raw(self.config, batch)
+            self.checkpoint()
             if len(raw) != len(batch):
                 raise QuailError("Provider response count does not match the submitted texts")
             rows = [
                 (digest_bytes(text.encode("utf-8")), pack_vector(vector))
                 for text, vector in zip(batch, raw, strict=True)
             ]
+            self.checkpoint()
             canonical = self.index.insert_vectors(self.config.identity, rows)
             stored.update(
                 (text_hash, vector)

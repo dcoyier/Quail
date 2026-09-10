@@ -214,19 +214,17 @@ def test_interrupted_valid_ingestion_keeps_batches_without_a_completion_receipt(
     recipient = clone(warm_study, tmp_path / "recipient")
     monkeypatch.setattr(packs, "_BATCH_BYTES", 8)
     with service.open_dataset(recipient, "notes") as index:
-        original = index.insert_vectors
-        calls = []
 
-        def interrupted(*args, **kwargs):
-            calls.append(args)
-            if len(calls) == 2:
+        def checkpoint():
+            if index.connection.execute("SELECT count(*) FROM vectors").fetchone()[0] == 1:
                 raise RuntimeError("injected interruption")
-            return original(*args, **kwargs)
 
-        monkeypatch.setattr(index, "insert_vectors", interrupted)
-        cache = embed.Cache(index, recipient.dataset("notes").embedding, raw=offline)
+        cache = embed.Cache(
+            index, recipient.dataset("notes").embedding, raw=offline, checkpoint=checkpoint
+        )
         with pytest.raises(RuntimeError, match="interruption"):
             cache.get(["parking"])
+        assert not cache.packs.warnings  # Interruption is not a malformed-pack diagnostic.
         assert index.connection.execute("SELECT count(*) FROM vectors").fetchone()[0] == 1
         assert index.connection.execute("SELECT count(*) FROM ingested").fetchone()[0] == 0
     with service.open_dataset(recipient, "notes") as index:
@@ -236,6 +234,35 @@ def test_interrupted_valid_ingestion_keeps_batches_without_a_completion_receipt(
         assert result.created == 0
         assert index.connection.execute("SELECT count(*) FROM vectors").fetchone()[0] == 4
         assert index.connection.execute("SELECT count(*) FROM ingested").fetchone()[0] == 1
+
+
+def test_inventory_checks_for_interruption_even_when_every_value_is_absent(warm_study, monkeypatch):
+    source = warm_study.dataset("notes").source
+    with source.open("w", newline="") as stream:
+        csv.writer(stream).writerows([["id", "body"], *[[str(i), ""] for i in range(1000)]])
+    rendered = []
+    original = packs.text_value
+
+    def observed(value):
+        rendered.append(value)
+        return original(value)
+
+    def checkpoint():
+        if rendered:
+            raise RuntimeError("injected interruption")
+
+    monkeypatch.setattr(packs, "text_value", observed)
+    with service.open_dataset(warm_study, "notes") as index:
+        cache = embed.Cache(
+            index, warm_study.dataset("notes").embedding, raw=offline, checkpoint=checkpoint
+        )
+        with pytest.raises(RuntimeError, match="interruption"):
+            cache.packs.inventory(("body",))
+        assert 0 < len(rendered) < 1000
+        assert not index.connection.in_transaction and not cache.packs.inventories
+        assert not index.connection.execute(
+            "SELECT name FROM sqlite_temp_master WHERE name LIKE 'warm_inventory_%'"
+        ).fetchall()
 
 
 def test_changed_file_is_revalidated_and_another_revision_is_skipped(warm_study, tmp_path):

@@ -125,12 +125,15 @@ def _line(value: JSONObject) -> bytes:
 
 
 class Packs:
-    def __init__(self, index: Index, paths: WarmPaths) -> None:
+    def __init__(
+        self, index: Index, paths: WarmPaths, *, checkpoint: Callable[[], None] | None = None
+    ) -> None:
         self.index, self.paths = index, paths
         self.connection = index.connection
         self.inventories: dict[tuple[str, ...], Inventory] = {}
         self.warnings: list[str] = []
         self._ingested = False
+        self.checkpoint = checkpoint or (lambda: None)
 
     def inventory(self, fields: tuple[str, ...]) -> Inventory:
         if (
@@ -151,13 +154,16 @@ class Packs:
                 columns = ",".join(sql_identifier(field) for field in fields)
                 cursor = self.connection.execute(f"SELECT {columns} FROM main.entries")
                 try:
-                    rendered = (text_value(value) for row in cursor for value in row)
-                    records = (
-                        (digest_bytes(text.encode("utf-8")), text) for text in rendered if text
-                    )
-                    for batch in itertools.batched(records, 256):
+                    # Bound work by source rows, including entirely absent rows.
+                    # A filtered generator could scan a blank corpus before yielding.
+                    for batch in itertools.batched(cursor, 256):
+                        self.checkpoint()
+                        rendered = (text_value(value) for row in batch for value in row)
+                        records = (
+                            (digest_bytes(text.encode("utf-8")), text) for text in rendered if text
+                        )
                         self.connection.executemany(
-                            f"INSERT OR IGNORE INTO temp.{name} VALUES (?,?)", batch
+                            f"INSERT OR IGNORE INTO temp.{name} VALUES (?,?)", records
                         )
                 finally:
                     cursor.close()
@@ -307,6 +313,7 @@ class Packs:
         if self._ingested:
             return
         for path in self.paths.files:
+            self.checkpoint()
             try:
                 inserted = self._ingest_file(path, config, progress)
                 if inserted and progress is not None:
@@ -330,7 +337,11 @@ class Packs:
                 raise QuailError("Warm pack exceeds the Git file limit")
             receipt = self.index.ingested(relative.as_posix())
             if receipt is not None:
-                current = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+                hasher = hashlib.sha256()
+                while chunk := stream.read(1024 * 1024):
+                    self.checkpoint()
+                    hasher.update(chunk)
+                current = "sha256:" + hasher.hexdigest()
                 if current == receipt:
                     return 0
                 stream.seek(0)
@@ -370,6 +381,8 @@ class Packs:
         try:
             with transaction(self.connection):
                 while line := stream.readline(MAX_PART_BYTES + 1):
+                    if count % 128 == 0:
+                        self.checkpoint()
                     count += 1
                     digest.update(line)
                     if not line.endswith(b"\n"):
@@ -417,6 +430,9 @@ class Packs:
         try:
             batch = cursor.fetchmany(size)
             while True:
+                # Check between short writes; a completed batch remains reusable
+                # after interruption, but only the final batch records a receipt.
+                self.checkpoint()
                 following = cursor.fetchmany(size)
                 result = self.index.insert_vectors(
                     str(header.embedding["id"]),
