@@ -11,10 +11,12 @@ import csv
 import hashlib
 import io
 import itertools
+import math
 import os
 import sqlite3
+import struct
 import sys
-from collections.abc import Buffer, Generator, Iterator
+from collections.abc import Buffer, Generator, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +29,7 @@ from quail.contracts import (
     Source,
     TagDelta,
     canonical_json,
+    checked_hash,
     decode_json,
     fts_table,
     json_object,
@@ -40,11 +43,13 @@ FTS_TOKENIZER = "porter unicode61 remove_diacritics 1"
 
 
 @contextmanager
-def transaction(connection: sqlite3.Connection) -> Generator[None, None, None]:
+def transaction(
+    connection: sqlite3.Connection, *, immediate: bool = False
+) -> Generator[None, None, None]:
     """The owning operation commits; nested transactions are programming errors."""
     if connection.in_transaction:
         raise RuntimeError("An index operation cannot own a nested transaction")
-    connection.execute("BEGIN")
+    connection.execute("BEGIN IMMEDIATE" if immediate else "BEGIN")
     try:
         yield
         connection.execute("COMMIT")
@@ -79,6 +84,40 @@ class Applied:
     source_version: str
     orphans: int
     summary: history.Summary
+
+
+@dataclass(frozen=True)
+class StoredVectors:
+    vectors: tuple[bytes, ...]
+    inserted: int
+
+
+def validate_vector(packed: bytes, dimensions: int | None = None) -> int:
+    """Validate the canonical float32 representation, with a safe nonzero norm."""
+    if not packed or len(packed) % 4:
+        raise QuailError("An embedding must contain complete float32 coordinates")
+    size = len(packed) // 4
+    if dimensions is not None and dimensions != size:
+        raise QuailError(f"Embedding dimensions changed: expected {dimensions}, got {size}")
+    values = [value for (value,) in struct.iter_unpack("<f", packed)]
+    if any(not math.isfinite(value) for value in values):
+        raise QuailError("An embedding contains non-finite float32 coordinates")
+    # Float32 sum-of-squares can overflow or underflow for valid vectors. hypot
+    # accumulates safely on the packed values, including float32 subnormals.
+    if math.hypot(*values) == 0:
+        raise QuailError("An embedding must have a nonzero norm after float32 packing")
+    return size
+
+
+def pack_vector(values: Sequence[float]) -> bytes:
+    if not values or any(type(value) not in {int, float} for value in values):
+        raise QuailError("An embedding must be a non-empty array of numbers")
+    try:
+        packed = struct.pack(f"<{len(values)}f", *values)
+    except (OverflowError, struct.error) as error:
+        raise QuailError("Embedding coordinates do not fit finite float32 values") from error
+    validate_vector(packed)
+    return packed
 
 
 class Index:
@@ -282,6 +321,52 @@ class Index:
                     )
         finally:
             cursor.close()
+
+    def vector_dimensions(self, embedding: str) -> int | None:
+        row = self.connection.execute(
+            "SELECT length(vec) FROM vectors WHERE embedding_id=? LIMIT 1", (embedding,)
+        ).fetchone()
+        return int(row[0]) // 4 if row is not None else None
+
+    def vectors(self, embedding: str, hashes: Sequence[str]) -> dict[str, bytes]:
+        result: dict[str, bytes] = {}
+        for batch in itertools.batched(hashes, 256):
+            placeholders = ",".join("?" for _ in batch)
+            result.update(
+                self.connection.execute(
+                    f"SELECT text_hash,vec FROM vectors WHERE embedding_id=? "
+                    f"AND text_hash IN ({placeholders})",
+                    (embedding, *batch),
+                )
+            )
+        return result
+
+    def insert_vectors(self, embedding: str, rows: Sequence[tuple[str, bytes]]) -> StoredVectors:
+        """Validate before the writer; recheck dimensions while holding it.
+
+        The first concurrent insertion establishes dimensions. Existing keys win,
+        and every caller receives the canonical stored bytes in its input order.
+        """
+        checked_hash(embedding, "embedding identity")
+        if not rows:
+            return StoredVectors((), 0)
+        dimensions = validate_vector(rows[0][1])
+        for text_hash, packed in rows:
+            checked_hash(text_hash, "text hash")
+            validate_vector(packed, dimensions)
+        with transaction(self.connection, immediate=True):
+            current = self.vector_dimensions(embedding)
+            if current is not None and current != dimensions:
+                raise QuailError(
+                    f"Embedding dimensions changed: expected {current}, got {dimensions}"
+                )
+            cursor = self.connection.executemany(
+                "INSERT OR IGNORE INTO vectors VALUES (?, ?, ?)",
+                ((embedding, text_hash, packed) for text_hash, packed in rows),
+            )
+            inserted = cursor.rowcount
+            stored = self.vectors(embedding, [text_hash for text_hash, _ in rows])
+        return StoredVectors(tuple(stored[text_hash] for text_hash, _ in rows), inserted)
 
     def export_rows(self, session: str, tag_fields: list[str]) -> Iterator[list[str | None]]:
         """Merge two ordered cursors; no per-entry queries or extra-wide SQL rows."""
