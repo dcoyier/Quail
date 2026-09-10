@@ -28,6 +28,7 @@ from quail.contracts import (
     json_object,
 )
 from quail.index import Index, pack_vector
+from quail.packs import Packs
 from quail.project import EmbeddingConfig
 
 type RawEmbed = Callable[[EmbeddingConfig, list[str]], list[list[float]]]
@@ -177,9 +178,12 @@ class Cache:
         self.index, self.config = index, config
         self.raw = raw or provider
         self.progress = progress
+        self.packs = Packs(index, index.warm_paths) if index.warm_paths is not None else None
 
     def get(self, texts: Sequence[str]) -> Embedded:
         # Callers pass bounded working batches, not a Python list of the corpus.
+        if self.packs is not None:
+            self.packs.ingest(self.config, self.progress)
         unique: dict[str, str] = {}
         order = []
         for text in texts:

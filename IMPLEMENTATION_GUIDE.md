@@ -73,19 +73,20 @@ dependencies. Imports follow this direction, without cycles.
 | `contracts.py` | Shared JSON value rules and text rendering, result/error and control records, pure codecs | None |
 | `project.py` | Project configuration, paths, metadata publication, local locks | None |
 | `history.py` | Run-log writing and validation, ordered replay, history digests and summaries | `project.py` |
-| `index.py` | CSV import, source indexes, materialized tags, vector storage, warm-pack validation and ingestion, cache synchronization | `project.py`, `history.py` |
-| `embed.py` | The two embedding HTTP dialects and the shared cached-embedding operation | `project.py`, `index.py` |
+| `index.py` | CSV import, source indexes, materialized tags, vector storage, cache synchronization | `project.py`, `history.py` |
+| `packs.py` | Warm-pack schemas, inventories, publication, validation, and ingestion through the vector cache | `project.py`, `index.py` |
+| `embed.py` | The two embedding HTTP dialects and the shared cached-embedding operation | `project.py`, `index.py`, `packs.py` |
 | `language/` | Expression construction and SQL compilation, evaluator, verbs, entries, private tag state, search preparation and scoring | None |
 | `prelude.py` | Child bootstrap, control I/O, persistent namespace and cell runner, confinement | `language/` |
 | `kernel.py` | Child lifetime, control exchange, limits, durable cell completion | `project.py`, `history.py`, `index.py`, `embed.py` |
-| `service.py` | Project operations, the shared dataset-open path, session opening, export, local and shared warming | `project.py`, `history.py`, `index.py`, `embed.py`, `kernel.py` |
+| `service.py` | Project operations, the shared dataset-open path, session opening, export, local and shared warming | `project.py`, `history.py`, `index.py`, `packs.py`, `embed.py`, `kernel.py` |
 | `local.py` | Per-session host startup, local connections, request admission, and live inspection | `project.py`, `service.py`, `kernel.py` |
 | `cli.py` | Argument parsing, presentation, exit status | `service.py`, `local.py` |
 
 `contracts.py` is a small dependency-free vocabulary, not a general utilities
 module. Share the value conversion and wire definitions used on both sides
 instead of maintaining matching copies. Configuration belongs in
-`project.py`, run schemas in `history.py`, and pack schemas in `index.py`.
+`project.py`, run schemas in `history.py`, and pack schemas in `packs.py`.
 They use the shared value rules, but retain their own format versions and
 validation. Use small typed records and ordinary functions, not a schema
 framework or an object hierarchy for every JSON shape.
@@ -100,8 +101,8 @@ performs provider HTTP, or writes durable files. Hosted can place this same
 child package in its confined process. Replay has one implementation in
 `history.py`; the host initializes working tags from the synchronized index.
 
-SQL belongs in `index.py` for host storage and `language/` for the child's
-queries and TEMP state. Transport code calls operations; it does not build
+SQL belongs in `index.py` and `packs.py` for host storage and `language/`
+for the child's queries and TEMP state. Transport code calls operations; it does not build
 queries, replay logs, or decide tag commits. Sharing a wire codec does not
 make a received message trusted: validate it at the process boundary and
 check its scope in the owning operation.
@@ -1098,8 +1099,9 @@ warming prepares semantic corpus vectors, not future query strings.
 Without `--shard`, warm the full selected inventory into the local cache.
 With `--shard I/N`, warm that deterministic fraction and publish its vectors
 under `warm/` for transfer through Git. Both forms use the same host cached
-embedding function as a semantic query. `index.py` owns inventory, pack
-encoding/validation, and cache insertion; `service.py` coordinates the work.
+embedding function as a semantic query. `packs.py` owns inventories and pack
+encoding/validation, using `index.py` for vector-cache insertion;
+`service.py` coordinates the work.
 Report selected, reused, and newly embedded value counts, plus any pack path.
 
 ### Shard assignment

@@ -36,7 +36,7 @@ from quail.contracts import (
     source_version,
     sql_identifier,
 )
-from quail.project import DatasetConfig, SessionMetadata, sync_directory
+from quail.project import DatasetConfig, Project, SessionMetadata, sync_directory
 
 SCHEMA_VERSION = 1
 FTS_TOKENIZER = "porter unicode61 remove_diacritics 1"
@@ -92,6 +92,15 @@ class StoredVectors:
     inserted: int
 
 
+@dataclass(frozen=True)
+class WarmPaths:
+    """An open operation's path snapshot; discovering it never decodes a pack."""
+
+    root: Path
+    dataset: str
+    files: tuple[Path, ...]
+
+
 def validate_vector(packed: bytes, dimensions: int | None = None) -> int:
     """Validate the canonical float32 representation, with a safe nonzero norm."""
     if not packed or len(packed) % 4:
@@ -125,6 +134,13 @@ class Index:
         self.path = path
         self.connection = connection
         self.source = source
+        self.warm_paths: WarmPaths | None = None
+
+    def discover_packs(self, project: Project, dataset: str) -> None:
+        directory = project.path("warm", dataset, self.source.version.removeprefix("sha256:"))
+        self.warm_paths = WarmPaths(
+            project.root, dataset, tuple(sorted(directory.glob("*/*.jsonl")))
+        )
 
     @classmethod
     def open(cls, path: Path, *, readonly: bool = False) -> Index:
@@ -341,22 +357,34 @@ class Index:
             )
         return result
 
-    def insert_vectors(self, embedding: str, rows: Sequence[tuple[str, bytes]]) -> StoredVectors:
+    def ingested(self, relative_path: str) -> str | None:
+        row = self.connection.execute(
+            "SELECT file_hash FROM ingested WHERE path=?", (relative_path,)
+        ).fetchone()
+        return str(row[0]) if row is not None else None
+
+    def insert_vectors(
+        self,
+        embedding: str,
+        rows: Sequence[tuple[str, bytes]],
+        *,
+        receipt: tuple[str, str] | None = None,
+    ) -> StoredVectors:
         """Validate before the writer; recheck dimensions while holding it.
 
         The first concurrent insertion establishes dimensions. Existing keys win,
         and every caller receives the canonical stored bytes in its input order.
         """
         checked_hash(embedding, "embedding identity")
-        if not rows:
+        if not rows and receipt is None:
             return StoredVectors((), 0)
-        dimensions = validate_vector(rows[0][1])
+        dimensions = validate_vector(rows[0][1]) if rows else None
         for text_hash, packed in rows:
             checked_hash(text_hash, "text hash")
             validate_vector(packed, dimensions)
         with transaction(self.connection, immediate=True):
             current = self.vector_dimensions(embedding)
-            if current is not None and current != dimensions:
+            if current is not None and dimensions is not None and current != dimensions:
                 raise QuailError(
                     f"Embedding dimensions changed: expected {current}, got {dimensions}"
                 )
@@ -366,6 +394,12 @@ class Index:
             )
             inserted = cursor.rowcount
             stored = self.vectors(embedding, [text_hash for text_hash, _ in rows])
+            if receipt is not None:
+                self.connection.execute(
+                    "INSERT INTO ingested VALUES (?,?) ON CONFLICT(path) "
+                    "DO UPDATE SET file_hash=excluded.file_hash",
+                    receipt,
+                )
         return StoredVectors(tuple(stored[text_hash] for text_hash, _ in rows), inserted)
 
     def export_rows(self, session: str, tag_fields: list[str]) -> Iterator[list[str | None]]:

@@ -19,6 +19,7 @@ import pytest
         ),
         ("quail.cli", ["quail.kernel", "quail.prelude", "numpy"]),
         ("quail.service", ["quail.kernel", "quail.prelude", "numpy"]),
+        ("quail.packs", ["quail.kernel", "quail.prelude", "quail.embed", "numpy"]),
     ],
 )
 def test_import_boundaries(module, forbidden):

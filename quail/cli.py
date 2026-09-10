@@ -50,7 +50,11 @@ def _parser() -> argparse.ArgumentParser:
     export = commands.add_parser("export", help="Export source fields and committed tags")
     export.add_argument("session")
     export.add_argument("--out", type=Path)
-    for command in ("info", "exec", "sessions", "fields", "export"):
+    warm = commands.add_parser("warm", help="Cache source embeddings and optionally share a shard")
+    warm.add_argument("dataset")
+    warm.add_argument("--field")
+    warm.add_argument("--shard")
+    for command in ("info", "exec", "sessions", "fields", "export", "warm"):
         commands.choices[command].add_argument("--json", action="store_true")
     return parser
 
@@ -106,6 +110,10 @@ def _operation(args: argparse.Namespace) -> JSONValue:
             }
         case "export":
             return service.export(project, args.session, args.out)
+        case "warm":
+            return service.warm(
+                project, args.dataset, field=args.field, shard=args.shard, progress=_progress
+            )
         case "exec":
             from quail import local
 
@@ -162,6 +170,11 @@ def _present(args: argparse.Namespace, result: JSONValue) -> int:
     elif args.command == "fork":
         assert isinstance(result, dict)
         print(f"Forked {result['forked_from']!r} to {result['session']!r}")
+    elif args.command == "warm":
+        assert isinstance(result, dict)
+        print(f"Warmed {result['selected']} values: {result['reused']} reused, {result['new']} new")
+        if result["pack"] is not None:
+            print(f"Published {result['pack']} ({result['bytes']} bytes)")
     else:
         # Orientation is structured data even in its readable form; execution
         # alone has notebook stdout. No secondary result schema is needed.

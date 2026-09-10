@@ -8,6 +8,7 @@ project state is needed, and inspection and warming do not load the kernel graph
 from __future__ import annotations
 
 import csv
+import itertools
 import os
 import shlex
 import shutil
@@ -21,10 +22,11 @@ from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from quail import history
+from quail import embed, history
 from quail import project as projects
 from quail.contracts import ErrorInfo, JSONObject, QuailError
 from quail.index import Applied, Index, hash_source, publish, transaction
+from quail.packs import Shard
 from quail.project import Project, SessionMetadata, atomic_write, load_session, sync_directory
 
 if TYPE_CHECKING:
@@ -110,6 +112,7 @@ def open_dataset(project: Project, dataset: str) -> Generator[Index, None, None]
             index = Index.open(project.index_path(dataset))
             if not _fresh(index, project, dataset, hash_source(config)):
                 raise QuailError("Source changed while opening; retry when it is stable")
+        index.discover_packs(project, dataset)
         yield index
     finally:
         if index is not None:
@@ -119,6 +122,63 @@ def open_dataset(project: Project, dataset: str) -> Generator[Index, None, None]
 
 def initialize(directory: Path) -> Project:
     return projects.initialize(directory)
+
+
+def warm(
+    project: Project,
+    dataset: str,
+    *,
+    field: str | None = None,
+    shard: str | None = None,
+    embed_fn: embed.RawEmbed | None = None,
+    progress: embed.Progress | None = None,
+) -> JSONObject:
+    """Warm source values directly; no session, child, or synthetic cell exists."""
+    selected_shard = Shard.parse(shard) if shard is not None else Shard(1, 1)
+    config = project.dataset(dataset).embedding
+    if config is None:
+        raise QuailError("Warming requires embed and embed_revision for this dataset")
+    with open_dataset(project, dataset) as index:
+        fields = (field,) if field is not None else tuple(sorted(index.source.fields[1:]))
+        cache = embed.Cache(index, config, raw=embed_fn, progress=progress)
+        packs = cache.packs
+        assert packs is not None  # The common open path discovered this operation's paths.
+        inventory = packs.inventory(fields)
+        start, stop = selected_shard.bounds(inventory.count)
+        reused = created = 0
+        estimated = 0
+        header = None
+        if (
+            shard is not None
+            and stop > start
+            and index.vector_dimensions(config.identity) is not None
+        ):
+            header = packs.header(inventory, config, selected_shard)
+            estimated = packs.check_size(header, inventory)
+        for batch in itertools.batched(packs.rows(inventory, selected_shard), 128):
+            result = cache.get([text for _, text in batch])
+            reused += result.reused
+            created += result.created
+            if shard is not None and header is None:
+                header = packs.header(inventory, config, selected_shard)
+                estimated = packs.check_size(header, inventory)
+                if progress is not None:
+                    progress(f"Estimated warm part: {estimated} bytes")
+        path, size = None, 0
+        if header is not None:
+            published, size = packs.publish(header, inventory)
+            path = str(published)
+        return {
+            "dataset": dataset,
+            "fields": list(fields),
+            "selected": stop - start,
+            "reused": reused,
+            "new": created,
+            "pack": path,
+            "estimated_bytes": estimated,
+            "bytes": size,
+            "warnings": list(packs.warnings),
+        }
 
 
 def usage_manual() -> str:

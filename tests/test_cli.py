@@ -2,11 +2,14 @@
 
 import json
 import os
+import shutil
 import socket
 import stat
 import subprocess
 import sys
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -77,6 +80,141 @@ def test_repository_or_wheel_cli_import_and_manual(tmp_path):
     )
     expected = (Path(__file__).resolve().parents[1] / "USING_QUAIL.md").read_text(encoding="utf-8")
     assert result.stdout == expected
+
+
+@pytest.fixture
+def embedding_server(local_runtime):
+    requests = []
+    entered, release = threading.Event(), threading.Event()
+    release.set()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            document = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            assert self.path == "/api/embed" and document["truncate"] is False
+            texts = document["input"]
+            requests.append(texts)
+            entered.set()
+            assert release.wait(timeout=20)
+            vectors = [[1, 0] if "parking" in text.lower() else [0, 1] for text in texts]
+            payload = json.dumps({"embeddings": vectors}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}", requests, entered, release
+    finally:
+        release.set()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+
+def semantic_configuration(directory, address):
+    manifest = directory / "quail.toml"
+    manifest.write_text(
+        manifest.read_text() + '\nembed = "ollama/test"\nembed_revision = "v1"\n'
+        f'\n[providers.ollama]\nbase_url = "{address}"\n'
+    )
+
+
+def test_shared_warming_and_cold_clone_semantics_from_separate_clients(
+    cli_study, embedding_server, tmp_path
+):
+    address, requests, _, _ = embedding_server
+    semantic_configuration(cli_study, address)
+    for shard in ("1/2", "2/2"):
+        result = json.loads(
+            command(
+                cli_study, "warm", "notes", "--field", "body", "--shard", shard, "--json"
+            ).stdout
+        )
+        assert result["selected"] == 1 and result["pack"] is not None
+    assert not list((cli_study / "sessions").iterdir())
+    destination = tmp_path / "cloned-study"
+    shutil.copytree(cli_study, destination, ignore=shutil.ignore_patterns(".quail"))
+    before = len(requests)
+    try:
+        first = command(
+            destination,
+            "exec",
+            "review",
+            "-c",
+            'score = Field("body").semantic("parking"); count(score > 0.5)',
+            "--json",
+        )
+        assert json.loads(first.stdout)["output"] == "1\n"
+        assert requests[before:] == [["parking"]]  # The corpus came entirely from the shared parts.
+        assert (
+            command(destination, "exec", "review", "-c", "retrieve(rank=score)[0][score]").stdout
+            == "1.0\n"
+        )
+        assert requests[before:] == [["parking"]]
+        command(destination, "exec", "review", "--reset")
+        assert (
+            command(
+                destination,
+                "exec",
+                "review",
+                "-c",
+                'count(Field("body").semantic("parking") > 0.5)',
+            ).stdout
+            == "1\n"
+        )
+        assert requests[before:] == [["parking"]]
+    finally:
+        command(destination, "exec", "review", "--close", check=False)
+
+
+def test_local_status_and_another_session_remain_available_during_provider_wait(
+    cli_study, embedding_server
+):
+    address, _, entered, release = embedding_server
+    semantic_configuration(cli_study, address)
+    release.clear()
+    client = subprocess.Popen(
+        [
+            PYTHON,
+            "-m",
+            "quail.cli",
+            "exec",
+            "review",
+            "-c",
+            'count(Field("body").semantic("parking") > 0.5)',
+            "--json",
+        ],
+        cwd=cli_study,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert entered.wait(timeout=15)
+        info = json.loads(command(cli_study, "info", "--json").stdout)
+        assert info["sessions"][0]["runtime"]["state"] == "busy"
+        busy = command(cli_study, "exec", "review", "--reset", check=False)
+        assert busy.returncode != 0 and "busy" in busy.stderr
+        assert (
+            command(cli_study, "exec", "other", "-c", 'tag(None, "checked", True)').stdout == "2\n"
+        )
+        release.set()
+        output, errors = client.communicate(timeout=20)
+        assert client.returncode == 0, output + errors
+        assert json.loads(output)["output"] == "1\n"
+    finally:
+        release.set()
+        if client.poll() is None:
+            client.terminate()
+            client.communicate(timeout=5)
 
 
 def test_download_to_analysis_without_info_and_persistent_files(cli_study):
