@@ -154,11 +154,12 @@ class Packs:
                 columns = ",".join(sql_identifier(field) for field in fields)
                 cursor = self.connection.execute(f"SELECT {columns} FROM main.entries")
                 try:
-                    # Bound work by source rows, including entirely absent rows.
-                    # A filtered generator could scan a blank corpus before yielding.
-                    for batch in itertools.batched(cursor, 256):
+                    # Batch source cells, including absent ones, so blank corpora
+                    # still yield checkpoints and wide rows do not multiply buffers.
+                    values = (value for row in cursor for value in row)
+                    for batch in itertools.batched(values, 256):
                         self.checkpoint()
-                        rendered = (text_value(value) for row in batch for value in row)
+                        rendered = (text_value(value) for value in batch)
                         records = (
                             (digest_bytes(text.encode("utf-8")), text) for text in rendered if text
                         )

@@ -265,6 +265,37 @@ def test_inventory_checks_for_interruption_even_when_every_value_is_absent(warm_
         ).fetchall()
 
 
+def test_wide_inventory_does_not_buffer_the_corpus_before_rendering(warm_study, monkeypatch):
+    fields = tuple(f"column{i:02d}" for i in range(20))
+    source = warm_study.dataset("notes").source
+    with source.open("w", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(["id", *fields])
+        writer.writerows([str(i), *["shared text"] * len(fields)] for i in range(100))
+    buffered = peak = 0
+    render = packs.text_value
+
+    def fetched(cursor, row):
+        nonlocal buffered, peak
+        if tuple(column[0] for column in cursor.description) == fields:
+            buffered += len(row)
+            peak = max(peak, buffered)
+        return row
+
+    def rendered(value):
+        nonlocal buffered
+        buffered -= 1
+        return render(value)
+
+    monkeypatch.setattr(packs, "text_value", rendered)
+    with service.open_dataset(warm_study, "notes") as index:
+        index.connection.row_factory = fetched
+        cache = embed.Cache(index, warm_study.dataset("notes").embedding, raw=offline)
+        assert cache.packs.inventory(fields).count == 1
+    assert buffered == 0
+    assert 0 < peak < 100 * len(fields)
+
+
 def test_changed_file_is_revalidated_and_another_revision_is_skipped(warm_study, tmp_path):
     result = service.warm(warm_study, "notes", field="body", shard="1/1", embed_fn=raw)
     recipient = clone(warm_study, tmp_path / "recipient")
