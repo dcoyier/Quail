@@ -374,7 +374,8 @@ def test_pack_preparation_consumes_wall_budget_without_disabling_a_valid_pack(
 ):
     study = configured(study)
     service.warm(study, "notes", field="body", shard="1/1", embed_fn=lambda c, t: [[1, 0]] * len(t))
-    limited = replace(study, limits=replace(study.limits, wall_seconds=5))
+    study.manifest.write_text(study.manifest.read_text() + "\n[kernel]\nwall_seconds = 5\n")
+    study = project.load(study.root)
     inventory = packs.Packs.inventory
 
     def elapsed(self, fields):
@@ -388,7 +389,8 @@ def test_pack_preparation_consumes_wall_budget_without_disabling_a_valid_pack(
         pytest.fail("An expired cell must stop before making a provider request")
 
     monkeypatch.setattr(packs.Packs, "inventory", elapsed)
-    with service.open_session(limited, "review", embed_fn=offline) as live:
+    with service.open_session(study, "review", embed_fn=offline) as live:
+        assert live.runtime.limits.wall_seconds == 5
         result = live.exec(
             'kept = 7; tag(None, "lost", True); count(Field("body").semantic("new query") > 0)'
         )
