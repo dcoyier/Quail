@@ -258,7 +258,7 @@ def test_download_to_analysis_without_info_and_persistent_files(cli_study):
 
 
 def test_failure_reset_close_and_socket_cleanup(cli_study):
-    command(cli_study, "exec", "review", "-c", "saved = 2")
+    first = json.loads(command(cli_study, "exec", "review", "-c", "saved = 2", "--json").stdout)
     failed = command(
         cli_study,
         "exec",
@@ -274,12 +274,16 @@ def test_failure_reset_close_and_socket_cleanup(cli_study):
     assert command(cli_study, "exec", "review", "-c", "saved").stdout == "3\n"
     endpoint = next((cli_study / ".quail/run").glob("*/kernel.sock"))
     assert stat.S_IMODE(endpoint.stat().st_mode) == 0o600
-    command(cli_study, "exec", "review", "--reset")
+    reset = json.loads(command(cli_study, "exec", "review", "--reset", "--json").stdout)
+    assert reset["reset"] is True and reset["session"] == "review"
+    assert reset["state"] == "idle" and reset["run"] != first["run"]
+    assert reset["warnings"] == [] and reset["limits"] == first["limits"]
     assert command(cli_study, "exec", "review", "-c", "saved", check=False).returncode == 1
-    command(cli_study, "exec", "review", "--close")
+    closed = json.loads(command(cli_study, "exec", "review", "--close", "--json").stdout)
+    assert closed == {"closed": True, "session": "review", "state": "stopped"}
     assert not endpoint.exists()
     assert not list((cli_study / ".quail/children").glob("kernel-*"))
-    command(cli_study, "exec", "review", "--close")
+    assert json.loads(command(cli_study, "exec", "review", "--close", "--json").stdout) == closed
     assert not endpoint.exists()
 
 
@@ -375,7 +379,14 @@ def test_fork_from_and_reset_stopped_use_one_new_run(cli_study):
     command(cli_study, "exec", "copy", "--close")
     directory = cli_study / "sessions/copy/log"
     before = len(list(directory.glob("*.jsonl")))
-    command(cli_study, "exec", "copy", "--reset")
+    interrupted = sorted(directory.glob("*.jsonl"))[-1]
+    with interrupted.open("ab") as stream:
+        stream.write(b'{"n":')
+    reset = json.loads(command(cli_study, "exec", "copy", "--reset", "--json").stdout)
+    assert reset["reset"] is True and reset["session"] == "copy" and reset["state"] == "idle"
+    assert reset["limits"]["wall_seconds"] == 120
+    assert any(interrupted.name in warning for warning in reset["warnings"])
+    assert (directory / (reset["run"] + ".jsonl")).is_file()
     assert len(list(directory.glob("*.jsonl"))) == before + 1
 
 

@@ -468,6 +468,11 @@ class Kernel:
             raise
 
     @property
+    def opening_warnings(self) -> tuple[str, ...]:
+        """Opening notices available before the first cell consumes them."""
+        return tuple(self._warnings)
+
+    @property
     def runtime(self) -> Runtime:
         snapshot = self._runtime
         child = self._child

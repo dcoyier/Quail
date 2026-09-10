@@ -26,7 +26,7 @@ from quail.project import Project, load, load_session, validate_name
 if TYPE_CHECKING:
     from quail.kernel import CellIdentity, Kernel
 
-PROTOCOL = 1
+PROTOCOL = 2
 # bind/connect have no dir_fd variant. Restrict the temporary cwd change to this
 # local adapter and serialize it; every project operation uses resolved paths.
 _socket_directory = threading.Lock()
@@ -145,7 +145,9 @@ def _existing(project: Project, session: str) -> socket.socket | None:
         raise QuailError(f"Cannot connect to session {session!r}: {error}") from error
 
 
-def _start(project: Project, session: str, dataset: str | None, fork_from: str | None) -> None:
+def _start(
+    project: Project, session: str, dataset: str | None, fork_from: str | None
+) -> JSONObject:
     """Wait for readiness or an actual startup failure, however long replay takes."""
     with ExitStack() as channels:
         config_read, config_write = os.pipe()
@@ -188,6 +190,7 @@ def _start(project: Project, session: str, dataset: str | None, fork_from: str |
     if result.get("type") == "error":
         process.wait(timeout=5)
         _raise_error(result)
+    ready = json_object(result.pop("value", None), "host readiness result")
     if result != {
         "type": "ready",
         "protocol": PROTOCOL,
@@ -195,12 +198,22 @@ def _start(project: Project, session: str, dataset: str | None, fork_from: str |
         "session": session,
     }:
         raise QuailError("Local host returned an invalid readiness record")
+    return ready
 
 
 def _raise_error(record: JSONObject) -> None:
     error = ErrorInfo.from_record(json_object(record.get("error")))
     message = error.message if error.type == "QuailError" else f"{error.type}: {error.message}"
     raise QuailError(message, error.hint)
+
+
+def _ready_result(owner: Kernel) -> JSONObject:
+    """Use the host's applied state and notices after opening or resetting."""
+    return {
+        **owner.runtime.to_record(),
+        "session": owner.session.name,
+        "warnings": list(owner.opening_warnings),
+    }
 
 
 def call(
@@ -218,16 +231,17 @@ def call(
         load_session(project, session)  # Reset never invents a new session.
     connection = _existing(project, session)
     if connection is None and operation == "close":
-        return {"session": session, "state": "stopped"}
+        return {"closed": True, "session": session, "state": "stopped"}
     if connection is None:
-        _start(project, session, dataset, fork_from)
+        ready = _start(project, session, dataset, fork_from)
+        if operation == "reset":
+            # Opening already created the requested fresh run. Return its ready
+            # result without resetting again or depending on a later status call.
+            return {"reset": True, **ready}
         connection = _existing(project, session)
         if connection is None:
             raise QuailError("Host stopped after startup; no cell has been submitted")
         fork_from = None  # Creation already validated/copied it; this is now an existing session.
-        if operation == "reset":
-            connection.close()
-            return runtime(project, session)
     request = Request(operation, str(project.root), session, code, dataset, fork_from)
     # Validate before any send, even for callers other than argparse.
     Request.from_record(request.to_record(), project, session)
@@ -450,11 +464,16 @@ class _Server:
                             on_progress=delivery.progress,
                         ).to_record()
                     elif request.operation == "reset":
-                        result = self.owner.reset().to_record()
+                        self.owner.reset()
+                        result = {"reset": True, **_ready_result(self.owner)}
                     else:
                         self.stop()
                         self.owner.close()
-                        result = {"session": self.owner.session.name, "state": "stopped"}
+                        result = {
+                            "closed": True,
+                            "session": self.owner.session.name,
+                            "state": "stopped",
+                        }
                     delivery.emit({"type": "result", "value": result})
                 except BaseException as error:
                     delivery.emit(
@@ -501,6 +520,7 @@ def main() -> int:
                 "protocol": PROTOCOL,
                 "project": str(project.root),
                 "session": session,
+                "value": _ready_result(owner),
             },
         )
         outgoing.close()
