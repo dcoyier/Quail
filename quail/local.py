@@ -286,6 +286,9 @@ class _Delivery:
     def accepted(self, identity: CellIdentity) -> None:
         self.emit({"type": "accepted", **identity.to_record()})
 
+    def progress(self, message: str) -> None:
+        self.emit({"type": "progress", "message": message})
+
     def emit(self, record: JSONObject) -> None:
         if self.done.is_set():
             return
@@ -442,7 +445,9 @@ class _Server:
                         assert request.code is not None
 
                         result = self.owner.exec(
-                            request.code, on_accept=delivery.accepted
+                            request.code,
+                            on_accept=delivery.accepted,
+                            on_progress=delivery.progress,
                         ).to_record()
                     elif request.operation == "reset":
                         result = self.owner.reset().to_record()

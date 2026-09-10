@@ -1,8 +1,13 @@
 import math
+import struct
 
 import pytest
 
 from quail.contracts import (
+    EMBED_TEXT_BYTES,
+    EmbeddingReply,
+    EmbeddingRequest,
+    ErrorInfo,
     Limits,
     QuailError,
     canonical_json,
@@ -54,3 +59,29 @@ def test_limits_validate_resolved_configuration(settings):
     with pytest.raises(QuailError):
         Limits.from_record(settings)
     assert Limits.from_record({"max_limit": 0}).max_limit == 0
+
+
+def test_embedding_control_records_preserve_packed_bytes_and_cell_scope():
+    request = EmbeddingRequest(3, ("café\ncomplete text", "second"))
+    assert EmbeddingRequest.from_record(request.to_record(), 3) == request
+    packed = struct.pack("<2f", 1e-40, 3e38)
+    reply = EmbeddingReply(3, (packed, packed))
+    assert EmbeddingReply.from_record(reply.to_record(), 3, 2) == reply
+    failure = EmbeddingReply(3, error=ErrorInfo("QuailError", "unavailable"))
+    assert EmbeddingReply.from_record(failure.to_record(), 3, 2) == failure
+    for invalid in (
+        request.to_record() | {"n": 2},
+        request.to_record() | {"texts": [""]},
+        request.to_record() | {"texts": ["a"] * 129},
+        request.to_record() | {"texts": ["a" * EMBED_TEXT_BYTES, "b"]},
+    ):
+        with pytest.raises(QuailError):
+            EmbeddingRequest.from_record(invalid, 3)
+    for invalid in (
+        reply.to_record() | {"n": True},
+        reply.to_record() | {"vectors": ["!"] * 2},
+        reply.to_record() | {"vectors": ["YQ=="] * 2},
+        reply.to_record() | {"vectors": []},
+    ):
+        with pytest.raises(QuailError):
+            EmbeddingReply.from_record(invalid, 3, 2)

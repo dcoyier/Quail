@@ -17,6 +17,8 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quail.contracts import (
+    EMBED_TEXT_BYTES,
+    EMBED_TEXT_ITEMS,
     QuailError,
     canonical_json,
     decode_json,
@@ -29,9 +31,6 @@ from quail.language.state import State
 type Embed = Callable[[list[str]], Sequence[bytes]]
 type Matrix = NDArray[np.float32]
 type RowIDs = NDArray[np.int64]
-
-_TEXT_ITEMS = 128
-_TEXT_BYTES = 256 * 1024
 
 
 def normalize(packed: Sequence[bytes], dimensions: int) -> Matrix:
@@ -191,14 +190,14 @@ class Semantic:
         while True:
             cursor = self.connection.execute(
                 f"SELECT rowid,body FROM temp.{item.values} WHERE vec IS NULL LIMIT ?",
-                (_TEXT_ITEMS,),
+                (EMBED_TEXT_ITEMS,),
             )
             try:
                 batch: list[tuple[int, str]] = []
                 size = 0
                 for rowid, text in cursor:
                     encoded = len(canonical_json(text).encode("utf-8"))
-                    if batch and size + encoded > _TEXT_BYTES:
+                    if batch and size + encoded > EMBED_TEXT_BYTES:
                         break
                     batch.append((rowid, text))
                     size += encoded

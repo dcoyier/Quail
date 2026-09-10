@@ -18,16 +18,19 @@ import tempfile
 import threading
 import time
 from collections import deque
-from collections.abc import Callable
-from contextlib import ExitStack
+from collections.abc import Callable, Generator
+from concurrent.futures import Future
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, replace
 from importlib.metadata import version
 from pathlib import Path
 from typing import Literal
 
-from quail import history, wire
+from quail import embed, history, wire
 from quail.contracts import (
     CellReply,
+    EmbeddingReply,
+    EmbeddingRequest,
     ErrorInfo,
     Execution,
     JSONObject,
@@ -36,7 +39,7 @@ from quail.contracts import (
     json_object,
 )
 from quail.index import Applied, Index
-from quail.project import Project, SessionMetadata
+from quail.project import EmbeddingConfig, Project, SessionMetadata
 
 type Spawn = Callable[[list[str], dict[str, str], tuple[int, ...]], subprocess.Popen[bytes]]
 
@@ -166,7 +169,9 @@ def _spawn(
 class _Child:
     """One confined process and its private pipes/scratch, with bounded I/O."""
 
-    def __init__(self, project: Project, index: Index, session: str, spawn: Spawn) -> None:
+    def __init__(
+        self, project: Project, index: Index, session: str, spawn: Spawn, embedding_id: str | None
+    ) -> None:
         self.resources = ExitStack()
         self.process: subprocess.Popen[bytes] | None = None
         self.monitor: _Monitor | None = None
@@ -211,6 +216,7 @@ class _Child:
                         "session": session,
                         "source": index.source.to_record(),
                         "limits": project.limits.to_record(),
+                        "embedding_id": embedding_id,
                     }
                 ),
                 self.check,
@@ -294,6 +300,114 @@ class _Child:
         self.resources.close()
 
 
+class _CellBudget:
+    """One cell's clocks; only an active raw-provider wait pauses wall time."""
+
+    def __init__(self, child: _Child, limits: Limits) -> None:
+        self.child, self.limits = child, limits
+        self.started = time.monotonic()
+        self.paused = 0.0
+        self.wait_started: float | None = None
+        self.expired: str | None = None
+        self.interrupted: float | None = None
+        assert child.process is not None
+        try:
+            self.baseline: float | None = _usage(child.process.pid).cpu
+        except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+            self.baseline = None  # The monitor tolerates a transient missed sample.
+
+    def check_wall(self) -> None:
+        now = time.monotonic()
+        waiting = now - self.wait_started if self.wait_started is not None else 0
+        if now - self.started - self.paused - waiting > self.limits.wall_seconds:
+            self.expired = self.expired or "Wall limit exceeded"
+
+    def tick(self) -> None:
+        self.child.check()
+        process, monitor = self.child.process, self.child.monitor
+        assert process is not None and monitor is not None
+        current = time.monotonic()
+        usage = monitor.latest
+        if self.baseline is None and usage is not None:
+            self.baseline = usage.cpu
+        self.check_wall()
+        if (
+            self.expired is None
+            and usage is not None
+            and self.baseline is not None
+            and usage.cpu - self.baseline > self.limits.cpu_seconds
+        ):
+            self.expired = "CPU limit exceeded"
+        if self.expired and self.interrupted is None:
+            self.interrupted = current
+            process.send_signal(
+                signal.SIGINT if self.expired.startswith("Wall") else signal.SIGPROF
+            )
+        if self.interrupted is not None and current - self.interrupted >= 5:
+            process.kill()
+            raise QuailError(self.expired or "Kernel did not stop after interruption")
+
+    @contextmanager
+    def provider_wait(self) -> Generator[None, None, None]:
+        self.tick()
+        self.wait_started = time.monotonic()
+        try:
+            yield
+        finally:
+            self.paused += time.monotonic() - self.wait_started
+            self.wait_started = None
+
+
+class _Provider:
+    """At most one raw batch in flight; only the owner ever touches SQLite.
+
+    A daemon worker cannot keep a closing host alive if a Hosted substitution
+    ignores its deadline. A late result is disposable, and another request may
+    not spawn a second worker while that first call is still running.
+    """
+
+    def __init__(self, raw: embed.RawEmbed) -> None:
+        self.raw = raw
+        self.pending: Future[list[list[float]]] | None = None
+
+    def call(
+        self, config: EmbeddingConfig, texts: list[str], budget: _CellBudget
+    ) -> list[list[float]]:
+        if self.pending is not None and not self.pending.done():
+            raise QuailError(
+                "The previous provider request is still finishing", "Retry after it ends"
+            )
+        result: Future[list[list[float]]] = Future()
+        finished = threading.Event()
+        raw = self.raw
+
+        def work() -> None:
+            try:
+                result.set_result(raw(config, texts))
+            except BaseException as error:
+                result.set_exception(error)
+            finally:
+                finished.set()
+
+        with budget.provider_wait():
+            if budget.expired:
+                raise QuailError(budget.expired)
+            self.pending = result
+            deadline = time.monotonic() + embed.ATTEMPTS * (
+                embed.ATTEMPT_SECONDS + embed.REQUEST_TIMEOUT
+            )
+            threading.Thread(target=work, name="quail-provider", daemon=True).start()
+            while not finished.wait(0.05):
+                budget.tick()
+                if time.monotonic() >= deadline:
+                    raise QuailError("Embedding provider exceeded the bounded request deadline")
+            budget.tick()
+        try:
+            return result.result()
+        finally:
+            self.pending = None
+
+
 class Kernel:
     """A ready session, owned synchronously by the thread that opened it."""
 
@@ -307,11 +421,21 @@ class Kernel:
         snapshot: history.Snapshot,
         *,
         spawn: Spawn | None = None,
+        embed_fn: embed.RawEmbed | None = None,
     ) -> None:
         self.project, self.session, self.index = project, session, index
         self._resources = resources
         self._owner = threading.get_ident()
         self._spawn = spawn or _spawn
+        self._provider = _Provider(embed_fn or embed.provider)
+        self._budget: _CellBudget | None = None
+        self._progress: embed.Progress | None = None
+        config = project.dataset(session.dataset).embedding
+        self._embeddings = (
+            embed.Cache(index, config, raw=self._raw_embed, progress=self._report_progress)
+            if config is not None
+            else None
+        )
         self._applied = applied
         self._hashes = snapshot.hashes
         self._closed = False
@@ -353,11 +477,17 @@ class Kernel:
             raise QuailError("Kernel is busy", "Wait for the accepted cell to complete")
 
     def _start_run(self) -> None:
-        child = _Child(self.project, self.index, self.session.name, self._spawn)
+        config = self.project.dataset(self.session.dataset).embedding
+        child = _Child(
+            self.project,
+            self.index,
+            self.session.name,
+            self._spawn,
+            config.identity if config else None,
+        )
         log = None
         try:
             source = self.index.source
-            config = self.project.dataset(self.session.dataset).embedding
             header = history.RunHeader(
                 history.RunLog.new_id(),
                 history.now(),
@@ -396,7 +526,11 @@ class Kernel:
                 log.close()
 
     def exec(
-        self, code: str, *, on_accept: Callable[[CellIdentity], None] | None = None
+        self,
+        code: str,
+        *,
+        on_accept: Callable[[CellIdentity], None] | None = None,
+        on_progress: embed.Progress | None = None,
     ) -> Execution:
         self._owned()
         restarted = False
@@ -419,39 +553,9 @@ class Kernel:
         payload = wire.encode({"type": "run", "n": number, "code": code}, child.maximum)
         identity = CellIdentity(log.header.run, number)
         self._runtime = replace(self._runtime, state="busy", cell=number)
-        started, wall_start = history.now(), time.monotonic()
-        try:
-            baseline: float | None = _usage(child.process.pid).cpu
-        except (OSError, ValueError, IndexError, subprocess.SubprocessError):
-            baseline = None  # The monitor tolerates a transient missed sample.
-        expired: str | None = None
-        interrupted: float | None = None
-
-        def tick() -> None:
-            nonlocal baseline, expired, interrupted
-            child.check()
-            assert child.process is not None and child.monitor is not None
-            current = time.monotonic()
-            usage = child.monitor.latest
-            if baseline is None and usage is not None:
-                baseline = usage.cpu
-            if expired is None:
-                if current - wall_start > self.project.limits.wall_seconds:
-                    expired = "Wall limit exceeded"
-                elif (
-                    usage is not None
-                    and baseline is not None
-                    and usage.cpu - baseline > self.project.limits.cpu_seconds
-                ):
-                    expired = "CPU limit exceeded"
-                if expired:
-                    interrupted = current
-                    child.process.send_signal(
-                        signal.SIGINT if expired.startswith("Wall") else signal.SIGPROF
-                    )
-            if interrupted is not None and current - interrupted >= 5:
-                child.process.kill()
-                raise QuailError(expired or "Kernel did not stop after interruption")
+        started = history.now()
+        budget = self._budget = _CellBudget(child, self.project.limits)
+        self._progress = on_progress
 
         replacement_needed = False
         try:
@@ -461,16 +565,22 @@ class Kernel:
                 except OSError:
                     pass  # Loss of the observer cannot cancel accepted execution.
             try:
-                child.send(payload, tick)
-                reply = CellReply.from_record(child.receive(tick), number)
+                child.send(payload, budget.tick)
+                while True:
+                    record = child.receive(budget.tick)
+                    if record.get("type") != "embed":
+                        break
+                    self._embedding_exchange(
+                        child, EmbeddingRequest.from_record(record, number), budget
+                    )
+                reply = CellReply.from_record(record, number)
                 self.index.validate_delta(reply.tags)
-                if time.monotonic() - wall_start > self.project.limits.wall_seconds:
-                    expired = expired or "Wall limit exceeded"
-                if expired:
+                budget.check_wall()
+                if budget.expired:
                     replacement_needed = reply.error is None
-                    reply = replace(reply, error=ErrorInfo("QuailError", expired), tags={})
+                    reply = replace(reply, error=ErrorInfo("QuailError", budget.expired), tags={})
             except (OSError, EOFError, QuailError) as error:
-                reason = expired or str(error)
+                reason = budget.expired or str(error)
                 reply = CellReply(number, "", ErrorInfo("QuailError", reason), False, {})
                 replacement_needed = True
             cell = history.CellRecord(
@@ -508,6 +618,39 @@ class Kernel:
         except BaseException:
             self.close()
             raise
+        finally:
+            self._budget = None
+            self._progress = None
+
+    def _raw_embed(self, config: EmbeddingConfig, texts: list[str]) -> list[list[float]]:
+        assert self._budget is not None
+        return self._provider.call(config, texts, self._budget)
+
+    def _report_progress(self, message: str) -> None:
+        assert self._budget is not None
+        self._budget.tick()
+        if self._progress is not None:
+            try:
+                self._progress(message[:2048])
+            except OSError:
+                pass  # A disconnected progress observer does not cancel the cell.
+
+    def _embedding_exchange(
+        self, child: _Child, request: EmbeddingRequest, budget: _CellBudget
+    ) -> None:
+        try:
+            if self._embeddings is None:
+                raise QuailError("Semantic search requires an embedding provider")
+            vectors = self._embeddings.get(request.texts).vectors
+            payload = wire.encode(EmbeddingReply(request.n, vectors).to_record(), child.maximum)
+        except (QuailError, sqlite3.Error, OSError) as error:
+            # Provider/configuration/validation failures are ordinary cell errors;
+            # liveness or limit failure still wins before sending the response.
+            payload = wire.encode(
+                EmbeddingReply(request.n, error=ErrorInfo.from_exception(error)).to_record(),
+                child.maximum,
+            )
+        child.send(payload, budget.tick)
 
     def _complete(self, log: history.RunLog, cell: history.CellRecord) -> None:
         try:

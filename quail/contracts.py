@@ -6,6 +6,8 @@ domain; the operation receiving a record must still validate its schema and scop
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 import math
@@ -17,6 +19,11 @@ type JSONScalar = None | bool | int | float | str
 type JSONValue = JSONScalar | list[JSONValue] | dict[str, JSONValue]
 type JSONObject = dict[str, JSONValue]
 type TagDelta = dict[str, dict[str, JSONValue]]
+
+# Texts are indivisible. One larger value may travel alone, still subject to the
+# channel's byte ceiling; ordinary batches are bounded by both count and bytes.
+EMBED_TEXT_ITEMS = 128
+EMBED_TEXT_BYTES = 256 * 1024
 
 
 class QuailError(Exception):
@@ -321,6 +328,80 @@ class CellReply:
         if error is not None and tags:
             raise QuailError("A failed cell cannot write tags")
         return cls(expected, output, error, truncated, tags)
+
+
+@dataclass(frozen=True)
+class EmbeddingRequest:
+    n: int
+    texts: tuple[str, ...]
+
+    def to_record(self) -> JSONObject:
+        return {"type": "embed", "n": self.n, "texts": list(self.texts)}
+
+    @classmethod
+    def from_record(cls, record: JSONObject, expected: int) -> EmbeddingRequest:
+        if (
+            record.keys() != {"type", "n", "texts"}
+            or record["type"] != "embed"
+            or type(record["n"]) is not int
+            or record["n"] != expected
+        ):
+            raise QuailError("Embedding request does not match the accepted cell")
+        texts = record["texts"]
+        if not isinstance(texts, list) or not 0 < len(texts) <= EMBED_TEXT_ITEMS:
+            raise QuailError("Invalid embedding request count")
+        checked = []
+        size = 0
+        for text in texts:
+            if not isinstance(text, str) or not text:
+                raise QuailError("Embedding requests require non-empty complete text")
+            size += len(canonical_json(text).encode("utf-8"))
+            checked.append(text)
+        if len(checked) > 1 and size > EMBED_TEXT_BYTES:
+            raise QuailError("Embedding request exceeds the text batch allowance")
+        return cls(expected, tuple(checked))
+
+
+@dataclass(frozen=True)
+class EmbeddingReply:
+    n: int
+    vectors: tuple[bytes, ...] = ()
+    error: ErrorInfo | None = None
+
+    def to_record(self) -> JSONObject:
+        return {
+            "type": "embedded",
+            "n": self.n,
+            "vectors": [base64.b64encode(vector).decode("ascii") for vector in self.vectors],
+            "error": self.error.to_record() if self.error else None,
+        }
+
+    @classmethod
+    def from_record(cls, record: JSONObject, expected: int, count: int) -> EmbeddingReply:
+        if (
+            record.keys() != {"type", "n", "vectors", "error"}
+            or record["type"] != "embedded"
+            or type(record["n"]) is not int
+            or record["n"] != expected
+        ):
+            raise QuailError("Embedding reply does not match the accepted cell")
+        failure = record["error"]
+        error = ErrorInfo.from_record(json_object(failure)) if failure is not None else None
+        vectors = record["vectors"]
+        if not isinstance(vectors, list) or len(vectors) != (0 if error else count):
+            raise QuailError("Embedding reply count does not match the requested texts")
+        packed = []
+        for value in vectors:
+            try:
+                if not isinstance(value, str):
+                    raise ValueError("Vector must be base64 text")
+                data = base64.b64decode(value, validate=True)
+                if not data or len(data) % 4:
+                    raise ValueError("Vector must contain packed float32 values")
+                packed.append(data)
+            except (ValueError, binascii.Error) as caught:
+                raise QuailError(f"Invalid embedding reply: {caught}") from caught
+        return cls(expected, tuple(packed), error)
 
 
 @dataclass(frozen=True)

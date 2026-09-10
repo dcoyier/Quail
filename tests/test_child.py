@@ -2,6 +2,7 @@
 
 import os
 import selectors
+import signal
 import subprocess
 import sys
 import time
@@ -9,10 +10,12 @@ import time
 import pytest
 
 from quail import wire
+from quail.contracts import EmbeddingReply, EmbeddingRequest, ErrorInfo, embedding_identity
+from quail.index import pack_vector
 
 
 class Child:
-    def __init__(self, index, study, scratch, *, cpu=30):
+    def __init__(self, index, study, scratch, *, cpu=30, embedding_id=None):
         child_in, parent_out = os.pipe()
         parent_in, child_out = os.pipe()
         environment = {
@@ -47,6 +50,7 @@ class Child:
                 "session": "review",
                 "source": index.source.to_record(),
                 "limits": limits,
+                "embedding_id": embedding_id,
             },
         )
         self.ready = self.receive()
@@ -166,5 +170,49 @@ def test_caught_cpu_interrupt_cannot_commit_tags(index, study, tmp_path):
         assert "CPU" in reply["error"]["message"]
         assert reply["tags"] == {}
         assert child.execute("kept")["output"] == "42\n"
+    finally:
+        child.close()
+
+
+def test_confined_semantics_use_packed_replies_and_keep_prepared_scores(index, study, tmp_path):
+    child = Child(index, study, tmp_path, embedding_id=embedding_identity("ollama/test", "v1"))
+    try:
+        child.submit('score = Field("body").semantic("query"); values(score)')
+        request = EmbeddingRequest.from_record(child.receive(), 1)
+        assert request.texts == ("Parking is expensive", "Helpful staff")
+        wire.send(
+            child.outgoing,
+            EmbeddingReply(1, (pack_vector([1, 0]), pack_vector([0, 1]))).to_record(),
+        )
+        query = EmbeddingRequest.from_record(child.receive(), 1)
+        assert query.texts == ("query",)
+        wire.send(child.outgoing, EmbeddingReply(1, (pack_vector([1, 0]),)).to_record())
+        result = child.receive()
+        assert result["error"] is None and result["output"] == "[1.0, 0.0]\n", result
+        reused = child.execute('tag(score > 0.5, "match", True); retrieve(rank=score)[0][score]')
+        assert reused["type"] == "result" and reused["error"] is None
+        assert reused["output"] == "1.0\n" and reused["tags"] == {"match": {"a": True}}
+    finally:
+        child.close()
+
+
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_embedding_failure_or_interrupt_leaves_no_stale_reply(index, study, tmp_path, interrupted):
+    child = Child(index, study, tmp_path, embedding_id=embedding_identity("ollama/test", "v1"))
+    try:
+        child.submit(
+            'kept = 7; tag(None, "lost", True); count(Field("body").semantic("query") > 0)'
+        )
+        request = EmbeddingRequest.from_record(child.receive(), 1)
+        if interrupted:
+            child.process.send_signal(signal.SIGINT)
+            response = EmbeddingReply(1, tuple(pack_vector([1, 0]) for _ in request.texts))
+        else:
+            response = EmbeddingReply(1, error=ErrorInfo("QuailError", "provider unavailable"))
+        wire.send(child.outgoing, response.to_record())
+        failed = child.receive()
+        assert failed["type"] == "result" and failed["tags"] == {}
+        assert ("Wall" if interrupted else "unavailable") in failed["error"]["message"]
+        assert child.execute("kept")["output"] == "7\n"
     finally:
         child.close()

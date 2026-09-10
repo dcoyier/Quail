@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from typing import cast
 
 from quail.contracts import (
+    EMBED_TEXT_BYTES,
+    EMBED_TEXT_ITEMS,
     JSONObject,
     JSONValue,
     QuailError,
@@ -31,8 +33,8 @@ from quail.project import EmbeddingConfig
 type RawEmbed = Callable[[EmbeddingConfig, list[str]], list[list[float]]]
 type Progress = Callable[[str], None]
 
-MAX_BATCH_ITEMS = 128
-MAX_BATCH_BYTES = 256 * 1024
+MAX_BATCH_ITEMS = EMBED_TEXT_ITEMS
+MAX_BATCH_BYTES = EMBED_TEXT_BYTES
 REQUEST_TIMEOUT = 15
 ATTEMPT_SECONDS = 30
 MAX_RESPONSE_BYTES = 64 * 1024 * 1024
@@ -191,6 +193,10 @@ class Cache:
         missing = [text for text_hash, text in unique.items() if text_hash not in stored]
         created = 0
         for batch in _texts_batched(missing):
+            if self.progress is not None:
+                self.progress(
+                    f"Embedding {len(batch)} values: {reused} reused, {created} new so far"
+                )
             raw = self.raw(self.config, batch)
             if len(raw) != len(batch):
                 raise QuailError("Provider response count does not match the submitted texts")

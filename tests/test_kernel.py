@@ -1,13 +1,16 @@
 import os
+import signal
 import sqlite3
 import subprocess
 import threading
+import time
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
 from quail import kernel, project, service
-from quail.contracts import QuailError
+from quail.contracts import Limits, QuailError
 
 
 @pytest.fixture
@@ -220,3 +223,110 @@ def test_rss_recovery_preserves_only_committed_state(study, monitored):
         assert result.reply.error is not None and "RSS" in result.reply.error.message
         assert result.kernel_restarted and not result.reply.tags
         assert live.exec("count()").reply.output == "2\n"
+
+
+def configured(study):
+    study.manifest.write_text(
+        study.manifest.read_text() + '\nembed = "ollama/test"\nembed_revision = "v1"\n'
+    )
+    return project.load(study.root)
+
+
+def test_cell_budget_excludes_provider_wait_but_keeps_cpu_and_grace(monkeypatch):
+    clock, signals, killed = [0.0], [], []
+    monkeypatch.setattr(kernel.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(kernel, "_usage", lambda pid: kernel.Usage(0, 0))
+    child = SimpleNamespace(
+        process=SimpleNamespace(
+            pid=1, send_signal=signals.append, kill=lambda: killed.append(True)
+        ),
+        monitor=SimpleNamespace(latest=kernel.Usage(0, 0)),
+        check=lambda: None,
+    )
+    budget = kernel._CellBudget(child, Limits(wall_seconds=1, cpu_seconds=1))
+    with budget.provider_wait():
+        clock[0] = 10
+        budget.tick()
+        assert not signals
+    clock[0] = 10.5
+    budget.tick()
+    assert budget.expired is None
+    with budget.provider_wait():
+        child.monitor.latest = kernel.Usage(0, 2)
+        budget.tick()
+        assert signals == [signal.SIGPROF]
+        clock[0] += 5
+        with pytest.raises(QuailError, match="CPU"):
+            budget.tick()
+        assert killed
+
+
+def test_hosted_raw_substitution_uses_shared_cache_and_survives_cell_failure(study, monitored):
+    study = configured(study)
+    calls = []
+    owner_thread = threading.get_ident()
+
+    def raw(config, texts):
+        assert threading.get_ident() != owner_thread
+        calls.append(texts)
+        return [[1, 0] if "Parking" in text else [0, 1] for text in texts]
+
+    with service.open_session(study, "review", embed_fn=raw) as live:
+        progress = []
+        failed = live.exec(
+            'score = Field("body").semantic("Parking"); count(score > 0.5); '
+            'tag(None, "lost", True); 1 / 0',
+            on_progress=progress.append,
+        )
+        assert failed.reply.error.type == "ZeroDivisionError" and not failed.reply.tags
+        assert progress and "new" in progress[-1]
+        before = len(calls)
+        assert live.exec("count(score > 0.5)").reply.output == "1\n"
+        assert len(calls) == before
+        live.reset()
+        assert live.exec('count(Field("body").semantic("Parking") > 0.5)').reply.output == "1\n"
+        assert len(calls) == before
+
+
+def test_provider_wait_pauses_only_its_wall_time_and_allows_another_commit(study, monitored):
+    study = configured(study)
+    entered, committed = threading.Event(), threading.Event()
+    errors = []
+
+    def other_session():
+        try:
+            with service.open_session(study, "other") as other:
+                assert entered.wait(timeout=10)
+                result = other.exec('tag(None, "independent", True)')
+                assert result.reply.error is None
+                committed.set()
+        except BaseException as error:
+            errors.append(error)
+            committed.set()
+
+    def raw(config, texts):
+        entered.set()
+        assert committed.wait(timeout=10)
+        time.sleep(0.5)  # Longer than the cell's wall allowance, solely in raw I/O.
+        return [[1, 0] for _ in texts]
+
+    with service.open_session(study, "review"):
+        pass
+    limited = replace(study, limits=replace(study.limits, wall_seconds=0.4))
+    worker = threading.Thread(target=other_session)
+    worker.start()
+    try:
+        with service.open_session(limited, "review", embed_fn=raw) as live:
+            result = live.exec('count(Field("body").semantic("query") > 0.5)')
+            assert result.reply.error is None, result.reply
+            assert result.reply.output == "2\n" and not errors
+            assert service.fields(study, "notes", "other")[-1]["name"] == "independent"
+            # Local Python time after a cached search still consumes the budget.
+            late = live.exec(
+                'import time; count(Field("body").semantic("query") > 0.5); time.sleep(2)'
+            )
+            assert "Wall" in late.reply.error.message
+    finally:
+        entered.set()
+        worker.join(timeout=12)
+    assert not worker.is_alive() and not errors

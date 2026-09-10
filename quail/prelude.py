@@ -35,11 +35,14 @@ from typing import TYPE_CHECKING, BinaryIO, NoReturn
 from quail import wire
 from quail.contracts import (
     CellReply,
+    EmbeddingReply,
+    EmbeddingRequest,
     ErrorInfo,
     JSONObject,
     Limits,
     QuailError,
     Source,
+    checked_hash,
     json_object,
 )
 
@@ -125,19 +128,22 @@ class Runner:
         self._source_bytes = 0
         self._source_budget = min(8 * 1024 * 1024, self.limits.memory_mb * 1024 * 1024 // 32)
         self.expired: str | None = None
+        self.exchanging_embeddings = False
         self.timers = timers
         if timers:
             signal.signal(signal.SIGPROF, self._cpu_limit)
             signal.signal(signal.SIGINT, self._wall_limit)
             evaluator.state.connection.set_progress_handler(self._interrupted_sql, 1000)
 
-    def _cpu_limit(self, signum: int, frame: types.FrameType | None) -> NoReturn:
+    def _cpu_limit(self, signum: int, frame: types.FrameType | None) -> None:
         self.expired = "CPU limit exceeded"
-        raise QuailError(self.expired)
+        if not self.exchanging_embeddings:
+            raise QuailError(self.expired)
 
-    def _wall_limit(self, signum: int, frame: types.FrameType | None) -> NoReturn:
+    def _wall_limit(self, signum: int, frame: types.FrameType | None) -> None:
         self.expired = "Wall limit exceeded"
-        raise QuailError(self.expired)
+        if not self.exchanging_embeddings:
+            raise QuailError(self.expired)
 
     def _interrupted_sql(self) -> int:
         return int(self.expired is not None)
@@ -394,6 +400,12 @@ def main() -> int:
         source = Source.from_record(json_object(configuration.get("source")))
         limits = Limits.from_record(json_object(configuration.get("limits")))
         index, session = configuration.get("index"), configuration.get("session")
+        configured_identity = configuration.get("embedding_id")
+        identity = (
+            checked_hash(configured_identity, "embedding identity")
+            if configured_identity is not None
+            else None
+        )
         if not isinstance(index, str) or not isinstance(session, str):
             raise QuailError("Invalid child scope")
         maximum = max(1024 * 1024, limits.memory_mb * 1024 * 1024 // 4)
@@ -410,14 +422,39 @@ def main() -> int:
         from quail.language.evaluator import Evaluator
         from quail.language.state import State
 
-        runner = Runner(Evaluator(State(Path(index), source, session, limits)))
         inbox: queue.Queue[JSONObject] = queue.Queue(maxsize=2)
+        expected = 1
+
+        def request_vectors(texts: list[str]) -> tuple[bytes, ...]:
+            assert runner is not None
+            # Defer the exception, not the limit latch, until the matching reply
+            # is consumed. An interrupt must not split a control frame or leave
+            # an old embedding response queued ahead of the next numbered cell.
+            # The host still monitors the process and enforces the hard grace.
+            runner.exchanging_embeddings = True
+            try:
+                wire.send(outgoing, EmbeddingRequest(expected, tuple(texts)).to_record(), maximum)
+                reply = EmbeddingReply.from_record(inbox.get(), expected, len(texts))
+            finally:
+                runner.exchanging_embeddings = False
+            if runner.expired:
+                raise QuailError(runner.expired)
+            if reply.error is not None:
+                raise QuailError(reply.error.message, reply.error.hint)
+            return reply.vectors
+
+        runner = Runner(
+            Evaluator(
+                State(Path(index), source, session, limits),
+                embedding_id=identity,
+                embed=request_vectors,
+            )
+        )
         threading.Thread(
             target=_watch_control, args=(incoming, inbox, maximum), daemon=True
         ).start()
         install_confinement(runner.evaluator.state.connection)
         wire.send(outgoing, {"type": "ready", "confinement": confinement}, maximum)
-        expected = 1
         while True:
             request = inbox.get()
             if request == {"type": "close"}:

@@ -28,6 +28,7 @@ from quail.index import Applied, Index, hash_source, publish, transaction
 from quail.project import Project, SessionMetadata, atomic_write, load_session, sync_directory
 
 if TYPE_CHECKING:
+    from quail.embed import RawEmbed
     from quail.kernel import Kernel, Spawn
 
 
@@ -214,6 +215,7 @@ def open_session(
     fork_from: str | None = None,
     *,
     spawn: Spawn | None = None,
+    embed_fn: RawEmbed | None = None,
 ) -> Kernel:
     from quail.kernel import Kernel
 
@@ -263,7 +265,16 @@ def open_session(
         snapshot = history.snapshot(project.session_path(session) / "log")
         applied = index.synchronize(metadata, snapshot)
         history.sync_recovered(snapshot)
-        return Kernel(project, metadata, index, resources.pop_all(), applied, snapshot, spawn=spawn)
+        return Kernel(
+            project,
+            metadata,
+            index,
+            resources.pop_all(),
+            applied,
+            snapshot,
+            spawn=spawn,
+            embed_fn=embed_fn,
+        )
 
 
 @contextmanager
