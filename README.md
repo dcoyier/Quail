@@ -42,7 +42,7 @@ git and [uv](https://docs.astral.sh/uv/getting-started/installation/)
 already installed):
 
 ```sh
-git clone --depth 1 --branch cursor/core-rebuild-spec-f45e https://github.com/dcoyier/Quail.git
+git clone --depth 1 https://github.com/dcoyier/Quail.git
 cd Quail && uv sync --locked --no-dev --python 3.12 && . .venv/bin/activate
 ```
 
