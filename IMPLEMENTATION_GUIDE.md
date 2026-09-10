@@ -1402,16 +1402,16 @@ operations, with local inspection added as described below.
 ### From download to the first analysis
 
 Treat this as a release acceptance path, not an aspirational README example.
-It is for the implemented rebuild once available on the default branch;
-the current design-only branch cannot run it yet. The eventual README must
-name the usable revision and link to [uv installation](https://docs.astral.sh/uv/getting-started/installation/).
+The rebuild is currently on `cursor/core-rebuild-spec-f45e` (PR 94);
+installation must select that branch until it reaches the default branch.
+README names the usable revision and links to [uv installation](https://docs.astral.sh/uv/getting-started/installation/).
 README owns installation; `USING_QUAIL.md` continues with the first study
 and analysis. The combined path below must work without project inspection.
 With Git and uv installed, no separate Python, database, embedding server,
 MCP configuration, or hand-built manifest is required for lexical analysis:
 
 ```sh
-git clone --depth 1 https://github.com/dcoyier/Quail.git
+git clone --depth 1 --branch cursor/core-rebuild-spec-f45e https://github.com/dcoyier/Quail.git
 cd Quail
 uv sync --locked --no-dev --python 3.12
 . .venv/bin/activate

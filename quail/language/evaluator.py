@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import cast
 
 from quail.contracts import (
-    JSONObject,
+    FieldInfo,
     JSONValue,
     QuailError,
     TagDelta,
@@ -71,7 +71,7 @@ class Evaluator:
         self.state.rollback()
         self.searches.rollback()
 
-    def fields(self) -> list[JSONObject]:
+    def fields(self) -> list[FieldInfo]:
         return self.state.fields()
 
     def _expression(self, value: object) -> Node:

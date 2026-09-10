@@ -13,7 +13,7 @@ import json
 import math
 import re
 from dataclasses import dataclass
-from typing import NoReturn
+from typing import Literal, NoReturn
 
 type JSONScalar = None | bool | int | float | str
 type JSONValue = JSONScalar | list[JSONValue] | dict[str, JSONValue]
@@ -204,6 +204,18 @@ class Source:
             tuple(item for item in present if isinstance(item, int)),
             rows,
         )
+
+
+@dataclass(frozen=True)
+class FieldInfo:
+    """The small, immutable catalog record returned by the analysis language."""
+
+    name: str
+    kind: Literal["source", "tag"]
+    present: int
+
+    def to_record(self) -> JSONObject:
+        return {"name": self.name, "kind": self.kind, "present": self.present}
 
 
 @dataclass(frozen=True)

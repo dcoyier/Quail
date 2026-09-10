@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from quail.contracts import (
-    JSONObject,
+    FieldInfo,
     Limits,
     QuailError,
     Source,
@@ -108,17 +108,12 @@ class State:
         finally:
             self._callback_error = None
 
-    def fields(self) -> list[JSONObject]:
-        result: list[JSONObject] = [
-            {"name": name, "kind": "source", "present": count}
+    def fields(self) -> list[FieldInfo]:
+        result = [
+            FieldInfo(name, "source", count)
             for name, count in zip(self.source.fields, self.source.present, strict=True)
         ]
-        result.extend(
-            [
-                {"name": name, "kind": "tag", "present": self.counts[name]}
-                for name in sorted(self.counts)
-            ]
-        )
+        result.extend(FieldInfo(name, "tag", self.counts[name]) for name in sorted(self.counts))
         return result
 
     def begin(self) -> None:

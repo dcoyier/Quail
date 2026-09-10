@@ -81,7 +81,7 @@ def test_scalar_failures_remain_diagnosable_at_each_query_boundary(analysis):
             operation()
         # A handled failure must not leak its exception into the next query.
         assert engine.count() == 8
-    assert not any(item["name"] == "broken" for item in engine.fields())
+    assert not any(item.name == "broken" for item in engine.fields())
 
 
 def test_absence_numeric_conversion_and_python_identity(analysis):
@@ -247,7 +247,7 @@ def test_tag_call_resolves_all_computed_values_before_writes(analysis):
     engine.tag(field("n") < 1, "n", field("n").number() + 1)
     assert engine.values(field("n")) == [1] * 8
     engine.tag(None, "n", None)
-    assert "n" not in {item["name"] for item in engine.fields()}
+    assert "n" not in {item.name for item in engine.fields()}
     delta = engine.commit()
     assert len(delta["n"]) == 8 and all(value is None for value in delta["n"].values())
 

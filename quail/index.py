@@ -24,6 +24,7 @@ from types import TracebackType
 
 from quail import history
 from quail.contracts import (
+    FieldInfo,
     JSONObject,
     QuailError,
     Source,
@@ -308,12 +309,12 @@ class Index:
 
     def fields(self, session: str | None = None) -> list[JSONObject]:
         result: list[JSONObject] = [
-            {"name": field, "kind": "source", "present": present}
+            FieldInfo(field, "source", present).to_record()
             for field, present in zip(self.source.fields, self.source.present, strict=True)
         ]
         if session is not None:
             result.extend(
-                {"name": field, "kind": "tag", "present": present}
+                FieldInfo(field, "tag", present).to_record()
                 for field, present in self.connection.execute(
                     "SELECT field, count(*) FROM tags WHERE session=? "
                     "GROUP BY field ORDER BY field",

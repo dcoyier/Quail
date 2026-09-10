@@ -38,6 +38,7 @@ from quail.contracts import (
     EmbeddingReply,
     EmbeddingRequest,
     ErrorInfo,
+    FieldInfo,
     JSONObject,
     Limits,
     QuailError,
@@ -96,6 +97,7 @@ def public_namespace(evaluator: Evaluator) -> dict[str, object]:
         "Expression": Expression,
         "Predicate": Predicate,
         "Entry": Entry,
+        "FieldInfo": FieldInfo,
         "QuailError": QuailError,
     }
     return operations | {

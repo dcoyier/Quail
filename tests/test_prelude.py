@@ -62,7 +62,7 @@ def test_failed_cell_keeps_python_bindings_and_output_but_rolls_back_tags(runner
     assert "before\n" in failed.output
     assert "cell-1" in failed.output and "quail/prelude.py" not in failed.output
     assert failed.tags == {}
-    following = runner.run(2, '(kept, "attempt" in [f["name"] for f in fields()])')
+    following = runner.run(2, '(kept, "attempt" in [f.name for f in fields()])')
     assert following.output == "(42, False)\n"
     assert following.error is None
 
@@ -95,6 +95,7 @@ def test_public_bindings_are_explicit_and_shadowed_verbs_are_recoverable(runner)
         "Expression",
         "Predicate",
         "Entry",
+        "FieldInfo",
         "QuailError",
         "quail",
         "re",
