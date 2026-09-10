@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from quail.contracts import QuailError, fts_table, sql_identifier
 from quail.language.expressions import Node
+from quail.language.semantic import Embed, Semantic
 from quail.language.state import State
 
 
@@ -31,13 +32,16 @@ def search_nodes(nodes: Iterable[Node]) -> Iterator[Node]:
 
 
 class Searches:
-    def __init__(self, state: State) -> None:
+    def __init__(
+        self, state: State, identity: str | None = None, embed: Embed | None = None
+    ) -> None:
         self.state = state
         self.connection = state.connection
         self.cache: OrderedDict[Node, Scores] = OrderedDict()
         self._before_cell: OrderedDict[Node, Scores] = OrderedDict()
         self._serial = 0
         self._queries: OrderedDict[str, str] = OrderedDict()
+        self.semantic = Semantic(state, identity, embed)
         # Token extraction does not stem. Porter applies exactly once, in MATCH.
         self.connection.execute(
             "CREATE VIRTUAL TABLE temp.query_words "
@@ -49,19 +53,23 @@ class Searches:
 
     def begin(self) -> None:
         self._before_cell = self.cache.copy()
+        self.semantic.begin()
 
     def commit(self) -> None:
         self._before_cell.clear()
+        self.semantic.commit()
 
     def rollback(self) -> None:
         # SQL rolled back table creation/deletion as well as writes. Restore the
         # matching catalog, then drop affected tag scores rather than salvaging them.
         self.cache = self._before_cell
         self._before_cell = OrderedDict()
+        self.semantic.rollback()
         for field in self.state.touched:
             self.invalidate(field)
 
     def invalidate(self, field: str) -> None:
+        self.semantic.invalidate(field)
         for node, item in tuple(self.cache.items()):
             if item.field == field:
                 self.connection.execute("DROP TABLE IF EXISTS temp." + sql_identifier(item.table))
@@ -82,9 +90,18 @@ class Searches:
                 if item is None:
                     self._serial += 1
                     table = f"scores_{self._serial}"
-                    if node.op == "semantic":
-                        raise QuailError("Semantic search requires an embedding provider")
-                    self._lexical(field, str(node.data[0]), table)
+                    try:
+                        if node.op == "semantic":
+                            self.semantic.score(field, str(node.data[0]), table)
+                        else:
+                            self._lexical(field, str(node.data[0]), table)
+                    except BaseException:
+                        # A user may catch a search error within the cell. Do not
+                        # leave a half-prepared table outside the cache catalog.
+                        self.connection.execute(
+                            "DROP TABLE IF EXISTS temp." + sql_identifier(table)
+                        )
+                        raise
                     item = Scores(table, field, generation)
                     self.cache[node] = item
                 self.cache.move_to_end(node)

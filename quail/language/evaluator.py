@@ -29,6 +29,7 @@ from quail.language.compiler import Compiler, Query
 from quail.language.expressions import Expression, Field, Node, Predicate, literal
 from quail.language.scalars import SQLValue, decode
 from quail.language.search import Searches
+from quail.language.semantic import Embed
 from quail.language.state import State
 
 
@@ -43,9 +44,11 @@ class Row:
 
 
 class Evaluator:
-    def __init__(self, state: State) -> None:
+    def __init__(
+        self, state: State, *, embedding_id: str | None = None, embed: Embed | None = None
+    ) -> None:
         self.state = state
-        self.searches = Searches(state)
+        self.searches = Searches(state, embedding_id, embed)
         self._entries: OrderedDict[str, Row] = OrderedDict()
         self._entry_bytes = 0
         # Combined with SQLite's 1/16 and search's matrix allocation, this leaves
