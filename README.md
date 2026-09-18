@@ -2,7 +2,7 @@
   <img src="quail.png" alt="Quail">
 </p>
 
-# Quail v0.94
+# Quail
 
 Quail is an environment for agentic qualitative analysis. An agent (or human!)
 works in a Python kernel to study a corpus of text.
