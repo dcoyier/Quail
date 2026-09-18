@@ -4,10 +4,10 @@
 
 # Quail
 
-Quail is an environment for agentic qualitative analysis. An agent (or human!)
-works in a Python kernel to study a corpus of text.
+Quail is an environment for agentic qualitative analysis. An agent works in 
+a Python kernel to study a corpus of text.
 
-Anyone using Quail should also read [`USING_QUAIL.md`](USING_QUAIL.md) completely.
+Agents using Quail should also read [`USING_QUAIL.md`](USING_QUAIL.md) completely.
 It is the manual for using Quail and details the analysis language, the CLI,
 how to share work, and how to start and continue studies.
 
