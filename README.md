@@ -15,7 +15,7 @@ Here's some vocab about Quail to provide an initial understanding:
 
 - A **dataset** is an immutable grid of entries by fields (rows x columns),
   and it's imported from a CSV. Every entry has an `id` field, which is
-  either provided or assigned by Quail.
+  either provided by the user or assigned by Quail.
 - A **session** is a persistent workspace on one **dataset**, with its
   **tags** and recorded analysis history. Tags are values the user writes
   onto entries, scoped to that session. Its Python kernel holds your variables,
@@ -31,9 +31,9 @@ Here's some vocab about Quail to provide an initial understanding:
   compiling expressions to SQLite queries. Source data stays read-only;
   `tag` writes session annotations.
 - The last layer is a **study**, a directory of text files to keep things organized.
-  It contains a concise config (`quail.toml`), **datasets**, one log per kernel
-  run in each **session**, and optional shared embedding vectors. Tags and
-  recorded history are designed to travel with the study through git.
+  It contains a concise config (`quail.toml`), **datasets** and tags, one 
+  log per kernel run in each **session**, and optional shared embedding vectors. 
+  This information is designed to travel with the study through git.
 
 ## Installation
 
