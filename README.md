@@ -31,9 +31,10 @@ Here's some vocab about Quail to provide an initial understanding:
   compiling expressions to SQLite queries. Source data stays read-only;
   `tag` writes session annotations.
 - The last layer is a **study**, a directory of text files to keep things organized.
-  It contains a concise config (`quail.toml`), **datasets** and tags, one 
-  log per kernel run in each **session**, and optional shared embedding vectors. 
-  This information is designed to travel with the study through git.
+  It contains a concise config (`quail.toml`), datasets, session logs recording
+  code, output, and committed tag changes, and optional shared embedding vectors.
+  Each kernel run creates its own log. These files are designed to travel with
+  the study through Git.
 
 ## Installation
 
