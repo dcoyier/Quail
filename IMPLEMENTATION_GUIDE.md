@@ -1,14 +1,17 @@
 # Implementation guide
 
-This is the implementation contract for the Quail core rebuild. Its goal is
+This is the implementation contract for Quail Core. Its goal is
 a small environment in which an agent can inspect a corpus, write annotations,
 and continue that work on another machine.
 
 This guide owns the implementation contract; `USING_QUAIL.md` owns the
 agent-facing language and operating instructions. `README.md` provides
 installation and repository orientation.
-Keep them consistent. When implementation settles a behavior differently,
-update its contract and agent-facing documentation in the same commit.
+Keep them consistent. An intentional behavior change updates this contract,
+the affected agent-facing documentation, and its regression coverage together.
+An implementation discrepancy does not by itself change the contract. Known
+conformance gaps are called out at the end of this guide rather than silently
+turning bugs into specified behavior.
 
 The guide fixes observable behavior and ownership. It does not prescribe
 the order of function definitions, a class for every concept, or a final
@@ -50,7 +53,7 @@ Core provides the CLI, language, project format, and local runtime. Hosted
 may wrap these with authentication, MCP, and container placement. Core does
 not run an agent, call a language model, run Git, or manage remote workers.
 
-The first implementation targets Python 3.12+ on Linux and macOS. Use the
+The supported runtime targets are Python 3.12+ on Linux and macOS. Use the
 standard library, SQLite with FTS5, `google-re2`, and NumPy. Include NumPy in
 the normal installation and use one vectorized scoring implementation;
 agents should not need an extra installation step to get timely search.
@@ -61,9 +64,9 @@ There is no Core MCP dependency.
 Organize around the boundaries that must stay independent: durable project
 state, derived storage, analysis execution, and the adapters that invoke it.
 A new transport should not change the language or commit path; a new
-expression should not change process management. Start with these areas,
-splitting cohesive responsibilities when that makes them easier to reason
-about and test. The filenames are a starting layout, not a fixed file count.
+expression should not change process management. The current modules divide
+these responsibilities as follows. They may be split further when that makes
+ownership easier to reason about and test; this is not a fixed file count.
 
 All areas may use `contracts.py`; the final column lists other Core
 dependencies. Imports follow this direction, without cycles.
@@ -71,17 +74,30 @@ dependencies. Imports follow this direction, without cycles.
 | Area | Owns | Other Core dependencies |
 | --- | --- | --- |
 | `contracts.py` | Shared JSON value rules and text rendering, result/error and control records, pure codecs | None |
+| `wire.py` | Bounded, length-prefixed JSON framing for private pipes and local sockets | None |
 | `project.py` | Project configuration, paths, metadata publication, local locks | None |
 | `history.py` | Run-log writing and validation, ordered replay, history digests and summaries | `project.py` |
 | `index.py` | CSV import, source indexes, materialized tags, vector storage, cache synchronization | `project.py`, `history.py` |
 | `packs.py` | Warm-pack schemas, inventories, publication, validation, and ingestion through the vector cache | `project.py`, `index.py` |
 | `embed.py` | The two embedding HTTP dialects and the shared cached-embedding operation | `project.py`, `index.py`, `packs.py` |
 | `language/` | Expression construction and SQL compilation, evaluator, verbs, entries, private tag state, search preparation and scoring | None |
-| `prelude.py` | Child bootstrap, control I/O, persistent namespace and cell runner, confinement | `language/` |
-| `kernel.py` | Child lifetime, control exchange, limits, durable cell completion | `project.py`, `history.py`, `index.py`, `embed.py` |
+| `prelude.py` | Child bootstrap, control I/O, persistent namespace and cell runner, confinement | `language/`, `wire.py` |
+| `kernel.py` | Child lifetime, control exchange, limits, durable cell completion | `project.py`, `history.py`, `index.py`, `embed.py`, `wire.py` |
 | `service.py` | Project operations, the shared dataset-open path, session opening, export, local and shared warming | `project.py`, `history.py`, `index.py`, `packs.py`, `embed.py`, `kernel.py` |
-| `local.py` | Per-session host startup, local connections, request admission, and live inspection | `project.py`, `service.py`, `kernel.py` |
+| `local.py` | Per-session host startup, local connections, request admission, and live inspection | `project.py`, `service.py`, `kernel.py`, `wire.py` |
 | `cli.py` | Argument parsing, presentation, exit status | `service.py`, `local.py` |
+
+Within `language/`, `expressions.py` owns inert typed nodes and construction
+checks, `compiler.py` emits SQL, and `scalars.py` implements typed scalar
+operations and RE2 helpers. `state.py` owns the connection and mutation path;
+`evaluator.py` coordinates verbs and Entry reads; `search.py` prepares reusable
+score tables; and `semantic.py` owns exact vector scoring. NumPy is imported
+by the semantic layer, not by the host storage or provider layers.
+
+Dependencies in the table include imports deferred to an operation and
+type-only imports. Keep the kernel import inside `service.open_session` and
+host-only imports on the host path in `local.py`: importing CLI, inspection,
+or warming code must not load `kernel.py`, `prelude.py`, or NumPy.
 
 `contracts.py` is a small dependency-free vocabulary, not a general utilities
 module. Share the value conversion and wire definitions used on both sides
@@ -90,6 +106,15 @@ instead of maintaining matching copies. Configuration belongs in
 They use the shared value rules, but retain their own format versions and
 validation. Use small typed records and ordinary functions, not a schema
 framework or an object hierarchy for every JSON shape.
+
+`wire.py` frames canonical UTF-8 JSON objects with a four-byte unsigned
+big-endian payload length. It handles partial reads/writes and bounds a frame
+before accepting its payload; EOF in a frame is not a submitted cell. Its
+default ceiling is 64 MiB for the local transport. After bootstrap, the child
+channel uses `max(1 MiB, memory_mb * 1 MiB // 4)`. These are internal transport
+bounds, not permission to split or truncate submitted Python, tag values, or
+individual embedding texts. Operation-specific schema and scope validation
+still belongs to the receiving owner.
 
 Keep `quail/__init__.py` inert. The child still starts with
 `[sys.executable, "-m", "quail.prelude"]`. Its dependency closure is
@@ -188,6 +213,10 @@ Dataset paths resolve relative to the manifest. Embedding dimensions are
 learned from vectors and are not a manifest setting. The `[kernel]` values
 configure section 7's limits; they are defaults, not fixed product limits.
 
+CPU and wall seconds accept positive finite numbers. Memory MiB and output
+KiB must be positive integers; `max_limit` must be a nonnegative integer,
+with zero allowing no retrieved entries. Booleans are not numeric settings.
+
 An embedding revision is a non-empty operator designation for fixed model
 weights and embedding behavior. It is required when `embed` is configured;
 it is not inferred from a mutable model name. Section 6 defines its use.
@@ -256,7 +285,9 @@ unescaped Unicode, and no non-finite numbers. Use the shared Python codec for
 these bytes, with `allow_nan=False` when encoding. On decoding, reject
 NaN/Infinity tokens through `parse_constant` and validate all decoded numbers
 as finite, including overflow from numeric literals. Reject strings that
-cannot be encoded as UTF-8.
+cannot be encoded as UTF-8, and reject duplicate object keys rather than
+silently keeping one value. These shared decoding rules also apply to logs,
+warm packs, and private control records.
 
 The descriptor uses effective import behavior, so explicitly selecting the
 already-selected `id` column changes nothing. Changing source bytes or the
@@ -321,6 +352,7 @@ require the historical CSV to be available.
 Never overwrite a destination or share writable files through hard links.
 Forking a historical session is allowed. Forks retain the same rules for
 stable-ID continuation and generated-ID source compatibility.
+Copying history never re-executes its cells or recreates Python variables.
 
 ## 3. Logs, replay, and durable completion
 
@@ -450,7 +482,7 @@ logging. Source/tag name conflicts follow section 2's compatibility rule.
 ### History digests and materialization
 
 The session digest is SHA-256 of canonical JSON containing sorted
-`[log_filename, sha256_of_exact_file_bytes]` pairs. Include valid failed-cell
+`[log_filename, "sha256:<hex of exact file bytes>"]` pairs. Include valid failed-cell
 records, empty files, and ignored trailing fragments in the digest. The
 digest is a cache marker, not an ordering or identity system. It is independent
 of the session directory name, so copied history has the same digest.
@@ -735,7 +767,7 @@ embedding identity, and relevant tag-field revisions where applicable.
 
 Expression construction inspects the cached field catalog and type
 information, but reads no rows and performs no search or embedding.
-Reject unknown fields and invalid method/produce pairs at construction.
+Reject unknown fields and invalid method/result-kind pairs at construction.
 An expression referring to a tag field must also be checked when evaluated,
 since rollback or clearing its last value can remove that field.
 
@@ -821,7 +853,25 @@ with only the documented `re.I`, `re.M`, and `re.S` flags. Translate them to
 RE2 options or inline flags and reject any other flag bits; do not pass a
 Python `re` flag mask as RE2's options argument.
 
+The numeric SQL channel uses signed 64-bit integers or floating-point values.
+An integer result outside that range uses a finite float when representable,
+otherwise None. This does not restrict integers stored inside JSON tags, and
+does not promise arbitrary-precision arithmetic through `.number()` or SQL.
+Regex `search` returns the complete first match; `findall` returns complete
+matches rather than capture-group tuples. A failed search returns None and
+an unmatched `findall` on present text returns an empty list.
+
 ### Verbs and entries
+
+The cell-facing call signatures are:
+
+```python
+count(where=None, by=None)                  # int, or Counter when grouped
+retrieve(where=None, rank=None, limit=10, offset=0)  # list[Entry]
+values(expr, where=None, rank=None, limit=None)     # list of evaluated values
+tag(target, field, value)                   # distinct target count
+fields()                                   # list[FieldInfo]
+```
 
 - `where` is None or a Predicate; `rank` is a number expression or None.
 - `retrieve` defaults to 10. Limit and offset are nonnegative integers
@@ -851,6 +901,13 @@ the plain tuple `("json", canonical_json)`: for example, `{"a": 1}` becomes
 cannot collide. Cross-tabs contain these keys inside their outer tuple.
 This needs no custom key class or separate grouping engine.
 
+`fields()` returns frozen `FieldInfo(name, kind, present)` records. `kind` is
+`"source"` or `"tag"`; `present` counts entries with a non-None value, including
+present empty strings and lists. Order source fields as imported, with
+canonical ID first, then tag fields by name. These are cached catalog reads,
+including earlier writes in the current cell. Host inspection and CLI fields
+serialize the same three properties as JSON objects.
+
 `tag(None, field, value)` targets all entries. Other targets are a
 Predicate, an Entry, or a list of Entries. Deduplicate entry lists by ID
 and validate their dataset version and kernel scope before writing.
@@ -874,9 +931,18 @@ value; it does not silently change after a later tag write. Materialize
 a dict when a caller wants a value snapshot. Source cells can be cached
 because this source version is immutable.
 
-Expose the documented verbs, constructors, error, pre-imported modules,
-and `quail` recovery object. Use an explicit expected public namespace in
-tests; example variable names and transport names are not public bindings.
+List/object tag reads return detached JSON values: mutating one does not
+write a tag. Entry repr is a readable preview and may shorten long values;
+use a lookup for the complete value, not repr as a serialization format.
+
+Expose the five functions above; `Field`, `Random`, `Expression`, `Predicate`,
+`Entry`, `FieldInfo`, and `QuailError`; and the pre-imported `re`, `math`,
+`statistics`, `json`, `itertools`, `collections`, and `Counter`. The `quail`
+recovery object holds the functions, constructors, types, and error, so a
+shadowed verb can be restored with `count = quail.count`. NumPy is preloaded
+but analysis code still imports it to bind a name such as `np`.
+Use an explicit expected public namespace in tests; example variable names
+and transport names are not public bindings.
 Do not reserve ordinary Python assignment names.
 
 ### Execution should follow the size of the work
@@ -964,6 +1030,8 @@ cell transaction. A rollback restores both.
 Embed each complete non-empty rendered value once; its score is cosine
 similarity to the complete query vector. Empty rendered text has no semantic
 vector and scores None, even when the underlying tag is present.
+If the entire field renders empty, return absent scores without requesting a
+query vector. A semantic expression still requires configured semantics.
 
 This first version is suited to rows that are meaningful analysis units,
 such as one survey answer or one prepared excerpt. It provides no passage
@@ -1020,6 +1088,16 @@ response items), and use finite request timeouts with a small fixed retry
 bound for transport, rate-limit, and server failures. Do not retry
 authentication, invalid-input, dimension, or schema errors.
 
+The current HTTP adapter permits three attempts, uses a 15-second socket
+timeout and a 30-second attempt deadline checked between bounded reads, and
+rejects responses above 64 MiB. These internal bounds apply to each provider
+batch; they are not a promise that an arbitrarily large corpus finishes in
+one such interval.
+
+Text batches contain at most 128 values and ordinarily at most 256 KiB of
+JSON-encoded text. One larger complete value travels alone, subject to the
+control-channel and provider limits; it is never split or silently clipped.
+
 `index.py` owns cache reads, vector validation, and writes; `embed.py` owns
 the miss/batch/provider orchestration. Both `kernel.py` and `service.py`
 call that cached operation. Warming needs no `Kernel` instance, child,
@@ -1042,7 +1120,10 @@ numerically safe norms and score each distinct text once, then map scores
 to entries. Check agreement against a small scalar cosine reference in
 tests; a second production scorer is unnecessary. Do not promise bitwise
 identity across numerical libraries or provider recomputations. Equivalent
-warm/cold inputs must agree within a documented numerical tolerance.
+warm/cold inputs must agree within an absolute score tolerance of `1e-5` for
+the same packed vectors. Use that tolerance for scalar-reference and
+resident-versus-streamed scoring checks too. Clamp cosine rounding overshoot
+to `[-1, 1]`; finite negative similarities are valid scores.
 
 Reuse field mappings and normalized matrices across cells while they fit
 within a bounded fraction of the kernel's memory budget. Keep larger
@@ -1103,6 +1184,18 @@ embedding function as a semantic query. `packs.py` owns inventories and pack
 encoding/validation, using `index.py` for vector-cache insertion;
 `service.py` coordinates the work.
 Report selected, reused, and newly embedded value counts, plus any pack path.
+
+Counts describe distinct selected texts: `reused` includes shared-pack hits,
+and `new` counts provider work even if another writer won the same cache key.
+Return `dataset`, selected `fields`, `selected`, `reused`, `new`, `pack`,
+`estimated_bytes`, `bytes`, and `warnings`; `pack` is null and the byte counts
+are zero when no pack is produced. Warming requires at least one non-ID source
+field. An empty value inventory or shard performs no provider work.
+
+`warm` runs synchronously in the calling host, without the child's CPU, wall,
+or RSS budgets. The built-in provider's HTTP bounds still apply. A supplied
+raw provider callable must also bound its own work; local warming does not
+create a kernel worker to enforce a cell deadline.
 
 ### Shard assignment
 
@@ -1211,6 +1304,8 @@ dimensions, finite coordinates, and nonzero norm through the same vector
 validator used for provider results. Reject a malformed or truncated pack
 as a whole, report its path and reason, and continue with other packs or
 ordinary lazy embedding. Missing parts are always acceptable.
+Require canonical base64 as well as successful decoding; re-encoding the
+decoded bytes must reproduce the stored string, including padding.
 
 Validate and stage the complete pack outside a shared-index writer
 transaction. A host TEMP table can stage a large file without retaining
@@ -1252,8 +1347,23 @@ Blocking provider I/O must not prevent limit monitoring, child-liveness
 checks, or local status responses. Use bounded standard-library workers
 where needed; a provider worker returns data to the execution owner, which
 validates and writes the cache. Keep at most one provider batch in flight
-per Kernel initially. This supplies responsiveness without making the Core
+per Kernel. This supplies responsiveness without making the Core
 API asynchronous, adding a cell queue, or sharing connections across workers.
+
+An interrupted provider wait does not necessarily stop the raw callable.
+Retain its outstanding future until it finishes, reject another provider
+batch while it is pending, and discard an unused late result. The worker is
+daemonized so it cannot keep a closing host alive. The current Kernel caps
+one raw call's wait at `ATTEMPTS * (ATTEMPT_SECONDS + REQUEST_TIMEOUT)` from
+`embed.py` (135 seconds); Hosted substitutions use this same boundary.
+
+During host-side embedding work, check the active cell budget while building
+inventories, hashing known packs, validating staged vectors, and between cache
+write batches. Bound inventory checkpoints by source values, including absent
+ones, so wide rows or blank corpora cannot postpone checking until the end.
+Cancellation must propagate as interruption, not mark a valid pack malformed
+or install a completed-ingestion receipt. Already committed vector batches
+remain reusable.
 
 ### Child bootstrap and confinement
 
@@ -1275,6 +1385,8 @@ internal default using concurrent-kernel throughput and CPU use as well as
 single-cell latency; a faster isolated multiply can make several sessions
 slower together. No thread-pool controller dependency or public tuning API
 is needed.
+The current bootstrap sets `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS`,
+`MKL_NUM_THREADS`, and `VECLIB_MAXIMUM_THREADS` to `1` before importing NumPy.
 
 Then load the child package, RE2 and NumPy, create the evaluator on the
 read-only index with its private tables, register UDFs, and create the
@@ -1310,6 +1422,8 @@ the runtime's TEMP operations, including FTS5's shadow-table and TEMP schema
 updates; deny main-schema writes, attach/detach, the SQL `load_extension`
 function, and writable pragmas. Leave extension loading disabled at bootstrap;
 the authorizer does not intercept the Python extension APIs denied above.
+Call `enable_load_extension(False)` only when that Python SQLite build exposes
+the method; builds that omit extension-loading support are also supported.
 Kernel internals are outside the public namespace. Core's confinement
 prevents ordinary accidental access; determined Python introspection is
 outside its trust boundary. Hosted supplies OS isolation for untrusted execution.
@@ -1317,11 +1431,14 @@ outside its trust boundary. Hosted supplies OS isolation for untrusted execution
 ### Cell execution and errors
 
 The cell runner parses once, executes statements, and displays the last
-expression's repr when it is not None. Capture stdout, stderr, display,
-and formatted traceback through the same bounded text sink. Retain only
-the UTF-8 prefix that fits `output_kib`, count omitted bytes, append a
+expression's repr followed by a newline when it is not None. Assignment-only
+cells and a final None display nothing unless the code prints. Capture stdout,
+stderr, display, and formatted traceback through the same bounded text sink.
+Retain only the UTF-8 prefix that fits `output_kib`, count omitted bytes, append a
 truncation notice, and set `truncated`. Formatting runs inside cell limits.
 Do not accumulate unlimited output and truncate it afterward.
+The notice is additional to the retained byte allowance. Bound structured
+error messages and hints too; their presence must not bypass output limits.
 
 Quail errors have type `QuailError`, a message, and an optional actionable hint.
 Ordinary Python exceptions retain their type name and message, with a null
@@ -1371,9 +1488,33 @@ and warm. It owns no kernel registry or process-global state.
 
 `open_session(project, session, dataset=None, fork_from=None, *,
 spawn=None, embed_fn=None)` returns a ready `Kernel`. The caller owns it.
-`Kernel.exec(code)`, `reset()`, and `close()` own live operations.
+The project argument is a resolved `project.Project`; CLI callers obtain it
+through discovery. Import and new-session publication reload the manifest
+under the metadata lock, while an existing-session API open uses its supplied
+Project configuration. API callers reload that Project to pick up edits.
+
+`Kernel.exec(code, *, on_accept=None, on_progress=None)` returns a
+`contracts.Execution`; its `.to_record()` is the public result described below.
+`reset()` returns a `kernel.Runtime`, and `close()` returns None and is
+idempotent on the owning thread. A Kernel is also a context manager.
+`Kernel.runtime` exposes a frozen Runtime observation, and
+`Kernel.opening_warnings` exposes pending opening notices as a tuple. Callback
+`on_accept(CellIdentity)` observes the assigned run/cell, and
+`on_progress(message)` observes bounded host diagnostics. They run on the
+execution owner and must return promptly; an observer's OSError does not
+cancel accepted work.
+
+`spawn(argv, environment, descriptors)` returns a `subprocess.Popen[bytes]`
+compatible local child handle. Preserve the passed control descriptors and
+scrubbed environment; monitoring requires a usable local process ID.
+`embed_fn(config, texts)` receives an `EmbeddingConfig` and a list of complete
+texts and returns one numeric coordinate list per text in the same order.
+It replaces the raw provider call, not cache lookup, vector validation, or
+canonical insertion. `warm(project, dataset, *, field=None, shard=None,
+embed_fn=None, progress=None)` exposes the same raw substitution independently
+of Kernel construction.
 The spawn and raw embedding callables are the only Hosted substitutions
-needed initially; do not generalize them into plugin registries.
+supported here; do not generalize them into plugin registries.
 `local.py` is a local caller of this API, not another execution engine.
 
 Use this command set:
@@ -1483,7 +1624,7 @@ failure; ordinary cell failures leave the kernel usable. With `--json`,
 stdout is one final result object instead of rendered notebook output:
 
 ```json
-{"session":"study","run":"...","cell":1,"output":"11","error":null,"tags_written":0,"truncated":false,"kernel_restarted":false,"warnings":[],"limits":{"cpu_seconds":30,"wall_seconds":120,"memory_mb":1024,"max_limit":1000,"output_kib":64}}
+{"session":"study","run":"...","cell":1,"output":"11\n","error":null,"tags_written":0,"truncated":false,"kernel_restarted":false,"warnings":[],"limits":{"cpu_seconds":30,"wall_seconds":120,"memory_mb":1024,"max_limit":1000,"output_kib":64}}
 ```
 
 `warnings` carries opening warnings, including source changes and ignored
@@ -1493,6 +1634,9 @@ diagnostics. `limits` reports the settings actually applied by the host,
 even if the manifest has since changed. Report the run/cell
 identity on execution-related host errors when known. Failures before a
 cell is accepted return an error without inventing a cell record or result.
+Their `--json` shape is `{"error":{"type":"...","message":"...","hint":null}}`,
+with a diagnostic on stderr. A completed execution's run/cell always identifies
+its log record, even if recovery has already opened a different current run.
 Invalid CLI arguments use ordinary usage errors. There is no public stdin
 protocol or terminal-mode handling.
 
@@ -1507,6 +1651,14 @@ when no owner is running it succeeds without starting one or creating a
 session. Neither operation executes a cell. Their JSON results contain
 `reset:true` with session, new run, warnings, and applied limits, or
 `closed:true` with session. Human output confirms the same outcome.
+Reset also includes the Runtime fields `state`, `cell`, `last_completed`, and
+`reason`: it is idle with a null current cell/reason when ready. A live reset
+retains `last_completed` as an observation of the previous run; a stopped
+session starts with no such live observation. Opening a stopped session for
+reset creates exactly one new run and returns its startup result, without a
+second reset or status request. Close returns
+`{"closed":true,"session":"study","state":"stopped"}` for both live and already
+stopped hosts.
 
 An accepted cell finishes under its existing limits even if the client
 disconnects, is interrupted, or loses stdout. Completion still follows
@@ -1540,6 +1692,9 @@ errors, timeouts, or an owner still initializing are not proof of a stopped
 session. Preserve an unreachable owner's files and report the problem.
 Check project/session and protocol compatibility when connecting; an
 incompatible running host requires an explicit close, not replacement.
+The current private local protocol version is `2`, independent of log and
+manifest versions. Explicit close permits a different protocol number while
+still requiring the recognized request shape and matching project/session.
 
 Use one framed request per client connection: exec, reset, close, or private
 status. Malformed or incomplete requests execute and log nothing and do not
@@ -1551,6 +1706,10 @@ disconnected clients must not block completion or inspection. Bound
 connection attempts, but do not impose a fixed short response timeout on
 an accepted cell; its existing execution/provider limits govern the wait.
 No request IDs, retry protocol, or additional durable result store is needed.
+Bound connection workers and progress mailboxes as well. Progress may be
+dropped under backpressure; preserve the acceptance identity and final result
+for delivery while the connection remains usable. The single admitted-work
+mailbox is a handoff to the owner, not a queue of competing cell requests.
 
 The internal child protocol remains ready, numbered run/result, and bounded
 embedding request/response records during a cell. Tag deltas and vector data
@@ -1628,23 +1787,23 @@ from the completed CLI.
 
 ## 9. Build and verification
 
-Build useful paths through the system. The first runnable slice must
-exercise the real host/child boundary and durable log; it need not have
-semantic search.
+The core paths described here are implemented. Maintain the following
+acceptance workflows across changes; this is a standing verification contract,
+not an outstanding sequence of rebuild milestones. The listed test modules
+are the existing homes for coverage, not a claim that every required edge
+case below already has a regression test.
 
-| Slice | Deliverable | Proof |
+| Workflow | Required proof | Existing test modules |
 | --- | --- | --- |
-| 1 | Packaging, minimal project/import/index, CLI info and persistent execution, Field reads, count/retrieve, tag, log replay | Through separate shell calls, initialize a small CSV project, reuse variables/functions/classes across inline and file cells, fail a cell, close, reopen, and recover committed tags; verify this path in the target agent harness |
-| 2 | Complete language, values/grouping, lexical search, entry behavior, fields/export/fork | Agent workflows run through the same engine with bulk database operations; another session cannot change lexical scores |
-| 3 | Limits, persistence failure recovery, locking and source/ID continuity | Concurrent local sessions work; stable-ID edits preserve sessions and positional IDs cannot reassign tags |
-| 4 | Provider adapters, one cached embedding path, exact semantic scoring, local and shared warming | Warm/cold and bounded-batch scoring agree; repeated queries reuse scores; workers produce complete mergeable shards; a slow provider does not block another session's tag commit |
-| 5 | Documentation alignment, installed-wheel and real-harness checks | Run the download-to-analysis recipe; the actual harness preserves Python objects, recovers errors, closes cleanly, exports, and continues a cloned project with shared vectors |
+| Persistent analysis | Through separate clients, import a CSV, reuse Python objects across inline/file cells, fail a cell, close, reopen, and recover only committed tags | `test_cli.py`, `test_child.py`, `test_prelude.py`, `test_kernel.py` |
+| Language and reports | Bulk and Entry operations use one engine; grouping, lexical search, fields, export, and fork retain their contracts | `test_language.py`, `test_language_scaling.py`, `test_service.py`, `test_manual.py` |
+| Identity, durability, and concurrency | Stable-ID edits preserve sessions; generated IDs cannot reassign tags; commit failures and concurrent sessions retain the log's authority | `test_project.py`, `test_history.py`, `test_index.py`, `test_kernel.py`, `test_local.py` |
+| Semantic analysis and sharing | Warm/cold and bounded scoring agree; queries reuse work; complete shards compose; provider waits permit another session's commit | `test_embed.py`, `test_semantic.py`, `test_packs.py`, `test_kernel.py`, `test_cli.py` |
+| Distribution and documentation | The checkout and installed wheel work from a study outside the checkout, and package the exact canonical manual | `test_cli.py`, `test_manual.py`, `test_architecture.py`, `test_contracts.py` |
 
-Each slice can be several small commits. Introduce the relevant guards
-with the behavior they protect; slice 3 completes failure coverage rather
-than licensing an unsafe first implementation. Create files as needed,
-not as empty placeholders. Get a working CLI path before investing in
-warming optimizations.
+All test modules above live under `tests/`. Keep failure guards with the
+behavior they protect and verify a complete user path when changing a
+boundary, rather than relying only on isolated unit checks.
 
 ### Engineering checks
 
@@ -1656,7 +1815,27 @@ and smoke-test it. Exercise the small platform-dependent lifecycle and
 confinement surface on both supported OSes before claiming support;
 no broad dependency or version matrix is needed.
 
-Apply linting and type checking from the first slice. Type the internal
+The current `.github/workflows/check.yml` runs Python 3.12 on Ubuntu and
+macOS. Its checkout checks are:
+
+```sh
+uv sync --locked --python 3.12
+uv run --locked ruff format --check quail tests
+uv run --locked ruff check quail tests
+uv run --locked mypy quail
+uv run --locked pytest
+uv build
+```
+
+The wheel job installs `dist/*.whl` into a separate environment and runs
+`tests/test_cli.py` with `QUAIL_TEST_EXECUTABLE` pointing to that environment's
+absolute Python executable. The tests create studies outside the checkout
+and compare the installed manual with the repository's canonical text.
+Report skips separately from passes: environments without process counters
+or local socket facilities can skip lifecycle checks, which is not evidence
+that those contracts were exercised.
+
+Apply linting and type checking to changes throughout Core. Type the internal
 operation boundaries and use strict mypy checking for Core; keep unavoidable
 dynamic typing at the user-namespace and external-library boundaries instead
 of propagating unstructured dictionaries or `Any` through the implementation.
@@ -1697,15 +1876,21 @@ Organize tests around these observable contracts:
 | Durable completion | Client loss during execution and after log sync, child death before/after result, log append/fsync uncertainty, cache failure after log sync, host death before reply; recover the outcome without executing code twice |
 | Private state | Read-your-writes through the same bulk/Entry mutation path, disk-backed tag working tables with bounded memory, newly created fields, failed-cell rollback of tags/counts/FTS and invalidation of Entry/search caches, variables/functions/classes retained on normal failure |
 | Concurrency | Two kernels read then tag without a shared snapshot upgrade; embedding waits coexist with another session's commit; exports see committed state; completed and failed cells release read snapshots so idle kernels do not prevent WAL checkpoint progress |
-| Language | Method/produce pairs, nested expressions and helper classes, closures/comprehensions and dataclasses across cells, normal Python identity and rejection of bool filters, frozen literal arguments with live field reads, None propagation, absent length and inequality versus negation, numeric/mixed-list comparison, Python scalar equality including True/1/1.0 in comparisons and Counter grouping, recursive text conversion, canonical container grouping, Unicode operations, RE2 flag translation/rejection, standard seed types |
+| Language | Method/result-kind pairs, nested expressions and helper classes, closures/comprehensions and dataclasses across cells, normal Python identity and rejection of bool filters, frozen literal arguments with live field reads, None propagation, absent length and inequality versus negation, numeric/mixed-list comparison, Python scalar equality including True/1/1.0 in comparisons and Counter grouping, recursive text conversion, canonical container grouping, Unicode operations, RE2 flag translation/rejection, standard seed types, immutable FieldInfo records |
 | Search | Isolated field/session BM25, absent CSV cells versus present empty tags and nonmatches, phrase adjacency versus unquoted punctuation (hyphens, underscores, colons), literal operator words, unclosed/wordless queries, Unicode61 diacritics and single-pass stemming, equivalent warm/cold and bounded-batch scores, repeated-query reuse, precise invalidation after writes/rollback, cache eviction without changed answers |
-| Embeddings | Full-value requests, Ollama truncation disabled, input ordering, finite packed vectors and safe norms at small/large magnitudes, dimension races, revision separation, bounded retries |
+| Embeddings | Full-value requests, Ollama truncation disabled, input ordering, finite packed vectors and safe norms at small/large magnitudes, dimension races, revision separation, bounded retries, no overlapping batch after an interrupted provider wait |
 | Shared warming | Disjoint/balanced shard coverage, row-order-independent assignment, mixed shard-count composition, complete reused/new output, atomic publication, GitHub part sizes, cold-clone use of partial merged packs, whole-pack validation before batched ingestion, interrupted ingestion without a completion receipt, changed-file invalidation, duplicate keys, address independence and revision separation |
 | Local lifetime | Separate clients reuse one host/child; concurrent startup and stale endpoints cannot create competing owners; connection errors do not replace live owners; busy exec/reset/close and responsive status during execution/provider waits; reset preserves the live snapshot/configuration; close cleans up before success and never starts a stopped host; host death cleans up its child |
 | Confinement | Read-only main with working TEMP/FTS and rollback; denied ATTACH and SQL/Python extension loading; denied filesystem mutations including link creation and unaudited creation helpers; ordinary permitted imports and NumPy computation still work |
 | Runtime and CLI | Inline/file equivalence and info invocation metadata; configured versus applied limits; bounded output; CPU/wall/RSS failure including caught interrupts; fresh-start/replacement and interrupted-append warnings; long Unicode files and complete results; private socket access and long project paths; session validation errors; safe project-relative exports; exit status; actual harness variable persistence |
 
-Run examples from the corrected agent document against a fixture that
+Also cover deadline checks during wide/absent inventories and pack ingestion,
+interruption without labeling valid packs malformed, exact reset/close JSON
+shapes, and one-run startup for reset of a stopped session. Preserve the
+acceptance identity under progress backpressure and test human restart
+diagnostics alongside the JSON flag; section 10 records current gaps.
+
+Run examples from the canonical usage manual against a fixture that
 supplies their assumed fields and values. Check an explicit public namespace.
 Do not parse every inline code span as a required exported name.
 Verify that the first-run path works without `info`, that inspection creates
@@ -1752,11 +1937,40 @@ temporary results; a speedup on one fixture is evidence for a choice, not
 a universal latency promise. Add further indexes or planner machinery only
 for an identified bottleneck.
 
-The initial Core is complete when an agent can import, inspect, search,
+Core's acceptance criteria require that an agent can import, inspect, search,
 annotate, recover from interrupted appends, export, share warming work, and
 continue a session from its text project, including source edits with stable
-IDs. Build order does not make later slices optional. Automatic salvage of
-invalid complete log records, identity remapping, a worker coordinator,
-distributed conflict resolution tools, a machine-wide service manager,
+IDs. Automatic salvage of invalid complete log records, identity remapping,
+a worker coordinator, distributed conflict resolution tools, a machine-wide service manager,
 extra backend/provider frameworks, and Hosted policy remain outside Core.
 The per-session local host in section 8 is the full background-process scope.
+
+## 10. Known conformance gaps
+
+The audit against main at `6e8b0dd8` found the following implementation gaps.
+These notes describe current behavior without overriding the requirements
+above. Resolve each with implementation and regression coverage, then remove
+its note; passing the existing suite alone does not establish full conformance.
+
+1. **Human restart diagnostics.** Sections 3 and 8 require a diagnostic when
+   a child is replaced. `Kernel.exec` sets `Execution.kernel_restarted`, but
+   `cli._present` does not inspect that flag in text mode. When there are no
+   opening warnings, a successful cell after replacement can print only its
+   ordinary output, concealing the loss of earlier Python state. Preserve the
+   JSON flag and add a stderr diagnostic, including for replacement after an
+   otherwise successful cell.
+2. **Acceptance identity under backpressure.** `local._Delivery.emit` drops
+   the oldest queued notification when its eight-item mailbox fills, even
+   when that item is `accepted`. Enqueuing acceptance followed by eight
+   progress messages before the reader drains the mailbox loses the run/cell
+   identity required by section 8 for disconnect diagnostics. Prefer dropping
+   progress while retaining acceptance and the final response, without
+   blocking the execution owner.
+3. **Historical inspection without the source.** Section 3 permits historical
+   listings to validate logs without the source. `history.records` and
+   `service.fork` support that, but `service.info` and `service.sessions` only
+   produce history summaries after `open_dataset` succeeds. With an unavailable
+   CSV they report source unavailability and omit the history summary. Provide
+   source-independent validated history information while keeping current
+   materialized tags, field counts, and orphan counts unavailable; do not
+   invent those source-dependent values.
