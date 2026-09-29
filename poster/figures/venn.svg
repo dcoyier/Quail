@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1296 436" width="1296" height="436">
+  <style>
+    text { font-family: Inter, sans-serif; fill: #1F2328; }
+    .t { font-size: 25px; font-weight: 700; text-anchor: middle; }
+    .s { font-size: 22px; fill: #5B6168; }
+    .id { font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 700; text-anchor: middle; }
+    .bad { fill: #C9453A; text-decoration: line-through; }
+    .q { font-size: 22px; font-style: italic; }
+    text { font-variant-ligatures: none; }
+  </style>
+  <text class="t" x="440" y="36">keyword: <tspan style="font-family:'JetBrains Mono',monospace;font-weight:600">"parking"</tspan></text>
+  <text class="t" x="856" y="36">meaning: <tspan style="font-weight:500;font-style:italic">no place to park&#8230;</tspan></text>
+
+  <circle cx="520" cy="246" r="186" fill="#3B6EA8" fill-opacity="0.12" stroke="#3B6EA8" stroke-width="4"/>
+  <circle cx="776" cy="246" r="186" fill="#7A5BC7" fill-opacity="0.12" stroke="#7A5BC7" stroke-width="4"/>
+
+  <text class="id" x="414" y="178">r01</text>
+  <text class="id" x="414" y="220">r14</text>
+  <text class="id bad" x="414" y="276">r04</text>
+  <text class="id bad" x="414" y="318">r13</text>
+
+  <text class="id" x="648" y="190">r07</text>
+  <text class="id" x="648" y="234">r21</text>
+  <text class="id" x="648" y="278">r24</text>
+  <text class="id" x="648" y="322">r28</text>
+
+  <text class="id" x="882" y="158">r02</text>
+  <text class="id" x="882" y="210">r05</text>
+  <text class="id" x="882" y="262">r10</text>
+  <text class="id" x="882" y="314">r17</text>
+
+  <g text-anchor="end">
+    <text class="s" x="296" y="210" style="fill:#C9453A;font-weight:600">false positives</text>
+    <text class="q" x="296" y="244">&#8220;a parking lot</text>
+    <text class="q" x="296" y="272">of ideas&#8221;</text>
+    <text class="q" x="296" y="310">&#8220;put it in the</text>
+    <text class="q" x="296" y="338">parking lot&#8221;</text>
+  </g>
+  <g>
+    <text class="s" x="1002" y="158" style="fill:#7A5BC7;font-weight:600">no keyword</text>
+    <text class="q" x="1002" y="192">&#8220;circling for</text>
+    <text class="q" x="1002" y="220">a spot&#8221;</text>
+    <text class="q" x="1002" y="258">&#8220;the garage</text>
+    <text class="q" x="1002" y="286">is full&#8221;</text>
+    <text class="q" x="1002" y="324">&#8220;nowhere to</text>
+    <text class="q" x="1002" y="352">leave a car&#8221;</text>
+  </g>
+</svg>

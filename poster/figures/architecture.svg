@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1296 1200" width="1296" height="1200">
+  <style>
+    text { font-family: Inter, sans-serif; fill: #1F2328; }
+    .t { font-size: 30px; font-weight: 700; }
+    .l { font-size: 25px; font-weight: 600; }
+    .s { font-size: 23px; fill: #5B6168; }
+    .m { font-family: 'JetBrains Mono', monospace; font-size: 22px; }
+    .ln { fill: none; stroke: #1F2328; stroke-width: 3.5; stroke-linecap: round; }
+    .chip { fill: #fff; stroke: #C9CDD2; stroke-width: 2; }
+    text { font-variant-ligatures: none; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1F2328"/>
+    </marker>
+  </defs>
+
+  <!-- agent -->
+  <rect x="348" y="10" width="600" height="120" rx="60" fill="#1F2328"/>
+  <text x="648" y="64" text-anchor="middle" style="font-size:32px;font-weight:800;fill:#fff">Agent</text>
+  <text x="648" y="100" text-anchor="middle" style="font-size:23px;fill:#C9CDD2">any harness that can run a shell command</text>
+
+  <path class="ln" d="M560,140 L560,262" marker-end="url(#a)"/>
+  <text class="l" x="540" y="186" text-anchor="end">one cell per command</text>
+  <text class="m" x="540" y="220" text-anchor="end">quail exec S -c CODE</text>
+  <path class="ln" d="M736,262 L736,140" marker-end="url(#a)"/>
+  <text class="l" x="756" y="186">result, then the client exits</text>
+  <text class="s" x="756" y="220">text, or one JSON object</text>
+
+  <!-- machine boundary -->
+  <rect x="6" y="236" width="1284" height="956" rx="26" fill="none" stroke="#9AA0A6" stroke-width="2.5" stroke-dasharray="12 10"/>
+  <rect x="1024" y="222" width="240" height="30" fill="#fff"/>
+  <text class="s" x="1252" y="245" text-anchor="end">local machine or VM</text>
+
+  <!-- host -->
+  <rect x="40" y="272" width="1216" height="206" rx="18" fill="#F1F2F4" stroke="#1F2328" stroke-width="3"/>
+  <text class="t" x="70" y="318">Session host</text>
+  <text class="s" x="290" y="318">background process, one per session, reached over a Unix socket</text>
+  <g style="font-size:23px;font-weight:600">
+    <rect class="chip" x="70" y="346" width="262" height="100" rx="12"/>
+    <text x="201" y="388" text-anchor="middle">runs one cell</text>
+    <text x="201" y="418" text-anchor="middle">at a time</text>
+    <rect class="chip" x="352" y="346" width="262" height="100" rx="12"/>
+    <text x="483" y="388" text-anchor="middle">enforces limits</text>
+    <text x="483" y="418" text-anchor="middle" style="font-weight:400;fill:#5B6168">CPU &#183; wall &#183; memory</text>
+    <rect class="chip" x="634" y="346" width="262" height="100" rx="12"/>
+    <text x="765" y="388" text-anchor="middle">writes the log</text>
+    <text x="765" y="418" text-anchor="middle" style="font-weight:400;fill:#5B6168">before it replies</text>
+    <rect class="chip" x="916" y="346" width="310" height="100" rx="12"/>
+    <text x="1071" y="388" text-anchor="middle">fetches embeddings</text>
+    <text x="1071" y="418" text-anchor="middle" style="font-weight:400;fill:#5B6168">only for unseen text</text>
+  </g>
+
+  <!-- kernel -->
+  <rect x="40" y="560" width="790" height="340" rx="18" fill="#FFF8EE" stroke="#E0912F" stroke-width="4"/>
+  <text class="t" x="70" y="606">Python kernel</text>
+  <text class="s" x="290" y="606">sandboxed child process</text>
+  <g>
+    <rect x="70" y="632" width="300" height="60" rx="10" fill="#FCEBD3" stroke="#E0912F" stroke-width="2.5"/>
+    <text class="m" x="90" y="670">[1] body = Field(&#8230;)</text>
+    <rect x="70" y="702" width="300" height="60" rx="10" fill="#FCEBD3" stroke="#E0912F" stroke-width="2.5"/>
+    <text class="m" x="90" y="740">[2] retrieve(&#8230;)</text>
+    <rect x="70" y="772" width="300" height="60" rx="10" fill="#fff" stroke="#E0912F" stroke-width="3.5"/>
+    <text class="m" x="90" y="810">[3] tag(&#8230;)  &#9656;</text>
+  </g>
+  <text class="l" x="400" y="656">persistent namespace</text>
+  <text class="s" x="400" y="688">variables, functions, classes</text>
+  <text class="l" x="400" y="746">analysis language</text>
+  <text class="m" x="400" y="780">Field  count  retrieve</text>
+  <text class="m" x="400" y="812">values  tag</text>
+  <text x="70" y="872" style="font-size:24px;font-weight:600;fill:#9A5B12">confined: no network, no file writes, no subprocesses</text>
+
+  <!-- host <-> kernel -->
+  <path class="ln" d="M300,486 L300,552" marker-end="url(#a)"/>
+  <text class="s" x="316" y="528">cell code</text>
+  <path class="ln" d="M600,552 L600,486" marker-end="url(#a)"/>
+  <text class="s" x="616" y="528">output + tag changes</text>
+
+  <!-- log -->
+  <rect x="880" y="560" width="376" height="190" rx="18" fill="#D5EEE8" stroke="#2E8B7A" stroke-width="4"/>
+  <text class="t" x="908" y="604">Session log</text>
+  <text class="s" x="908" y="640">JSONL per kernel run:</text>
+  <text class="s" x="908" y="670">code, output, and tags</text>
+  <text class="l" x="908" y="720" style="fill:#2E8B7A">the source of truth</text>
+  <path class="ln" d="M960,486 L960,552" marker-end="url(#a)" style="stroke:#2E8B7A"/>
+
+  <!-- provider -->
+  <rect x="880" y="780" width="376" height="160" rx="18" fill="#fff" stroke="#9AA0A6" stroke-width="3" stroke-dasharray="10 8"/>
+  <text class="t" x="908" y="824">Embedding model</text>
+  <text class="s" x="908" y="860">Ollama or OpenAI-</text>
+  <text class="s" x="908" y="890">compatible; may be remote</text>
+  <path class="ln" d="M1236,486 L1236,772" marker-end="url(#a)" style="stroke:#9AA0A6"/>
+
+  <!-- storage -->
+  <rect x="40" y="990" width="500" height="170" rx="18" fill="#DCE7F4" stroke="#3B6EA8" stroke-width="4"/>
+  <text class="t" x="70" y="1034">SQLite, read-only</text>
+  <text class="s" x="70" y="1070">source rows &#183; FTS5 keyword index</text>
+  <text class="s" x="70" y="1100">private tag tables per kernel</text>
+  <text class="s" x="70" y="1130">rebuilt from the log on open</text>
+
+  <rect x="580" y="990" width="376" height="170" rx="18" fill="#DCE7F4" stroke="#3B6EA8" stroke-width="4"/>
+  <text class="t" x="608" y="1034">Vector cache</text>
+  <text class="s" x="608" y="1070">NumPy cosine scoring;</text>
+  <text class="s" x="608" y="1100">each distinct text</text>
+  <text class="s" x="608" y="1130">embedded once</text>
+
+  <path class="ln" d="M290,982 L290,908" marker-end="url(#a)"/>
+  <path class="ln" d="M330,908 L330,982" marker-end="url(#a)"/>
+  <text class="s" x="350" y="954">compiled SQL</text>
+  <path class="ln" d="M720,982 L720,908" marker-end="url(#a)"/>
+  <text class="s" x="740" y="954">scores</text>
+
+  <path class="ln" d="M1068,948 L1068,990 Q1068,1040 1010,1056 L964,1070" marker-end="url(#a)" style="stroke:#9AA0A6"/>
+</svg>

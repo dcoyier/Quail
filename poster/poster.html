@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Quail: an environment for agentic qualitative analysis</title>
+<link rel="stylesheet" href="poster.css">
+</head>
+<body>
+<div class="poster">
+
+<header>
+  <img class="logo" src="../quail.png" alt="Quail logo">
+  <div>
+    <h1>Quail <span>&mdash; an environment for agentic qualitative analysis</span></h1>
+    <p class="sub">A coding agent explores a corpus of text in a persistent Python kernel, with a small query language and annotations that outlast the kernel and travel through git.</p>
+    <div class="authors"><span class="placeholder">Author Name</span> &nbsp;&middot;&nbsp; <span class="placeholder">Affiliation</span> &nbsp;&middot;&nbsp; <span class="placeholder">email</span></div>
+  </div>
+  <div class="qr">
+    <img src="figures/qr.svg" alt="QR code for github.com/dcoyier/Quail">
+    <b>github.com/dcoyier/Quail</b><br>US-RSE&rsquo;26 &middot; Apache-2.0
+  </div>
+</header>
+
+<div class="cols">
+
+<!-- ============ column 1: why ============ -->
+<div class="col">
+
+  <section class="panel">
+    <h2><span class="n">1</span>Two ideas, one environment</h2>
+    <p class="lead">Retrieval finds passages that look relevant. Coding agents iterate on code and results. Qualitative analysis needs both, <b>across the whole corpus</b>: counts, codes, and checks against samples.</p>
+    <figure><img src="figures/ideas.svg" alt="RAG and coding agents combine into Quail"></figure>
+    <div class="callout">
+      <b>&ldquo;Coding,&rdquo; in both senses</b>
+      In qualitative research, <i>coding</i> means labeling passages with themes. Here a coding agent does it with <code>tag(where, "topic", "parking")</code>.
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2><span class="n">2</span>Four design questions</h2>
+    <figure style="margin-top:0"><img src="figures/loop.svg" alt="Agent loop with numbered design questions"></figure>
+    <div class="cards">
+      <div class="card"><h3><i>1</i>Its tools?</h3>
+        <p>One: run a Python cell, with a small language of fields, predicates, and four verbs. The agent composes.</p></div>
+      <div class="card"><h3><i>2</i>Its environment?</h3>
+        <p>A <b>study</b>: plain-text config, source CSVs, and session logs, shared through git.</p></div>
+      <div class="card"><h3><i>3</i>Can it change it?</h3>
+        <p>Only <b>tags</b>, in its own session, all-or-nothing per cell. No network, file writes, or subprocesses.</p></div>
+      <div class="card"><h3><i>4</i>What comes back?</h3>
+        <p>What a notebook shows: output, last value, or traceback. Bounded, with a hint on errors.</p></div>
+    </div>
+  </section>
+
+  <section class="panel grow">
+    <h2><span class="n">3</span>Local first, hosted when needed</h2>
+    <figure style="margin-top:0"><img src="figures/shapes.svg" alt="One Quail core with a local CLI adapter and a hosted wrapper"></figure>
+    <div class="two">
+      <p style="margin:0"><b>Local:</b> scales with the agents, debugs anywhere, and has no server to run.</p>
+      <p style="margin:0"><b>Hosted:</b> keeps sensitive data in one place, at the cost of operations and latency.</p>
+    </div>
+    <p class="muted" style="margin:22px 0 0">Quail began as a hosted MCP server; the rebuild made local the default.</p>
+  </section>
+
+</div>
+
+<!-- ============ column 2: how ============ -->
+<div class="col">
+
+  <section class="panel">
+    <h2><span class="n">4</span>How a cell runs</h2>
+    <p class="lead">Each shell command submits one cell. A background host keeps the kernel alive between commands, so variables persist as in a notebook.</p>
+    <figure><img src="figures/architecture.svg" alt="Architecture: agent, session host, sandboxed Python kernel, SQLite, vector cache, embedding model, session log"></figure>
+    <ul class="tight">
+      <li>Verbs compile to SQL <b>inside the kernel</b>; only unseen text goes to the embedding model.</li>
+      <li>The log is written <b>before</b> the reply; SQLite is a cache rebuilt from it.</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2><span class="n">5</span>A small analysis language</h2>
+    <p>Expressions are inert descriptions that live in Python variables, functions, and classes; verbs run them.</p>
+    <table>
+      <tr><td><code>Field("body")</code></td><td>a column, per entry</td></tr>
+      <tr><td><code>.lower() .search() .length()</code></td><td>transform values</td></tr>
+      <tr><td><code>== &lt; .isin() &amp; | ~</code></td><td>compose predicates</td></tr>
+      <tr><td><code>.lexical(q) .semantic(q)</code></td><td>keyword and meaning scores</td></tr>
+      <tr class="verb"><td><code>count(where, by)</code></td><td>a number or cross-tab</td></tr>
+      <tr class="verb"><td><code>retrieve(where, rank)</code></td><td>entries to read</td></tr>
+      <tr class="verb"><td><code>values(expr, where)</code></td><td>a list for NumPy</td></tr>
+      <tr class="verb"><td><code>tag(target, field, value)</code></td><td>a durable annotation</td></tr>
+    </table>
+  </section>
+
+  <section class="panel grow">
+    <h2><span class="n">6</span>What lasts</h2>
+    <p class="lead">The source never changes. Tags commit per cell and outlive the kernel. Variables are working memory.</p>
+    <figure><img src="figures/lifetimes.svg" alt="Timeline of source, tags, and variables across reset, close, and clone"></figure>
+    <p class="muted" style="margin:0">Quail never re-runs code for the agent; after a lost response, the log says what committed.</p>
+  </section>
+
+</div>
+
+<!-- ============ column 3: in practice ============ -->
+<div class="col">
+
+  <section class="panel">
+    <h2><span class="n">7</span>A session, cell by cell</h2>
+    <p>Real output on a 30-response survey written for this poster; each cell is one <code>quail exec</code>.</p>
+
+    <div class="cell"><pre class="in" data-n="cell 1">body = Field(<span class="st">"body"</span>)
+kw  = body.<span class="fn">lexical</span>(<span class="st">"parking"</span>) &gt; <span class="kw">0</span>
+sem = body.<span class="fn">semantic</span>(<span class="st">"no place to park near the building"</span>) &gt; <span class="kw">0.52</span>
+<span class="fn">count</span>(kw), <span class="fn">count</span>(sem), <span class="fn">count</span>(kw &amp; sem)</pre><pre class="out">(8, 8, 4)</pre></div>
+
+    <div class="cell"><pre class="in" data-n="cell 2"><span class="kw">for</span> e <span class="kw">in</span> <span class="fn">retrieve</span>(kw &amp; ~sem):
+    print(<span class="st">"keyword only"</span>, e.id, e[<span class="st">"body"</span>][:<span class="kw">44</span>])
+<span class="kw">for</span> e <span class="kw">in</span> <span class="fn">retrieve</span>(sem &amp; ~kw):
+    print(<span class="st">"meaning only"</span>, e.id, e[<span class="st">"body"</span>][:<span class="kw">44</span>])</pre><pre class="out">keyword only r01 The parking permit went up again this year a
+<span class="hi">keyword only r04 Our team keeps a parking lot of ideas on the</span>
+<span class="hi">keyword only r13 When a meeting runs long, the chair says to </span>
+keyword only r14 The parking permit portal logged me out thre
+meaning only r02 I spend fifteen minutes every morning circli
+meaning only r05 The garage is full by 8:30 so I end up walki
+meaning only r10 There is nowhere to leave a car close to the
+meaning only r17 I would come in more often if I could reliab</pre></div>
+
+    <figure><img src="figures/venn.svg" alt="Venn diagram of keyword and meaning matches"></figure>
+
+    <div class="cell"><pre class="in" data-n="cell 3"><span class="fn">tag</span>(kw | sem, <span class="st">"topic"</span>, <span class="st">"parking"</span>)
+<span class="fn">tag</span>(Field(<span class="st">"id"</span>).isin([<span class="st">"r04"</span>, <span class="st">"r13"</span>]), <span class="st">"topic"</span>, None)
+<span class="fn">count</span>(where=Field(<span class="st">"topic"</span>) == <span class="st">"parking"</span>, by=Field(<span class="st">"dept"</span>))</pre><pre class="out">Counter({'admin': 4, 'it': 3, 'facilities': 2, 'research': 1})</pre></div>
+
+    <div class="two">
+      <div class="cell shell"><pre class="in">$ quail exec poster --reset
+<span class="fn">count</span>(by=Field(<span class="st">"topic"</span>))</pre><pre class="out">Counter({None: 20,
+         'parking': 10})</pre></div>
+      <div class="cell shell"><pre class="in"><span class="cm"># after the reset</span>
+kw</pre><pre class="out err">NameError: name 'kw'
+  is not defined</pre></div>
+    </div>
+    <p class="muted" style="margin:0">Tags survived the reset; the variable did not.</p>
+  </section>
+
+  <section class="panel">
+    <h2><span class="n">8</span>A study is a git directory</h2>
+    <figure style="margin-top:0"><img src="figures/study.svg" alt="Study directory and two agents sharing sessions through git"></figure>
+    <p style="margin:0">Separate sessions write separate logs, so parallel agents merge cleanly.</p>
+  </section>
+
+  <section class="panel grow">
+    <h2><span class="n">9</span>Status and open questions</h2>
+    <p>Core implemented and tested. A first study runs on cloud agents:</p>
+    <figure style="margin:14px 0 24px"><img src="figures/cloud.svg" alt="Deployment: a Slack request starts a cloud VM from a snapshot; the agent runs cells and pushes logs"></figure>
+    <ul class="tight">
+      <li>How should agent coding be compared with human coders&rsquo;?</li>
+      <li>Where should an analyst review or revise tags?</li>
+    </ul>
+  </section>
+
+</div>
+</div>
+
+<footer>
+  <span>Python 3.12+ &middot; SQLite FTS5 &middot; NumPy &middot; RE2 &middot; Ollama or OpenAI-compatible embeddings</span>
+  <span>Panel 7: real Quail 0.94.0a0 output (traceback trimmed); reproduce with <code>poster/demo/session.sh</code></span>
+</footer>
+
+</div>
+</body>
+</html>

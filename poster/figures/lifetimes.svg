@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1296 560" width="1296" height="560">
+  <style>
+    text { font-family: Inter, sans-serif; fill: #1F2328; }
+    .l { font-size: 27px; font-weight: 700; }
+    .s { font-size: 23px; fill: #5B6168; }
+    .e { font-size: 23px; font-weight: 600; text-anchor: middle; }
+    .ev { stroke: #9AA0A6; stroke-width: 2.5; stroke-dasharray: 8 7; }
+    .x { stroke: #1F2328; stroke-width: 5; stroke-linecap: round; }
+  </style>
+
+  <!-- event lines -->
+  <line class="ev" x1="640" y1="40" x2="640" y2="470"/>
+  <line class="ev" x1="900" y1="40" x2="900" y2="470"/>
+  <line class="ev" x1="1030" y1="40" x2="1030" y2="470"/>
+  <text class="e" x="640" y="506">reset</text>
+  <text class="e" x="900" y="506">close,</text>
+  <text class="e" x="900" y="536">git push</text>
+  <text class="e" x="1030" y="506">clone,</text>
+  <text class="e" x="1030" y="536">reopen</text>
+
+  <!-- cells lane -->
+  <text class="l" x="0" y="80">Cells</text>
+  <g>
+    <rect x="290" y="52" width="40" height="40" rx="6" fill="#FCEBD3" stroke="#E0912F" stroke-width="3"/>
+    <rect x="370" y="52" width="40" height="40" rx="6" fill="#FCEBD3" stroke="#E0912F" stroke-width="3"/>
+    <rect x="450" y="52" width="40" height="40" rx="6" fill="#FCEBD3" stroke="#E0912F" stroke-width="3"/>
+    <circle cx="470" cy="72" r="9" fill="#2E8B7A"/>
+    <rect x="530" y="52" width="40" height="40" rx="6" fill="#F8DCD8" stroke="#C9453A" stroke-width="3"/>
+    <text x="550" y="81" text-anchor="middle" style="font-size:26px;font-weight:800;fill:#C9453A">!</text>
+    <rect x="700" y="52" width="40" height="40" rx="6" fill="#FCEBD3" stroke="#E0912F" stroke-width="3"/>
+    <rect x="780" y="52" width="40" height="40" rx="6" fill="#FCEBD3" stroke="#E0912F" stroke-width="3"/>
+    <circle cx="800" cy="72" r="9" fill="#2E8B7A"/>
+    <rect x="1090" y="52" width="40" height="40" rx="6" fill="#FCEBD3" stroke="#E0912F" stroke-width="3"/>
+    <rect x="1170" y="52" width="40" height="40" rx="6" fill="#FCEBD3" stroke="#E0912F" stroke-width="3"/>
+    <circle cx="1190" cy="72" r="9" fill="#2E8B7A"/>
+  </g>
+
+  <!-- source lane -->
+  <text class="l" x="0" y="176">Source data</text>
+  <text class="s" x="0" y="206">read-only</text>
+  <rect x="280" y="160" width="1000" height="44" rx="22" fill="#DCE7F4" stroke="#3B6EA8" stroke-width="3"/>
+  <text x="780" y="191" text-anchor="middle" style="font-size:23px;font-weight:600;fill:#3B6EA8">never modified</text>
+
+  <!-- tags lane -->
+  <text class="l" x="0" y="292">Tags</text>
+  <text class="s" x="0" y="322">durable state</text>
+  <line x1="280" y1="298" x2="470" y2="298" stroke="#C9CDD2" stroke-width="3" stroke-dasharray="4 8"/>
+  <rect x="470" y="276" width="810" height="44" rx="22" fill="#D5EEE8" stroke="#2E8B7A" stroke-width="3"/>
+  <text x="1155" y="307" text-anchor="middle" style="font-size:23px;font-weight:600;fill:#2E8B7A">in the log</text>
+  <text x="550" y="352" text-anchor="middle" style="font-size:21px;fill:#C9453A">error: this cell&#8217;s</text>
+  <text x="550" y="376" text-anchor="middle" style="font-size:21px;fill:#C9453A">tags roll back</text>
+
+  <!-- variables lane -->
+  <text class="l" x="0" y="428">Variables</text>
+  <text class="s" x="0" y="458">working memory</text>
+  <rect x="290" y="410" width="330" height="44" rx="22" fill="#FCEBD3" stroke="#E0912F" stroke-width="3"/>
+  <rect x="660" y="410" width="220" height="44" rx="22" fill="#FCEBD3" stroke="#E0912F" stroke-width="3"/>
+  <rect x="1050" y="410" width="230" height="44" rx="22" fill="#FCEBD3" stroke="#E0912F" stroke-width="3"/>
+  <line class="x" x1="628" y1="420" x2="652" y2="444"/><line class="x" x1="652" y1="420" x2="628" y2="444"/>
+  <line class="x" x1="888" y1="420" x2="912" y2="444"/><line class="x" x1="912" y1="420" x2="888" y2="444"/>
+  <text x="1165" y="440" text-anchor="middle" style="font-size:21px;fill:#9A5B12">fresh kernel</text>
+</svg>

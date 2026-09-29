@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1296 480" width="1296" height="480">
+  <style>
+    text { font-family: Inter, sans-serif; fill: #1F2328; }
+    .l { font-size: 27px; font-weight: 600; }
+    .s { font-size: 24px; fill: #5B6168; }
+    .m { font-family: 'JetBrains Mono', monospace; font-size: 22px; }
+    .ln { fill: none; stroke: #1F2328; stroke-width: 4; stroke-linecap: round; }
+    .b circle { fill: #1F2328; }
+    .b text { fill: #fff; font-size: 24px; font-weight: 700; text-anchor: middle; }
+    text { font-variant-ligatures: none; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1F2328"/>
+    </marker>
+  </defs>
+
+  <text class="l" x="0" y="100">question</text>
+  <text class="s" x="0" y="132">or task</text>
+  <line class="ln" x1="140" y1="112" x2="320" y2="112" marker-end="url(#a)"/>
+
+  <rect x="340" y="40" width="616" height="140" rx="70" fill="#1F2328"/>
+  <text x="648" y="104" text-anchor="middle" style="font-size:36px;font-weight:800;fill:#fff">Agent</text>
+  <text x="648" y="142" text-anchor="middle" style="font-size:24px;fill:#C9CDD2">language model + harness with a shell</text>
+
+  <line class="ln" x1="976" y1="112" x2="1080" y2="112" marker-end="url(#a)"/>
+  <text class="l" x="1096" y="100">findings</text>
+  <text class="s" x="1096" y="132">+ coded data</text>
+
+  <!-- down: cell -->
+  <path class="ln" d="M520,190 L520,300" marker-end="url(#a)"/>
+  <text class="l" x="500" y="236" text-anchor="end">a Python cell</text>
+  <text class="m" x="500" y="270" text-anchor="end">quail exec S -c CODE</text>
+  <g class="b"><circle cx="545" cy="245" r="20"/><text x="545" y="253">1</text></g>
+
+  <!-- up: result -->
+  <path class="ln" d="M776,300 L776,190" marker-end="url(#a)"/>
+  <text class="l" x="800" y="236">notebook-style result</text>
+  <text class="s" x="800" y="270">output, last value, or traceback</text>
+  <g class="b"><circle cx="751" cy="245" r="20"/><text x="751" y="253">4</text></g>
+
+  <!-- environment -->
+  <rect x="340" y="310" width="616" height="160" rx="20" fill="#fff" stroke="#1F2328" stroke-width="3"/>
+  <text class="l" x="370" y="354">Study</text>
+  <text class="s" x="452" y="354">&#8212; the environment</text>
+  <rect x="370" y="376" width="270" height="70" rx="12" fill="#DCE7F4" stroke="#3B6EA8" stroke-width="3"/>
+  <text x="505" y="420" text-anchor="middle" style="font-size:24px;font-weight:600">source: frozen</text>
+  <rect x="660" y="376" width="270" height="70" rx="12" fill="#D5EEE8" stroke="#2E8B7A" stroke-width="3"/>
+  <text x="795" y="420" text-anchor="middle" style="font-size:24px;font-weight:600">tags: writable</text>
+  <g class="b"><circle cx="340" cy="310" r="20"/><text x="340" y="318">2</text></g>
+  <g class="b"><circle cx="930" cy="376" r="20"/><text x="930" y="384">3</text></g>
+</svg>
