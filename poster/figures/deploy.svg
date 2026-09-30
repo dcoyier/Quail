@@ -18,7 +18,7 @@
   <text class="cap" x="348" y="50">CLOUD VM</text>
   <rect x="348" y="76" width="300" height="256" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
   <text class="h" x="374" y="124" style="font-size:30px">Agent</text>
-  <path class="ln" d="M527.0,171.8 A58,58 0 1 1 464.7,174.5" marker-end="url(#a)" style="stroke-width:4"/>
+  <path class="ln" d="M525.2,170.8 A58,58 0 1 1 490.9,164.4" marker-end="url(#a)" style="stroke-width:4"/>
   <text class="h" x="498" y="232" text-anchor="middle" style="font-size:30px">LLM</text>
   <rect x="872" y="76" width="300" height="256" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
   <text class="h" x="898" y="124" style="font-size:30px">Quail</text>
