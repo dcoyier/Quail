@@ -98,7 +98,7 @@
   <text class="t" x="64" y="1004">SQLite, read-only</text>
   <text class="s" x="64" y="1040" style="fill:#3B3B3B">source rows, FTS5 keyword index,</text>
   <text class="s" x="64" y="1070" style="fill:#3B3B3B">private tag tables per kernel;</text>
-  <text class="s" x="64" y="1100" style="fill:#3B3B3B">rebuilt from the log on open</text>
+  <text class="s" x="64" y="1100" style="fill:#3B3B3B">rebuilt from study files</text>
 
   <rect x="576" y="960" width="270" height="156" rx="18" fill="#E4E4E2"/>
   <text class="t" x="602" y="1004">Vector cache</text>

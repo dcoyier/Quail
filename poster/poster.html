@@ -40,7 +40,7 @@
     <div class="choice"><h3><i>3</i>What it can change</h3>
       <p>It can only write tags, in its own session. The kernel has no network, file writes or subprocesses.</p></div>
     <div class="choice"><h3><i>4</i>What comes back</h3>
-      <p>It gets what a notebook would show: printed output, the last value or a traceback, up to 64&nbsp;KiB.</p></div>
+      <p>It gets what a notebook would show: printed output, the last value or a traceback, up to 64&nbsp;KiB by default.</p></div>
   </div>
 </section>
 
@@ -108,7 +108,7 @@ r17 I would come in more often if I could reliably find somewh</pre></div>
 
 <section id="cell">
   <h2><span class="n">3</span>How a cell runs</h2>
-  <p>The first <code>quail exec</code> in a session starts a host that keeps a Python kernel alive between commands. Queries compile to SQL inside the kernel, and every cell is written to the session log before the agent sees its reply. The SQLite index is only a cache, rebuilt from the log when needed.</p>
+  <p>The first <code>quail exec</code> in a session starts a host that keeps a Python kernel alive between commands. Queries compile to SQL inside the kernel, and every cell is written to the session log before the agent sees its reply. The SQLite index is only a cache, rebuilt from the study&rsquo;s files when needed.</p>
   <figure style="margin-bottom:0"><img src="figures/architecture.svg" alt="Agent, session host, sandboxed Python kernel, SQLite index, vector cache, embedding model and session log"></figure>
 </section>
 
