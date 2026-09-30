@@ -1,115 +1,87 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1296 700" width="1296" height="700">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1260 576" width="1260" height="576">
   <style>
-    text { font-family: Inter, sans-serif; fill: #1F2328; }
-    .h { font-size: 32px; font-weight: 700; }
-    .s { font-size: 25px; fill: #5B6168; }
-    .l { font-size: 25px; font-weight: 600; }
-    .c { font-size: 24px; fill: #5B6168; text-anchor: middle; }
-    .w { fill: #fff; }
-    .ln { fill: none; stroke: #1F2328; stroke-width: 3.5; stroke-linecap: round; }
+    text { font-family: Inter, sans-serif; fill: #141414; font-variant-ligatures: none; }
+    .l { font-size: 30px; font-weight: 800; }
+    .b { font-size: 28px; font-weight: 700; }
+    .s { font-size: 25px; fill: #6A6A6A; }
+    .ln { fill: none; stroke: #141414; stroke-width: 4; stroke-linecap: round; }
   </style>
   <defs>
-    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#1F2328"/>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#141414"/>
     </marker>
-    <marker id="ao" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto">
-      <path d="M0,0 L10,5 L0,10 z" fill="#E0912F"/>
-    </marker>
+    <symbol id="pg" viewBox="0 0 40 50">
+      <path d="M4,1.5 H27 L38.5,13 V46 a2.5,2.5 0 0 1 -2.5,2.5 H4 a2.5,2.5 0 0 1 -2.5,-2.5 V4 a2.5,2.5 0 0 1 2.5,-2.5 z" fill="#fff" stroke="#141414" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M27,1.5 V10.5 a2.5,2.5 0 0 0 2.5,2.5 H38.5" fill="#E4E4E2" stroke="#141414" stroke-width="2.5" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="pgt" viewBox="0 0 40 50">
+      <path d="M4,1.5 H27 L38.5,13 V46 a2.5,2.5 0 0 1 -2.5,2.5 H4 a2.5,2.5 0 0 1 -2.5,-2.5 V4 a2.5,2.5 0 0 1 2.5,-2.5 z" fill="#F6E4DA" stroke="#B9572B" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M27,1.5 V10.5 a2.5,2.5 0 0 0 2.5,2.5 H38.5" fill="#E9C3AE" stroke="#B9572B" stroke-width="3" stroke-linejoin="round"/>
+    </symbol>
   </defs>
 
-  <!-- RAG -->
-  <text class="h" x="0" y="34">Retrieval-augmented generation</text>
-  <text class="s" x="0" y="70">one pass, over a few passages that look relevant</text>
+  <!-- retrieval-augmented generation -->
+  <text class="l" x="0" y="32">Retrieval-augmented generation</text>
+  <text class="s" x="0" y="68">answers from the passages a search returns</text>
+  <use xlink:href="#pg" x="8" y="116" width="72" height="90"/>
+  <use xlink:href="#pg" x="22" y="106" width="72" height="90"/>
+  <use xlink:href="#pg" x="36" y="96" width="72" height="90"/>
+  <text class="s" x="58" y="240" text-anchor="middle">corpus</text>
+  <path class="ln" d="M136,152 L216,152" marker-end="url(#a)"/>
+  <text class="s" x="176" y="130" text-anchor="middle">search</text>
+  <use xlink:href="#pg" x="234" y="125" width="44" height="55"/>
+  <use xlink:href="#pg" x="286" y="125" width="44" height="55"/>
+  <use xlink:href="#pg" x="338" y="125" width="44" height="55"/>
+  <use xlink:href="#pg" x="390" y="125" width="44" height="55"/>
+  <use xlink:href="#pg" x="442" y="125" width="44" height="55"/>
+  <text class="s" x="360" y="240" text-anchor="middle">top 5 passages</text>
+  <path class="ln" d="M506,152 L586,152" marker-end="url(#a)"/>
+  <rect x="602" y="107" width="170" height="90" rx="18" fill="#141414"/>
+  <text x="687" y="164" text-anchor="middle" style="font-size:32px;font-weight:800;fill:#fff">LLM</text>
+  <path class="ln" d="M788,152 L868,152" marker-end="url(#a)"/>
+  <rect x="884" y="112" width="230" height="80" rx="40" fill="#fff" stroke="#141414" stroke-width="4"/>
+  <text class="b" x="999" y="162" text-anchor="middle">answer</text>
 
-  <g transform="translate(0,0)">
-    <!-- corpus cylinder -->
-    <path d="M20,150 v90 a55,16 0 0 0 110,0 v-90" fill="#DCE7F4" stroke="#3B6EA8" stroke-width="3"/>
-    <ellipse cx="75" cy="150" rx="55" ry="16" fill="#EAF1F9" stroke="#3B6EA8" stroke-width="3"/>
-    <text class="c" x="75" y="296">corpus</text>
+  <line x1="0" y1="250" x2="1260" y2="250" stroke="#D4D4D4" stroke-width="3"/>
 
-    <line class="ln" x1="145" y1="200" x2="195" y2="200" marker-end="url(#a)"/>
+  <!-- quail -->
+  <text class="l" x="0" y="304">Quail</text>
+  <text class="s" x="0" y="340">the agent runs as many cells as it needs, over every entry</text>
 
-    <!-- similarity -->
-    <line x1="215" y1="200" x2="335" y2="200" stroke="#9AA0A6" stroke-width="2.5"/>
-    <line x1="275" y1="140" x2="275" y2="260" stroke="#9AA0A6" stroke-width="2.5"/>
-    <line x1="275" y1="200" x2="245" y2="150" stroke="#E0912F" stroke-width="4" marker-end="url(#ao)"/>
-    <line x1="275" y1="200" x2="290" y2="145" stroke="#9AA0A6" stroke-width="4"/>
-    <line x1="275" y1="200" x2="325" y2="180" stroke="#B774D8" stroke-width="4"/>
-    <line x1="275" y1="200" x2="235" y2="245" stroke="#E06A3A" stroke-width="4"/>
-    <text class="c" x="275" y="296">similarity</text>
-    <text class="c" x="275" y="326">search</text>
+  <rect x="0" y="376" width="220" height="92" rx="46" fill="#141414"/>
+  <text x="110" y="433" text-anchor="middle" style="font-size:32px;font-weight:800;fill:#fff">Agent</text>
+  <path class="ln" d="M110,476 L110,498" marker-end="url(#a)"/>
+  <rect x="0" y="508" width="220" height="64" rx="32" fill="#fff" stroke="#141414" stroke-width="4"/>
+  <text class="b" x="110" y="550" text-anchor="middle">findings</text>
 
-    <line class="ln" x1="355" y1="200" x2="405" y2="200" marker-end="url(#a)"/>
+  <path class="ln" d="M236,394 C300,358 400,358 456,386" marker-end="url(#a)"/>
+  <text class="b" x="346" y="412" text-anchor="middle">cell</text>
+  <path class="ln" d="M456,454 C400,486 300,486 236,450" marker-end="url(#a)"/>
+  <text class="b" x="346" y="458" text-anchor="middle">result</text>
 
-    <!-- top-k -->
-    <rect x="425" y="150" width="54" height="68" rx="5" fill="#fff" stroke="#3B6EA8" stroke-width="3"/>
-    <rect x="437" y="164" width="54" height="68" rx="5" fill="#fff" stroke="#3B6EA8" stroke-width="3"/>
-    <rect x="449" y="178" width="54" height="68" rx="5" fill="#fff" stroke="#3B6EA8" stroke-width="3"/>
-    <line x1="459" y1="198" x2="493" y2="198" stroke="#9AA0A6" stroke-width="3"/>
-    <line x1="459" y1="212" x2="493" y2="212" stroke="#9AA0A6" stroke-width="3"/>
-    <line x1="459" y1="226" x2="483" y2="226" stroke="#9AA0A6" stroke-width="3"/>
-    <text class="c" x="464" y="296">top-k</text>
-    <text class="c" x="464" y="326">passages</text>
+  <rect x="470" y="364" width="500" height="208" rx="22" fill="#F2F2F1" stroke="#141414" stroke-width="4"/>
+  <text class="s" x="496" y="404" style="fill:#141414;font-weight:600">kernel over the whole corpus</text>
+  <use xlink:href="#pg" x="500" y="424" width="36" height="45"/>
+  <use xlink:href="#pgt" x="556" y="424" width="36" height="45"/>
+  <use xlink:href="#pg" x="612" y="424" width="36" height="45"/>
+  <use xlink:href="#pg" x="668" y="424" width="36" height="45"/>
+  <use xlink:href="#pg" x="724" y="424" width="36" height="45"/>
+  <use xlink:href="#pgt" x="780" y="424" width="36" height="45"/>
+  <use xlink:href="#pg" x="836" y="424" width="36" height="45"/>
+  <use xlink:href="#pgt" x="892" y="424" width="36" height="45"/>
+  <use xlink:href="#pgt" x="500" y="490" width="36" height="45"/>
+  <use xlink:href="#pg" x="556" y="490" width="36" height="45"/>
+  <use xlink:href="#pg" x="612" y="490" width="36" height="45"/>
+  <use xlink:href="#pgt" x="668" y="490" width="36" height="45"/>
+  <use xlink:href="#pg" x="724" y="490" width="36" height="45"/>
+  <use xlink:href="#pg" x="780" y="490" width="36" height="45"/>
+  <use xlink:href="#pgt" x="836" y="490" width="36" height="45"/>
+  <use xlink:href="#pg" x="892" y="490" width="36" height="45"/>
 
-    <line class="ln" x1="520" y1="200" x2="570" y2="200" marker-end="url(#a)"/>
-
-    <rect x="585" y="165" width="100" height="70" rx="12" fill="#1F2328"/>
-    <text class="l w" x="635" y="209" text-anchor="middle" style="fill:#fff">LLM</text>
-
-    <line class="ln" x1="695" y1="200" x2="735" y2="200" marker-end="url(#a)"/>
-    <line x1="750" y1="186" x2="790" y2="186" stroke="#C9453A" stroke-width="5" stroke-linecap="round"/>
-    <line x1="750" y1="200" x2="790" y2="200" stroke="#C9453A" stroke-width="5" stroke-linecap="round"/>
-    <line x1="750" y1="214" x2="778" y2="214" stroke="#C9453A" stroke-width="5" stroke-linecap="round"/>
-    <text class="c" x="770" y="296">answer</text>
-  </g>
-
-  <!-- Coding agents -->
-  <text class="h" x="0" y="404">Coding agents</text>
-  <text class="s" x="0" y="440">many passes: write code, run it, read the result</text>
-
-  <rect x="120" y="540" width="170" height="64" rx="12" fill="#FCEBD3" stroke="#E0912F" stroke-width="3"/>
-  <text class="l" x="205" y="581" text-anchor="middle">code</text>
-  <rect x="500" y="540" width="170" height="64" rx="12" fill="#F8DCD8" stroke="#C9453A" stroke-width="3"/>
-  <text class="l" x="585" y="581" text-anchor="middle">result</text>
-  <path class="ln" d="M205,532 C230,470 560,470 575,528" marker-end="url(#a)"/>
-  <path class="ln" d="M585,612 C560,674 230,674 213,618" marker-end="url(#a)"/>
-  <text class="c" x="395" y="524">run</text>
-  <text class="c" x="395" y="690">read, revise</text>
-
-  <!-- merge arrows -->
-  <path d="M810,200 C860,200 850,330 895,340" fill="none" stroke="#1F2328" stroke-width="4" marker-end="url(#a)"/>
-  <path d="M690,572 C800,572 830,470 895,450" fill="none" stroke="#1F2328" stroke-width="4" marker-end="url(#a)"/>
-
-  <!-- Quail -->
-  <rect x="905" y="96" width="387" height="600" rx="22" fill="#FFF8EE" stroke="#E0912F" stroke-width="4"/>
-  <text x="1098" y="160" text-anchor="middle" style="font-size:46px;font-weight:800">Quail</text>
-  <text class="c" x="1098" y="198">many passes over</text>
-  <text class="c" x="1098" y="228">the whole corpus</text>
-
-  <g>
-    <path class="ln" d="M1139.9,316.7 A135,135 0 0 1 1185.3,349.7" marker-end="url(#a)"/>
-    <path class="ln" d="M1219.3,454.1 A135,135 0 0 1 1201.9,507.5" marker-end="url(#a)"/>
-    <path class="ln" d="M1113.1,572 A135,135 0 0 1 1056.9,572" marker-end="url(#a)"/>
-    <path class="ln" d="M968.1,507.5 A135,135 0 0 1 950.7,454.1" marker-end="url(#a)"/>
-    <path class="ln" d="M984.7,349.7 A135,135 0 0 1 1030.1,316.7" marker-end="url(#a)"/>
-  </g>
-  <g transform="translate(0,0)">
-    <path d="M1057,418 v44 a28,9 0 0 0 56,0 v-44" fill="#DCE7F4" stroke="#3B6EA8" stroke-width="3"/>
-    <ellipse cx="1085" cy="418" rx="28" ry="9" fill="#EAF1F9" stroke="#3B6EA8" stroke-width="3"/>
-  </g>
-  <g style="font-size:24px;font-weight:600">
-    <rect x="1030" y="283" width="110" height="44" rx="22" fill="#fff" stroke="#1F2328" stroke-width="2.5"/>
-    <text x="1085" y="313" text-anchor="middle">search</text>
-    <rect x="1168" y="376" width="96" height="44" rx="22" fill="#fff" stroke="#1F2328" stroke-width="2.5"/>
-    <text x="1216" y="406" text-anchor="middle">read</text>
-    <rect x="1112" y="527" width="104" height="44" rx="22" fill="#fff" stroke="#1F2328" stroke-width="2.5"/>
-    <text x="1164" y="557" text-anchor="middle">count</text>
-    <rect x="963" y="527" width="86" height="44" rx="22" fill="#D5EEE8" stroke="#2E8B7A" stroke-width="2.5"/>
-    <text x="1006" y="557" text-anchor="middle">tag</text>
-    <rect x="913" y="376" width="96" height="44" rx="22" fill="#fff" stroke="#1F2328" stroke-width="2.5"/>
-    <text x="961" y="406" text-anchor="middle">check</text>
-  </g>
-  <text class="c" x="1098" y="640">and the tags it writes</text>
-  <text class="c" x="1098" y="670">outlast the kernel</text>
+  <path class="ln" d="M986,468 L1046,468" marker-end="url(#a)"/>
+  <rect x="1060" y="428" width="196" height="80" rx="40" fill="#F6E4DA" stroke="#B9572B" stroke-width="4"/>
+  <text x="1158" y="479" text-anchor="middle" style="font-size:30px;font-weight:800;fill:#B9572B">tags</text>
+  <text class="s" x="1158" y="540" text-anchor="middle">saved with</text>
+  <text class="s" x="1158" y="570" text-anchor="middle">the study</text>
 </svg>
