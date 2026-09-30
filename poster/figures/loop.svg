@@ -47,9 +47,10 @@
   <text class="s" x="846" y="212" text-anchor="end" style="font-size:21px">output</text>
   <text class="s" x="410" y="238">what a notebook would show</text>
   <path class="ln" d="M322,229 L238,229" marker-end="url(#a)"/>
-  <path d="M994,272 L24,400" fill="none" stroke="#676C73" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 8"/>
-  <path d="M1176,272 L1176,400" fill="none" stroke="#676C73" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 8"/>
+  <rect x="984" y="227" width="202" height="54" rx="13" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 9"/>
+  <path d="M984,281 L3,414 M1186,281 L1197,414" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 9"/>
   <rect x="0" y="400" width="1200" height="506" rx="24" fill="#F2F4F6"/>
+  <rect x="1.5" y="401.5" width="1197" height="503" rx="23" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 9"/>
   <rect x="28" y="436" width="250" height="136" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
   <text class="h" x="54" y="484" style="font-size:30px">Embeddings</text>
   <text class="s" x="54" y="522">local (Ollama) or</text>
