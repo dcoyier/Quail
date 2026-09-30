@@ -38,12 +38,12 @@
   <path class="ln" d="M340,270 L248,270" marker-end="url(#a)"/>
   <path class="ln" d="M760.0,428 L760.0,368" marker-end="url(#a)"/>
   <text class="s" x="776" y="406">boots from</text>
-  <path d="M320,452 V586 A440.0,16 0 0 0 1200,586 V452" fill="#E3E7EC" stroke="#141414" stroke-width="3"/>
-  <ellipse cx="760.0" cy="452" rx="440.0" ry="16" fill="#fff" stroke="#141414" stroke-width="3"/>
-  <text class="h" x="346" y="508" style="font-size:30px">Snapshot</text>
-  <text class="s" x="346" y="546">Quail, an embedding model and</text>
-  <text class="s" x="346" y="576">the fully processed dataset</text>
-  <text class="s" x="296" y="516" text-anchor="end">prepared once,</text>
-  <text class="s" x="296" y="546" text-anchor="end">reused by every</text>
-  <text class="s" x="296" y="576" text-anchor="end">request</text>
+  <path d="M530.0,452 V586 A230.0,16 0 0 0 990.0,586 V452" fill="#E3E7EC" stroke="#141414" stroke-width="3"/>
+  <ellipse cx="760.0" cy="452" rx="230.0" ry="16" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="556" y="508" style="font-size:30px">Snapshot</text>
+  <text class="s" x="556" y="546">Quail, an embedding model and</text>
+  <text class="s" x="556" y="576">the fully processed dataset</text>
+  <text class="s" x="506" y="516" text-anchor="end">prepared once,</text>
+  <text class="s" x="506" y="546" text-anchor="end">reused by every</text>
+  <text class="s" x="506" y="576" text-anchor="end">request</text>
 </svg>
