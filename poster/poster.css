@@ -1,25 +1,24 @@
 @page { size: 44in 44in; margin: 0; }
 
+@font-face { font-family: "Inter"; src: url("fonts/Inter-SemiBold.ttf"); font-weight: 600; }
+@font-face { font-family: "Inter"; src: url("fonts/Inter-Bold.ttf"); font-weight: 700; }
 @font-face { font-family: "Source Sans 3"; src: url("fonts/SourceSans3.ttf"); font-weight: 200 900; font-style: normal; }
 @font-face { font-family: "Source Sans 3"; src: url("fonts/SourceSans3-Italic.ttf"); font-weight: 200 900; font-style: italic; }
-@font-face { font-family: "Source Serif 4"; src: url("fonts/SourceSerif4.ttf"); font-weight: 200 900; }
 @font-face { font-family: "Source Code Pro"; src: url("fonts/SourceCodePro.ttf"); font-weight: 200 900; }
 
 :root {
-  --ink: #1C1B19;
-  --ink-2: #45423D;
-  --muted: #6F6B64;
-  --rule: #D9D5CC;
-  --fill: #F6F4EF;
-  --fill-2: #EBE7DF;
-  --kw: #2F6497;
-  --sem: #2A7F63;
-  --tag: #B5522A;
-  --tag-tint: #F7E5DA;
+  --ink: #141414;
+  --ink-2: #3B3F45;
+  --muted: #676C73;
+  --rule: #D3D8DE;
+  --fill: #F2F4F6;
+  --fill-2: #E3E7EC;
+  --kw: #2B5F9E;
+  --sem: #23785A;
   --pad: 110px;
   --gap: 110px;
   --sans: "Source Sans 3", sans-serif;
-  --serif: "Source Serif 4", serif;
+  --display: "Inter", sans-serif;
   --mono: "Source Code Pro", monospace;
 }
 
@@ -48,32 +47,33 @@ html, body {
 
 header {
   flex: none;
-  margin: 0 var(--pad);
-  padding: 64px 0 52px;
-  border-bottom: 4px solid var(--ink);
+  background: var(--ink);
+  color: #fff;
+  padding: 70px var(--pad);
   display: grid;
-  grid-template-columns: 270px 1fr 400px;
-  gap: 90px;
+  grid-template-columns: 290px 1fr 400px;
+  gap: 84px;
   align-items: center;
 }
-header .logo { width: 270px; height: 270px; display: block; }
-header h1 { margin: 0; font-family: var(--serif); line-height: 1; }
-header h1 .name { display: block; font-size: 200px; font-weight: 700; letter-spacing: -4px; margin-left: -6px; }
-header h1 .sub { display: block; font-size: 84px; font-weight: 600; letter-spacing: -1px; margin-top: 10px; }
-header .authors { margin-top: 30px; font-size: 42px; color: var(--ink-2); }
-header .authors b { color: var(--ink); font-weight: 700; }
+header .logo { width: 290px; height: 290px; display: block; filter: invert(1); mix-blend-mode: screen; }
+header h1 { margin: 0; font-family: var(--display); font-weight: 700; line-height: 1; }
+header h1 .name { display: block; font-size: 200px; letter-spacing: -7px; margin-left: -8px; }
+header h1 .sub { display: block; font-size: 86px; font-weight: 600; letter-spacing: -2px; margin-top: 10px; }
+header .authors { margin-top: 34px; font-size: 42px; color: #C8CCD1; }
+header .authors b { color: #fff; font-weight: 700; }
 
 .qr {
   justify-self: end;
   width: 400px;
-  border: 3px solid var(--rule);
+  background: #fff;
+  color: var(--ink);
   border-radius: 28px;
   padding: 32px 28px 26px;
   text-align: center;
   font-size: 30px;
   line-height: 1.3;
 }
-.qr img { width: 240px; height: 240px; display: block; margin: 0 auto 14px; }
+.qr img { width: 250px; height: 250px; display: block; margin: 0 auto 14px; }
 .qr b { font-weight: 700; }
 
 main {
@@ -90,11 +90,11 @@ section { min-width: 0; }
 
 h2 {
   margin: 0 0 28px;
-  font-family: var(--serif);
-  font-size: 66px;
+  font-family: var(--display);
+  font-size: 62px;
   line-height: 1.08;
-  font-weight: 650;
-  letter-spacing: -0.5px;
+  font-weight: 700;
+  letter-spacing: -1.5px;
   display: flex;
   align-items: center;
   gap: 28px;
@@ -104,19 +104,20 @@ h2 .n {
   width: 84px;
   height: 84px;
   border-radius: 50%;
-  border: 4px solid var(--ink);
-  display: grid;
-  place-items: center;
-  font-family: var(--sans);
-  font-size: 44px;
-  font-weight: 700;
+  background: var(--ink);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 46px;
+  line-height: 1;
   letter-spacing: 0;
-  padding-bottom: 3px;
+  font-variant-numeric: tabular-nums;
 }
 
 p { margin: 0 0 26px; }
 p:last-child { margin-bottom: 0; }
-.lede { font-family: var(--serif); font-size: 46px; line-height: 1.32; margin-bottom: 44px; }
+.lede { font-size: 46px; line-height: 1.3; font-weight: 600; margin-bottom: 40px; }
 .small { font-size: 31px; line-height: 1.4; }
 figure { margin: 34px 0; }
 figure:last-child { margin-bottom: 0; }
@@ -127,21 +128,20 @@ code, .mono { font-family: var(--mono); font-size: 0.84em; font-weight: 500; }
 code, pre, .mono { font-variant-ligatures: none; font-feature-settings: "calt" 0, "liga" 0; }
 .kw { color: var(--kw); font-weight: 700; }
 .sem { color: var(--sem); font-weight: 700; }
-.tg { color: var(--tag); font-weight: 700; }
 
 /* the language, as a glossary */
-table.lang { width: 100%; border-collapse: collapse; margin-top: 34px; font-size: 31px; line-height: 1.3; }
-table.lang td { padding: 13px 0; border-top: 3px solid var(--rule); vertical-align: baseline; }
+table.lang { width: 100%; border-collapse: collapse; margin: 0 0 40px; font-size: 31px; line-height: 1.3; }
+table.lang td { padding: 12px 0; border-top: 3px solid var(--rule); vertical-align: baseline; }
 table.lang tr:last-child td { border-bottom: 3px solid var(--rule); }
-table.lang td:first-child { width: 560px; padding-right: 24px; font-family: var(--mono); font-size: 26px; white-space: nowrap; }
+table.lang td:first-child { width: 600px; padding-right: 24px; font-family: var(--mono); font-size: 26px; white-space: nowrap; }
 
 /* the example notebook */
 .notebook {
   background: var(--fill);
   border-radius: 36px;
-  padding: 50px 56px 50px;
+  padding: 48px 56px 50px;
 }
-.notebook .intro { margin-bottom: 40px; }
+.notebook .intro { margin-bottom: 34px; }
 .say { margin: 0 0 14px; }
 .step { margin-bottom: 30px; }
 .cellrow { display: grid; grid-template-columns: 70px 1fr; align-items: start; }
@@ -156,26 +156,22 @@ table.lang td:first-child { width: 560px; padding-right: 24px; font-family: var(
   line-height: 1.38;
   white-space: pre;
 }
-.cell .out { background: #FBFAF7; color: var(--ink-2); border-top: 3px solid var(--rule); }
-.cell .out.err { color: var(--ink-2); }
-.st { color: #6C675F; }
-.cmt { color: var(--muted); }
-.fp { color: #A39E95; }
-.note { font-family: var(--sans); font-size: 26px; font-weight: 700; color: var(--ink); }
-.note::before { content: "\2190  "; font-family: var(--mono); }
+.cell .out { background: #FAFBFC; color: var(--ink-2); border-top: 3px solid var(--rule); }
+.st { color: #5F656D; }
+.el { color: var(--muted); }
 
 .restart {
   display: flex;
   align-items: center;
   gap: 24px;
-  margin: 8px 0 30px;
+  margin: 6px 0 26px;
   color: var(--muted);
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 2.5px;
 }
-.restart::before, .restart::after { content: ""; flex: 1; border-top: 3px dashed #BDB8AE; }
-
+.restart::before, .restart::after { content: ""; flex: 1; border-top: 3px dashed #B4BAC2; }
+.restart code { font-size: 25px; letter-spacing: 0; font-weight: 500; color: var(--ink-2); }
 
 /* Slack excerpt */
 .thread {
@@ -194,7 +190,7 @@ table.lang td:first-child { width: 560px; padding-right: 24px; font-family: var(
 .term {
   margin-top: 34px;
   border-radius: 16px;
-  background: var(--fill);
+  background: #fff;
   border: 3px solid var(--rule);
   color: var(--ink);
   padding: 22px 28px;
@@ -205,7 +201,7 @@ table.lang td:first-child { width: 560px; padding-right: 24px; font-family: var(
   white-space: pre;
   font-variant-ligatures: none;
 }
-.term .cmt { font-family: var(--sans); font-size: 27px; }
+.term .cmt { font-family: var(--sans); font-size: 27px; color: var(--muted); }
 
 footer {
   flex: none;
@@ -222,3 +218,6 @@ footer {
 footer ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, auto); gap: 4px 60px; }
 footer ol li span { color: var(--ink); font-weight: 700; margin-right: 10px; }
 footer .right { text-align: right; }
+.cell .fp { color: #A0A6AD; }
+.cell .note { font-family: var(--sans); font-size: 26px; font-weight: 700; color: var(--ink); }
+.cell .note::before { content: "\2190\00a0"; font-family: var(--mono); }

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 920" width="1200" height="920">
+  <style>
+    text { font-family: 'Source Sans 3', sans-serif; fill: #141414; }
+    .h { font-size: 30px; font-weight: 700; }
+    .b { font-size: 25px; }
+    .s { font-size: 24px; fill: #676C73; }
+    .cap { font-size: 21px; font-weight: 700; letter-spacing: 2.5px; fill: #676C73; }
+    .m { font-family: 'Source Code Pro', monospace; font-size: 24px; font-weight: 500; font-variant-ligatures: none; }
+    .ln { fill: none; stroke: #141414; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#141414"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="230" height="300" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="26" y="112" style="font-size:30px">Agent</text>
+  <text class="s" x="26" y="150">a language</text>
+  <text class="s" x="26" y="180">model with</text>
+  <text class="s" x="26" y="210">a shell</text>
+  <rect x="970" y="0" width="230" height="300" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="996" y="112" style="font-size:30px">Quail</text>
+  <text class="s" x="996" y="150">one session,</text>
+  <text class="s" x="996" y="180">one Python</text>
+  <text class="s" x="996" y="210">kernel</text>
+  <path class="ln" d="M238,70 L322,70" marker-end="url(#a)"/>
+  <rect x="330" y="12" width="540" height="116" rx="14" fill="#fff" stroke="#D3D8DE" stroke-width="3"/>
+  <text class="m" x="356" y="60">only = (sem &gt; 0.5) &amp; ~kw</text>
+  <text class="m" x="356" y="98">count(only)</text>
+  <text class="s" x="846" y="44" text-anchor="end" style="font-size:21px">cell</text>
+  <path class="ln" d="M878,70 L962,70" marker-end="url(#a)"/>
+  <text class="s" x="600" y="162" text-anchor="middle" style="font-size:23px">kw and sem were defined in earlier cells</text>
+  <path class="ln" d="M962,240 L878,240" marker-end="url(#a)"/>
+  <rect x="330" y="190" width="540" height="100" rx="14" fill="#fff" stroke="#D3D8DE" stroke-width="3"/>
+  <text class="m" x="356" y="250">20</text>
+  <text class="s" x="846" y="222" text-anchor="end" style="font-size:21px">output</text>
+  <text class="s" x="410" y="250">what a notebook would show</text>
+  <path class="ln" d="M322,240 L238,240" marker-end="url(#a)"/>
+  <path d="M974,306 L24,380" fill="none" stroke="#676C73" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 8"/>
+  <path d="M1196,306 L1196,380" fill="none" stroke="#676C73" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 8"/>
+  <rect x="0" y="380" width="1200" height="540" rx="24" fill="#F2F4F6"/>
+  <text class="cap" x="28" y="424">INSIDE QUAIL, FOR EACH CELL</text>
+  <rect x="28" y="450" width="250" height="136" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="54" y="498" style="font-size:30px">Embeddings</text>
+  <text class="s" x="54" y="536">local (Ollama) or</text>
+  <text class="s" x="54" y="566">a hosted API</text>
+  <rect x="418" y="450" width="364" height="136" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="444" y="498" style="font-size:30px">Session host</text>
+  <text class="s" x="444" y="536">one per session;</text>
+  <text class="s" x="444" y="566">runs cells in order</text>
+  <path d="M916,450 H1158 Q1172,450 1172,464 V590 C1096,560 978,620 902,590 V464 Q902,450 916,450 Z" fill="#E3E7EC" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+  <text class="h" x="928" y="498" style="font-size:30px">Session log</text>
+  <text class="s" x="928" y="536">code, output and</text>
+  <text class="s" x="928" y="566">tags, written first</text>
+  <rect x="398" y="642" width="404" height="250" rx="22" fill="none" stroke="#141414" stroke-width="3" stroke-dasharray="12 9"/>
+  <text class="cap" x="422" y="678">SANDBOX</text>
+  <rect x="422" y="700" width="356" height="170" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="448" y="748" style="font-size:30px">Python kernel</text>
+  <text class="s" x="448" y="786">keeps variables between</text>
+  <text class="s" x="448" y="816">cells; no network, file</text>
+  <text class="s" x="448" y="846">writes or subprocesses</text>
+  <path d="M902,668 V866 A135.0,16 0 0 0 1172,866 V668" fill="#E3E7EC" stroke="#141414" stroke-width="3"/>
+  <ellipse cx="1037.0" cy="668" rx="135.0" ry="16" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="928" y="724" style="font-size:30px">Dataset index</text>
+  <text class="s" x="928" y="762">one SQLite file:</text>
+  <text class="s" x="928" y="792">rows, keyword index,</text>
+  <text class="s" x="928" y="822">embeddings and tags</text>
+  <path class="ln" d="M286,518 L410,518" marker-end="url(#a)" marker-start="url(#a)"/>
+  <text class="s" x="348" y="476" text-anchor="middle" style="font-size:22px">missing</text>
+  <text class="s" x="348" y="502" text-anchor="middle" style="font-size:22px">embeddings</text>
+  <path class="ln" d="M790,518 L894,518" marker-end="url(#a)"/>
+  <text class="s" x="842" y="502" text-anchor="middle" style="font-size:22px">first</text>
+  <path class="ln" d="M560,594 L560,692" marker-end="url(#a)"/>
+  <text class="s" x="546" y="624" text-anchor="end" style="font-size:22px">code</text>
+  <path class="ln" d="M640,692 L640,594" marker-end="url(#a)"/>
+  <text class="s" x="654" y="624" style="font-size:22px">output, tags</text>
+  <path class="ln" d="M770,594 L920,650" marker-end="url(#a)"/>
+  <text class="s" x="930" y="646" style="font-size:22px">then</text>
+  <path class="ln" d="M894,790 L786,790" marker-end="url(#a)"/>
+  <text class="s" x="853" y="776" text-anchor="middle" style="font-size:22px">read-only</text>
+  <rect x="28" y="662" width="52" height="34" rx="8" fill="#fff" stroke="#141414" stroke-width="2.5"/>
+  <text class="s" x="98" y="688">program</text>
+  <path d="M34,718 H74 Q80,718 80,724 V746 C66,738 42,758 28,748 V724 Q28,718 34,718 Z" fill="#E3E7EC" stroke="#141414" stroke-width="2.5"/>
+  <text class="s" x="98" y="744">file</text>
+  <path d="M28,781 V803 A26,7 0 0 0 80,803 V781" fill="#E3E7EC" stroke="#141414" stroke-width="2.5"/>
+  <ellipse cx="54" cy="781" rx="26" ry="7" fill="#fff" stroke="#141414" stroke-width="2.5"/>
+  <text class="s" x="98" y="800">database</text>
+  <rect x="28" y="830" width="52" height="34" rx="8" fill="none" stroke="#141414" stroke-width="2.5" stroke-dasharray="7 6"/>
+  <text class="s" x="98" y="856">sandbox</text>
+</svg>
