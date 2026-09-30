@@ -14,8 +14,8 @@
       <path d="M0,0 L10,5 L0,10 z" fill="#141414"/>
     </marker>
   </defs>
-  <text class="s" x="28" y="28">Each square is one passage in the collection.</text>
-  <text class="h" x="28" y="96" style="font-size:30px">Retrieval</text>
+  <text class="s" x="28" y="28">Each square is one passage in a dataset.</text>
+  <text class="h" x="28" y="96" style="font-size:30px">Retrieval (RAG)</text>
   <text class="s" x="28" y="136">hands the model the</text>
   <text class="s" x="28" y="166">passages closest to</text>
   <text class="s" x="28" y="196">a question</text>

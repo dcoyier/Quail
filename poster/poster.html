@@ -25,15 +25,15 @@
 <div class="col">
 
 <section id="why">
-  <h2><span class="n">1</span>Moving beyond retrieval</h2>
-  <p class="lede">Quail lets an AI agent make sense of a large collection of text the way an analyst would in a notebook, one cell at a time, with every step saved.</p>
-  <p>Researchers often have more text than anyone can read closely. Campus offices, for example, collect open-ended survey answers that nobody has time to read in full.<sup>1</sup> Retrieval-augmented generation<sup>2</sup> helps a language model with a collection like that by handing it the few passages that best match a question. That can answer &ldquo;what did the news say about lines at the polls?&rdquo; but not &ldquo;how often did it come up, and on which networks?&rdquo;</p>
-  <figure><img src="figures/corpus.svg" alt="The same collection three times: retrieval picks five passages; counting finds all twelve matches; labeling marks ten as fitting and two as not"></figure>
-  <p>Quail started as a retrieval tool for agents, and adding <code>count()</code> is what changed it. Counting covers every passage and can split the total by any field, so the agent can check how common something is instead of guessing from a few examples. Labels, which Quail calls tags, grew from there.</p>
+  <h2>Moving beyond retrieval</h2>
+  <p class="lede">Quail lets an AI agent make sense of a large text dataset the way an analyst would in a notebook, one cell at a time, with every step saved.</p>
+  <p>Researchers often have more text than anyone can read closely. Campus offices, for example, collect open-ended survey answers that nobody has time to read in full.<sup>1</sup> Retrieval-augmented generation (RAG)<sup>2</sup> helps a language model with a dataset like that by handing it the few passages that best match a question. That can answer &ldquo;what did the news say about lines at the polls?&rdquo; but not &ldquo;how often did it come up, and on which networks?&rdquo;</p>
+  <figure><img src="figures/corpus.svg" alt="The same dataset three times: retrieval picks five passages; counting finds all twelve matches; labeling marks ten as fitting and two as not"></figure>
+  <p>Quail builds on RAG by letting the agent count as well as retrieve. A count covers every match in the dataset and can be split by any field, so the agent can check how common something is instead of guessing from a few examples. Labels, which Quail calls tags, record what it decides as it reads.</p>
 </section>
 
 <section id="notebook">
-  <h2><span class="n">2</span>A notebook for an agent</h2>
+  <h2>A notebook for an agent</h2>
   <p>A Jupyter notebook lets an analyst try something, read the result and decide what to try next, and Quail gives an agent the same loop. Each <code>quail exec</code> sends one cell of Python to a kernel that stays alive between calls, and the agent reads back what a notebook would show: printed output, the last line&rsquo;s value, or a traceback.</p>
   <p>Searching, counting and tagging could have been separate tool calls. Instead they form a small Python library, so one cell can combine them and return only what matters. Cloudflare&rsquo;s Code Mode makes the same choice for MCP tools but starts a fresh sandbox for each snippet;<sup>3</sup> Quail keeps its kernel from one cell to the next.</p>
   <figure><img src="figures/loop.svg" alt="The agent sends a cell to Quail and reads back its output. Inside Quail, a session host runs the cell in a sandboxed Python kernel, writes it to the session log, then updates the SQLite dataset index; missing embeddings come from an embedding model"></figure>
@@ -45,9 +45,9 @@
 <div class="col">
 
 <section id="example">
-  <h2><span class="n">3</span>A session, cell by cell</h2>
+  <h2>An example session</h2>
   <div class="notebook">
-    <p class="intro">The election news study holds 3.3 million segments of TV news from six elections, 2004 to 2024. Here an agent searches the 323,464 segments from 2012 for voters waiting in line at the polls. Five cells follow, verbatim; gaps in numbering are cells left out.</p>
+    <p class="intro">This session comes from a study of 3.3 million segments of TV news from six elections, 2004 to 2024. The agent searches the 323,464 segments from 2012 for voters waiting in line at the polls. Five cells follow, verbatim; gaps in numbering are cells left out.</p>
     <table class="lang">
       <tr><td>Field("body")</td><td>a column of the dataset</td></tr>
       <tr><td>body.<span class="kw">lexical</span>("polls")</td><td>keyword score (BM25); <code>&gt; 0</code> means the word appears</td></tr>
@@ -123,16 +123,16 @@ for y in b: print(y, round(10000 * h.get(y, 0) / b[y], 2))</pre><pre class="out"
 <div class="col">
 
 <section id="study">
-  <h2><span class="n">4</span>Studies live in git</h2>
+  <h2>Studies live in git</h2>
   <p>A study is an ordinary folder of text files, so git can share it the way it shares code. Each kernel run writes its own log file, which means agents working in parallel never edit the same file. To try another approach without disturbing the first, <code>quail fork</code> copies a closed session&rsquo;s tags and history into a new session.</p>
   <figure><img src="figures/study.svg" alt="Study folder next to two agents sharing it through git; below, four parts of the embedding work are saved to warm/"></figure>
-  <p>Semantic search needs an embedding for every distinct text, and computing them the first time can take hours. <code>quail warm</code> can do that work in advance, split across several machines, and save it in <code>warm/</code>, so every clone of the study starts with it. The election news study keeps 2.8 million embeddings there, in 169 parts.</p>
+  <p>Semantic search needs an embedding for every distinct text, and computing them the first time can take hours. <code>quail warm</code> can do that work in advance, split across several machines, and save it in <code>warm/</code>, so every clone of the study starts with it.</p>
 </section>
 
 <section id="where">
-  <h2><span class="n">5</span>Where Quail can run</h2>
-  <p>Quail needs only a shell, so it can run wherever an agent does, on a laptop or a cloud VM. In one tested setup, the election news study was available in Slack. Mentioning @Cursor in a thread started a Cursor cloud agent on its own VM, booted from a snapshot that already held Quail, a local embedding model and the fully processed study, so the agent could search all six years without any setup.</p>
-  <figure><img src="figures/deploy.svg" alt="A Slack question starts a cloud VM from a snapshot holding Quail, an embedding model and the processed study; the agent runs Quail cells and replies in the thread"></figure>
+  <h2>Where Quail can run</h2>
+  <p>Quail needs only a shell, so it can run wherever an agent does, on a laptop or a cloud VM. In one tested setup, the TV news study from the example was available in Slack. Mentioning @Cursor in a thread started a Cursor cloud agent on its own VM, booted from a snapshot that already held Quail, an embedding model and the fully processed dataset, so the agent could search all six years without any setup.</p>
+  <figure><img src="figures/deploy.svg" alt="A Slack question starts a cloud VM from a snapshot holding Quail, an embedding model and the processed dataset; the agent runs Quail cells and replies in the thread"></figure>
   <div class="thread">
     <div><span class="who">Dashiell Coyier</span><span class="meta">#quail-allen-news</span></div>
     <p class="q"><span class="mention">@Cursor</span> how is Obama characterized?</p>
@@ -142,8 +142,8 @@ for y in b: print(y, round(10000 * h.get(y, 0) / b[y], 2))</pre><pre class="out"
 </section>
 
 <section id="status">
-  <h2><span class="n">6</span>Status and next steps</h2>
-  <p>Quail 0.94 is an alpha release for Linux and macOS, open source under the Apache 2.0 license, and it works with any agent that can run shell commands. Nothing it has produced has been formally evaluated yet, and working out how to do that well is our next step. If you have a collection of text you would like to understand, we would love to hear about it.</p>
+  <h2>Status and next steps</h2>
+  <p>Quail 0.94 is an alpha release for Linux and macOS, open source under the Apache 2.0 license, and it works with any agent that can run shell commands. Nothing it has produced has been formally evaluated yet, and working out how to do that well is our next step. If you have a text dataset you would like to understand, we would love to hear about it.</p>
   <div class="term"><span class="cmt">To try it, with Python 3.12+ and uv:</span>
 $ git clone --depth 1 https://github.com/dcoyier/Quail.git
 $ cd Quail &amp;&amp; uv sync --locked --no-dev --python 3.12

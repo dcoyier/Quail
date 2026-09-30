@@ -51,11 +51,11 @@ header {
   color: #fff;
   padding: 70px var(--pad);
   display: grid;
-  grid-template-columns: 290px 1fr 400px;
+  grid-template-columns: 330px 1fr 400px;
   gap: 84px;
   align-items: center;
 }
-header .logo { width: 290px; height: 290px; display: block; filter: invert(1); mix-blend-mode: screen; }
+header .logo { width: 497px; height: 497px; margin: -48px -82px -48px -85px; transform: translateY(10px); display: block; filter: invert(1); mix-blend-mode: screen; }
 header h1 { margin: 0; font-family: var(--display); font-weight: 700; line-height: 1; }
 header h1 .name { display: block; font-size: 200px; letter-spacing: -7px; margin-left: -8px; }
 header h1 .sub { display: block; font-size: 86px; font-weight: 600; letter-spacing: -2px; margin-top: 10px; }
@@ -95,24 +95,6 @@ h2 {
   line-height: 1.08;
   font-weight: 700;
   letter-spacing: -1.5px;
-  display: flex;
-  align-items: center;
-  gap: 28px;
-}
-h2 .n {
-  flex: none;
-  width: 84px;
-  height: 84px;
-  border-radius: 50%;
-  background: var(--ink);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 46px;
-  line-height: 1;
-  letter-spacing: 0;
-  font-variant-numeric: tabular-nums;
 }
 
 p { margin: 0 0 26px; }
