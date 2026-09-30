@@ -1,43 +1,52 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1260 196" width="1260" height="196">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 536" width="1200" height="536">
   <style>
-    text { font-family: Inter, sans-serif; fill: #141414; font-variant-ligatures: none; }
-    .l { font-size: 27px; font-weight: 800; }
-    .s { font-size: 23px; fill: #6A6A6A; }
-    .box { fill: #fff; stroke: #141414; stroke-width: 3.5; }
-    .ln { fill: none; stroke: #141414; stroke-width: 4; stroke-linecap: round; }
+    text { font-family: 'Source Sans 3', sans-serif; fill: #1C1B19; }
+    .h { font-size: 30px; font-weight: 700; }
+    .b { font-size: 25px; }
+    .s { font-size: 24px; fill: #6F6B64; }
+    .cap { font-size: 21px; font-weight: 700; letter-spacing: 2.5px; fill: #6F6B64; }
+    .m { font-family: 'Source Code Pro', monospace; font-size: 24px; font-weight: 500; font-variant-ligatures: none; }
+    .ln { fill: none; stroke: #1C1B19; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
   </style>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#141414"/>
+      <path d="M0,0 L10,5 L0,10 z" fill="#1C1B19"/>
     </marker>
   </defs>
-
-  <rect class="box" x="2" y="2" width="270" height="150" rx="20"/>
-  <text class="l" x="26" y="48">Slack</text>
-  <text class="s" x="26" y="88">a question that</text>
-  <text class="s" x="26" y="118">mentions @Cursor</text>
-
-  <path class="ln" d="M282,77 L318,77" marker-end="url(#a)"/>
-
-  <rect class="box" x="330" y="2" width="270" height="150" rx="20"/>
-  <text class="l" x="354" y="48">Cloud VM</text>
-  <text class="s" x="354" y="88">from a snapshot of</text>
-  <text class="s" x="354" y="118">Quail and the study</text>
-
-  <path class="ln" d="M610,77 L646,77" marker-end="url(#a)"/>
-
-  <rect x="658" y="2" width="270" height="150" rx="20" fill="#141414"/>
-  <text class="l" x="682" y="48" style="fill:#fff">Agent + Quail</text>
-  <text class="s" x="682" y="88" style="fill:#CFCFCF">runs cells in a</text>
-  <text class="s" x="682" y="118" style="fill:#CFCFCF">Quail session</text>
-
-  <path class="ln" d="M938,77 L974,77" marker-end="url(#a)"/>
-
-  <rect class="box" x="986" y="2" width="270" height="150" rx="20"/>
-  <text class="l" x="1010" y="48">Reply</text>
-  <text class="s" x="1010" y="88">with the findings,</text>
-  <text class="s" x="1010" y="118">posted in the thread</text>
-
-  <text class="s" x="630" y="188" text-anchor="middle">each thread gets its own VM, agent and Quail session, which last only as long as the task</text>
+  <rect x="0" y="60" width="240" height="150" rx="18" fill="#fff" stroke="#1C1B19" stroke-width="3"/>
+  <text class="h" x="26" y="108" style="font-size:30px">Slack</text>
+  <text class="s" x="26" y="148">a question that</text>
+  <text class="s" x="26" y="180">mentions @Cursor</text>
+  <path class="ln" d="M248,135 L312,135" marker-end="url(#a)"/>
+  <rect x="320" y="0" width="560" height="270" rx="22" fill="#fff" stroke="#1C1B19" stroke-width="3.5"/>
+  <text class="h" x="348" y="50">Cloud VM</text>
+  <text class="s" x="498" y="50">one per thread</text>
+  <rect x="348" y="82" width="220" height="160" rx="18" fill="#EBE7DF"/>
+  <text class="h" x="374" y="130" style="font-size:30px">Agent</text>
+  <text class="s" x="374" y="170">writes and</text>
+  <text class="s" x="374" y="202">reads cells</text>
+  <rect x="632" y="82" width="220" height="160" rx="18" fill="#EBE7DF"/>
+  <text class="h" x="658" y="130" style="font-size:30px">Quail</text>
+  <text class="s" x="658" y="170">session for</text>
+  <text class="s" x="658" y="202">this thread</text>
+  <path class="ln" d="M576,142 L624,142" marker-end="url(#a)"/>
+  <path class="ln" d="M624,186 L576,186" marker-end="url(#a)"/>
+  <path class="ln" d="M888,135 L952,135" marker-end="url(#a)"/>
+  <rect x="960" y="60" width="240" height="150" rx="18" fill="#fff" stroke="#1C1B19" stroke-width="3"/>
+  <text class="h" x="986" y="108" style="font-size:30px">Reply</text>
+  <text class="s" x="986" y="148">posted back</text>
+  <text class="s" x="986" y="180">in the thread</text>
+  <path class="ln" d="M600.0,340 L600.0,278" marker-end="url(#a)"/>
+  <text class="s" x="616.0" y="320">boots from</text>
+  <rect x="320" y="350" width="560" height="54" rx="12" fill="#EBE7DF"/>
+  <text class="b" x="344" y="386" style="font-weight:600;fill:#1C1B19">Quail, installed</text>
+  <rect x="320" y="412" width="560" height="54" rx="12" fill="#EBE7DF"/>
+  <text class="b" x="344" y="448" style="font-weight:600;fill:#1C1B19">the election news study, fully processed</text>
+  <rect x="320" y="474" width="560" height="54" rx="12" fill="#DFEFE8" stroke="#2A7F63" stroke-width="2.5"/>
+  <text class="b" x="344" y="510" style="font-weight:600;fill:#2A7F63">its embeddings, already computed</text>
+  <text class="h" x="0" y="390">Snapshot</text>
+  <text class="s" x="0" y="430">prepared once,</text>
+  <text class="s" x="0" y="460">reused by</text>
+  <text class="s" x="0" y="490">every thread</text>
 </svg>

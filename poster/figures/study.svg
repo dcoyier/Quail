@@ -1,77 +1,66 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1260 500" width="1260" height="500">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" width="1200" height="620">
   <style>
-    text { font-family: Inter, sans-serif; fill: #141414; font-variant-ligatures: none; }
-    .l { font-size: 27px; font-weight: 800; }
-    .s, .s text { font-size: 23px; fill: #6A6A6A; }
-    .m, .m text { font-family: 'JetBrains Mono', monospace; font-size: 24px; }
-    .ln { fill: none; stroke: #141414; stroke-width: 4; stroke-linecap: round; }
+    text { font-family: 'Source Sans 3', sans-serif; fill: #1C1B19; }
+    .h { font-size: 30px; font-weight: 700; }
+    .b { font-size: 25px; }
+    .s { font-size: 24px; fill: #6F6B64; }
+    .cap { font-size: 21px; font-weight: 700; letter-spacing: 2.5px; fill: #6F6B64; }
+    .m { font-family: 'Source Code Pro', monospace; font-size: 24px; font-weight: 500; font-variant-ligatures: none; }
+    .ln { fill: none; stroke: #1C1B19; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
   </style>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#141414"/>
+      <path d="M0,0 L10,5 L0,10 z" fill="#1C1B19"/>
     </marker>
   </defs>
-
-  <!-- tree -->
-  <rect x="2" y="2" width="640" height="496" rx="18" fill="#fff" stroke="#D4D4D4" stroke-width="3"/>
-  <g class="m">
-    <text x="28" y="50" style="font-weight:800">my-study/</text>
-    <text x="28" y="94">&#9500;&#9472; quail.toml</text>
-    <text x="28" y="136">&#9500;&#9472; survey.csv</text>
-    <text x="28" y="178">&#9500;&#9472; sessions/first-pass/</text>
-    <text x="28" y="220">&#9474;  &#9500;&#9472; session.toml</text>
-    <text x="28" y="262">&#9474;  &#9492;&#9472; log/*.jsonl</text>
-    <text x="28" y="304">&#9500;&#9472; exports/</text>
-    <text x="28" y="346">&#9500;&#9472; warm/</text>
-    <text x="28" y="388">&#9492;&#9472; .quail/</text>
-  </g>
-  <g class="s">
-    <text x="372" y="94">config</text>
-    <text x="372" y="136">source, read-only</text>
-    <text x="372" y="262">one per kernel run</text>
-    <text x="372" y="304">tags as CSV</text>
-    <text x="372" y="346">shared vectors</text>
-    <text x="372" y="388">local cache, ignored</text>
-  </g>
-  <rect x="26" y="420" width="592" height="56" rx="12" fill="#F2F2F1"/>
-  <text x="322" y="457" text-anchor="middle" style="font-size:23px;font-weight:600">plain text; Quail itself never runs git</text>
-
-  <!-- remote -->
-  <path d="M882,30 v72 a68,18 0 0 0 136,0 v-72" fill="#F2F2F1" stroke="#141414" stroke-width="3"/>
-  <ellipse cx="950" cy="30" rx="68" ry="18" fill="#fff" stroke="#141414" stroke-width="3"/>
-  <text x="950" y="88" text-anchor="middle" style="font-size:26px;font-weight:800">git</text>
-
-  <!-- agents -->
-  <rect x="680" y="220" width="270" height="160" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
-  <text class="l" x="704" y="262">Agent A</text>
-  <rect x="704" y="280" width="222" height="46" rx="23" fill="#F6E4DA" stroke="#B9572B" stroke-width="2.5"/>
-  <text x="815" y="311" text-anchor="middle" style="font-family:'JetBrains Mono',monospace;font-size:23px;font-weight:700;fill:#B9572B">first-pass</text>
-  <text class="s" x="704" y="358">first coding pass</text>
-
-  <rect x="986" y="220" width="270" height="160" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
-  <text class="l" x="1010" y="262">Agent B</text>
-  <rect x="1010" y="280" width="222" height="46" rx="23" fill="#F6E4DA" stroke="#B9572B" stroke-width="2.5"/>
-  <text x="1121" y="311" text-anchor="middle" style="font-family:'JetBrains Mono',monospace;font-size:23px;font-weight:700;fill:#B9572B">second-pass</text>
-  <text class="s" x="1010" y="358">forked, new scheme</text>
-
-  <path class="ln" d="M815,212 C815,160 850,112 872,104" marker-start="url(#a)" marker-end="url(#a)"/>
-  <path class="ln" d="M1121,212 C1121,160 1050,112 1028,104" marker-start="url(#a)" marker-end="url(#a)"/>
-  <text class="s" x="800" y="160" text-anchor="end">push, pull</text>
-  <text class="s" x="1136" y="160">push, pull</text>
-
-  <!-- shards -->
-  <text class="l" x="680" y="420">Shared embedding work</text>
-  <g style="font-size:23px;font-weight:700">
-    <rect x="680" y="440" width="84" height="52" rx="10" fill="#E4E4E2"/>
-    <text x="722" y="475" text-anchor="middle">1/4</text>
-    <rect x="774" y="440" width="84" height="52" rx="10" fill="#E4E4E2"/>
-    <text x="816" y="475" text-anchor="middle">2/4</text>
-    <rect x="868" y="440" width="84" height="52" rx="10" fill="#E4E4E2"/>
-    <text x="910" y="475" text-anchor="middle">3/4</text>
-    <rect x="962" y="440" width="84" height="52" rx="10" fill="#E4E4E2"/>
-    <text x="1004" y="475" text-anchor="middle">4/4</text>
-  </g>
-  <path class="ln" d="M1064,466 L1124,466" marker-end="url(#a)"/>
-  <text class="m" x="1140" y="475" style="font-weight:700">warm/</text>
+  <rect x="1.5" y="1.5" width="600" height="470" rx="18" fill="#fff" stroke="#D9D5CC" stroke-width="3"/>
+  <text class="m" x="28" y="52" style="font-weight:700">my-study/</text>
+  <text class="m" x="28" y="98">&#9500;&#9472; quail.toml</text>
+  <text class="s" x="360" y="98" style="font-size:23px">settings</text>
+  <text class="m" x="28" y="144">&#9500;&#9472; survey.csv</text>
+  <text class="s" x="360" y="144" style="font-size:23px">source, never changed</text>
+  <text class="m" x="28" y="190">&#9500;&#9472; sessions/first-pass/</text>
+  <text class="m" x="28" y="236">&#9474;  &#9500;&#9472; session.toml</text>
+  <text class="m" x="28" y="282">&#9474;  &#9492;&#9472; log/*.jsonl</text>
+  <text class="s" x="360" y="282" style="font-size:23px">one per kernel run</text>
+  <text class="m" x="28" y="328">&#9500;&#9472; exports/</text>
+  <text class="s" x="360" y="328" style="font-size:23px">tags as CSV</text>
+  <text class="m" x="28" y="374">&#9500;&#9472; warm/</text>
+  <text class="s" x="360" y="374" style="font-size:23px">saved embeddings</text>
+  <text class="m" x="28" y="420">&#9492;&#9472; .quail/</text>
+  <text class="s" x="360" y="420" style="font-size:23px">local index, not shared</text>
+  <path d="M852,34 v72 a68,18 0 0 0 136,0 v-72" fill="#EBE7DF" stroke="#1C1B19" stroke-width="3"/>
+  <ellipse cx="920" cy="34" rx="68" ry="18" fill="#fff" stroke="#1C1B19" stroke-width="3"/>
+  <text class="h" x="920" y="92" text-anchor="middle" style="font-size:27px">git</text>
+  <rect x="640" y="230" width="260" height="200" rx="18" fill="#fff" stroke="#1C1B19" stroke-width="3"/>
+  <text class="h" x="664" y="274" style="font-size:28px">Agent A</text>
+  <rect x="664" y="292" width="212" height="46" rx="23" fill="#F7E5DA" stroke="#B5522A" stroke-width="2.5"/>
+  <text class="m" x="770" y="323" text-anchor="middle" style="font-size:22px;font-weight:700;fill:#B5522A">first-pass</text>
+  <text class="s" x="664" y="376" style="font-size:23px">the original</text>
+  <text class="s" x="664" y="406" style="font-size:23px">session</text>
+  <rect x="940" y="230" width="260" height="200" rx="18" fill="#fff" stroke="#1C1B19" stroke-width="3"/>
+  <text class="h" x="964" y="274" style="font-size:28px">Agent B</text>
+  <rect x="964" y="292" width="212" height="46" rx="23" fill="#F7E5DA" stroke="#B5522A" stroke-width="2.5"/>
+  <text class="m" x="1070" y="323" text-anchor="middle" style="font-size:22px;font-weight:700;fill:#B5522A">second-pass</text>
+  <text class="s" x="964" y="376" style="font-size:23px">forked from</text>
+  <text class="s" x="964" y="406" style="font-size:23px">first-pass</text>
+  <path class="ln" d="M770,222 C770,170 810,124 842,112" marker-end="url(#a)" marker-start="url(#a)"/>
+  <path class="ln" d="M1070,222 C1070,170 1030,124 998,112" marker-end="url(#a)" marker-start="url(#a)"/>
+  <text class="s" x="752" y="176" text-anchor="end" style="font-size:23px">push, pull</text>
+  <text class="s" x="1088" y="176" style="font-size:23px">push, pull</text>
+  <text class="h" x="0" y="530" style="font-size:28px">Embedding ahead of time</text>
+  <rect x="0" y="556" width="92" height="56" rx="12" fill="#DFEFE8" stroke="#2A7F63" stroke-width="2.5"/>
+  <text class="b" x="46" y="593" text-anchor="middle" style="font-weight:700;fill:#2A7F63">1/4</text>
+  <rect x="104" y="556" width="92" height="56" rx="12" fill="#DFEFE8" stroke="#2A7F63" stroke-width="2.5"/>
+  <text class="b" x="150" y="593" text-anchor="middle" style="font-weight:700;fill:#2A7F63">2/4</text>
+  <rect x="208" y="556" width="92" height="56" rx="12" fill="#DFEFE8" stroke="#2A7F63" stroke-width="2.5"/>
+  <text class="b" x="254" y="593" text-anchor="middle" style="font-weight:700;fill:#2A7F63">3/4</text>
+  <rect x="312" y="556" width="92" height="56" rx="12" fill="#DFEFE8" stroke="#2A7F63" stroke-width="2.5"/>
+  <text class="b" x="358" y="593" text-anchor="middle" style="font-weight:700;fill:#2A7F63">4/4</text>
+  <path class="ln" d="M420,584 L476,584" marker-end="url(#a)"/>
+  <text class="m" x="492" y="593" style="font-weight:700">warm/</text>
+  <path class="ln" d="M592,584 L648,584" marker-end="url(#a)"/>
+  <text class="s" x="664" y="582">every clone&#8217;s first</text>
+  <text class="s" x="664" y="610">semantic search is fast</text>
 </svg>

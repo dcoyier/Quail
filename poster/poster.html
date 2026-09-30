@@ -14,7 +14,7 @@
     <h1><span class="name">Quail</span><span class="sub">An Environment for Agentic Qualitative Analysis</span></h1>
     <div class="authors"><b>Dashiell Coyier</b> &nbsp;&middot;&nbsp; DataSquad, Carleton College &nbsp;&middot;&nbsp; coyierd@carleton.edu</div>
   </div>
-  <div class="qr folded">
+  <div class="qr">
     <img src="figures/qr.svg" alt="QR code for github.com/dcoyier/Quail">
     <b>github.com/dcoyier/Quail</b><br>Apache-2.0
   </div>
@@ -22,37 +22,46 @@
 
 <main>
 
+<div class="col">
+
 <section id="why">
-  <h2><span class="n">1</span>Why Quail</h2>
-  <p>Campus offices often collect open-ended survey answers and then only skim them, because nobody has time to read hundreds closely.<sup>1</sup> Retrieval-augmented generation<sup>2</sup> answers from a handful of passages, but qualitative <i>coding</i>, labeling passages with themes, has to cover the whole corpus.</p>
-  <figure><img src="figures/ideas.svg" alt="Retrieval answers from a few passages; in Quail an agent runs many cells over the whole corpus and leaves tags behind"></figure>
-  <p>As in Cloudflare&rsquo;s Code Mode,<sup>3</sup> the agent writes code that calls its tools, then reads the result and decides what to run next.</p>
+  <h2><span class="n">1</span>Beyond retrieval</h2>
+  <p class="lede">Quail lets an AI agent make sense of a large collection of text the way an analyst would in a notebook, one cell at a time, with every step saved.</p>
+  <p>Researchers often have more text than anyone can read closely. Campus offices, for example, collect open-ended survey answers that nobody has time to read in full.<sup>1</sup> Retrieval-augmented generation<sup>2</sup> helps a language model with a collection like that by handing it the few passages that best match a question. That can answer &ldquo;what do people say about parking?&rdquo; but not &ldquo;how many people raised it, and where?&rdquo;</p>
+  <figure><img src="figures/corpus.svg" alt="The same corpus three times: retrieval picks five passages; count highlights every match and splits it into groups; tag marks ten matches as kept and two as rejected"></figure>
+  <p>Quail began as retrieval for an agent, and the step that changed it was adding <code>count()</code>. Counting runs over every row and can split the total by any field, so the agent can check how common something is instead of guessing from a handful of passages. Tags, the rest of the language and the saved history all grew from there.</p>
 </section>
 
-<section id="agent">
-  <h2><span class="n">2</span>Four design choices</h2>
-  <figure style="margin-top:0"><img src="figures/loop.svg" alt="The agent sends cells to a study and gets results back; the four design choices are numbered on the loop"></figure>
-  <div class="choices">
-    <div class="choice"><h3><i>1</i>The tool</h3>
-      <p>The agent&rsquo;s one tool is <code>quail exec</code>, which runs a Python cell with a small analysis language.</p></div>
-    <div class="choice"><h3><i>2</i>The environment</h3>
-      <p>It works in a study, a directory with the source CSVs, a short config file and each session&rsquo;s log.</p></div>
-    <div class="choice"><h3><i>3</i>What it can change</h3>
-      <p>It can only write tags, in its own session. The kernel has no network, file writes or subprocesses.</p></div>
-    <div class="choice"><h3><i>4</i>What comes back</h3>
-      <p>It gets what a notebook would show: printed output, the last value or a traceback, up to 64&nbsp;KiB by default.</p></div>
-  </div>
+<section id="notebook">
+  <h2><span class="n">2</span>A notebook for an agent</h2>
+  <p>A Jupyter notebook lets an analyst try something, look at the result and decide what to try next. Quail gives an agent the same loop. Each <code>quail exec</code> command runs one Python cell in a kernel that stays alive between commands, and the agent gets back what a notebook would show: whatever the cell printed, the value of its last line, or a traceback.</p>
+  <p>Searching, counting and tagging could have been separate tool calls. In Quail they are a small Python library instead, so one cell can combine them and send back only what matters. Cloudflare&rsquo;s Code Mode makes the same choice for MCP tools but runs each snippet in a fresh sandbox;<sup>3</sup> Quail keeps its kernel from one cell to the next.</p>
+  <figure><img src="figures/tools.svg" alt="Separate tool calls pass every result back through the agent; one Quail cell combines two searches and a count and returns only the counts"></figure>
+  <table class="lang">
+    <tr><td>Field("body")</td><td>a column of the dataset</td></tr>
+    <tr><td>body.<span class="kw">lexical</span>("parking")</td><td>keyword score (BM25); <code>&gt; 0</code> means the word appears</td></tr>
+    <tr><td>body.<span class="sem">semantic</span>("&hellip;")</td><td>closeness in meaning, from embeddings</td></tr>
+    <tr><td>a &amp; b, &nbsp;a | b, &nbsp;~a</td><td>combine conditions</td></tr>
+    <tr><td>count(where, by=&hellip;)</td><td>how many rows match, split by any field</td></tr>
+    <tr><td>retrieve(where, rank=&hellip;)</td><td>the matching rows themselves, to read</td></tr>
+    <tr><td><span class="tg">tag</span>(where, "topic", "parking")</td><td>labels rows; the only thing a cell can write</td></tr>
+  </table>
 </section>
 
-<section id="example" class="folded">
-  <h2><span class="n">4</span>Example: coding survey responses</h2>
-  <div class="ex-grid">
-    <div class="steps">
-      <div class="step">
-        <h3><span class="k">A</span>Search for the word and read every match</h3>
-        <div class="cell"><pre class="in">body = Field(<span class="st">"body"</span>)
-word = body.<span class="fn">lexical</span>(<span class="st">"parking"</span>) &gt; 0
-<span class="kw">for</span> e <span class="kw">in</span> <span class="fn">retrieve</span>(word):
+</div>
+
+<div class="col">
+
+<section id="example">
+  <h2><span class="n">3</span>A session, cell by cell</h2>
+  <div class="notebook">
+    <p class="intro">Thirty invented answers to a staff survey question, <i>&ldquo;Is there anything else you&rsquo;d like to tell us?&rdquo;</i> The agent has been asked how many people raised parking, and in which departments. Each numbered cell is one <code>quail exec</code> call, with its real output.</p>
+
+    <div class="step">
+      <p class="say">It starts with the word itself and reads every match.</p>
+      <div class="cellrow"><span class="no">[1]</span><div class="cell"><pre class="in">body = Field(<span class="st">"body"</span>)
+word = body.<span class="kw">lexical</span>(<span class="st">"parking"</span>) &gt; 0
+for e in retrieve(word):
     print(e.id, e[<span class="st">"body"</span>][:58])</pre><pre class="out">r01 The parking permit went up again this year and nobody expl
 <span class="fp">r04 Our team keeps a parking lot of ideas on the whiteboard, w</span>  <span class="note">false match</span>
 r07 Parking enforcement ticketed me while I was unloading equi
@@ -60,42 +69,59 @@ r07 Parking enforcement ticketed me while I was unloading equi
 r14 The parking permit portal logged me out three times before
 r21 Visitors complain that they cannot find parking for interv
 r24 Accessible parking spaces are often taken by service vehic
-r28 I get to work at seven just to be sure I have a place to p</pre></div>
-      </div>
-      <div class="step">
-        <h3><span class="k">B</span>Search for the meaning, skipping what the word found</h3>
-        <div class="cell"><pre class="in">meaning = body.<span class="fn">semantic</span>(<span class="st">"no place to park near the building"</span>) &gt; 0.52
-<span class="kw">for</span> e <span class="kw">in</span> <span class="fn">retrieve</span>(meaning &amp; ~word):
+r28 I get to work at seven just to be sure I have a place to p</pre></div></div>
+    </div>
+
+    <div class="step">
+      <p class="say">Two of those are about a different kind of parking lot. To find complaints that never use the word, it searches by meaning and skips the rows it has already read.</p>
+      <div class="cellrow"><span class="no">[2]</span><div class="cell"><pre class="in">meaning = body.<span class="sem">semantic</span>(<span class="st">"no place to park near the building"</span>) &gt; 0.52
+for e in retrieve(meaning &amp; ~word):
     print(e.id, e[<span class="st">"body"</span>][:58])</pre><pre class="out">r02 I spend fifteen minutes every morning circling for a spot
 r05 The garage is full by 8:30 so I end up walking in from the
 r10 There is nowhere to leave a car close to the building if y
-r17 I would come in more often if I could reliably find somewh</pre></div>
-      </div>
-      <div class="step">
-        <h3><span class="k">C</span>Tag both sets, drop the false matches, count by department</h3>
-        <div class="cell"><pre class="in"><span class="fn acc">tag</span>(word | meaning, <span class="st">"topic"</span>, <span class="st">"parking"</span>)
-<span class="fn acc">tag</span>(Field(<span class="st">"id"</span>).isin([<span class="st">"r04"</span>, <span class="st">"r13"</span>]), <span class="st">"topic"</span>, None)
-<span class="fn">count</span>(where=Field(<span class="st">"topic"</span>) == <span class="st">"parking"</span>, by=Field(<span class="st">"dept"</span>))</pre><pre class="out">Counter({'admin': 4, 'it': 3, 'facilities': 2, 'research': 1})</pre></div>
-      </div>
+r17 I would come in more often if I could reliably find somewh</pre></div></div>
     </div>
-    <div class="ex-side">
-      <p>Thirty invented answers to a staff survey question, <i>&ldquo;Is there anything else you&rsquo;d like to tell us?&rdquo;</i> The agent is asked how many people raised parking, and in which departments. Each box is one <code>quail exec</code> call with its real output.</p>
-      <figure><img src="figures/venn.svg" alt="Keyword and semantic matches overlap on four responses; two keyword matches are false"></figure>
-      <p class="small">The keyword search takes <i>parking lot</i> literally. The semantic search finds complaints that never use the word, but its scores sit close together (0.53 for r05, 0.50 for a complaint about air conditioning), so the agent has to check any cutoff by reading.</p>
+
+    <div class="step">
+      <p class="say">The semantic scores sit close together (0.53 for r05, 0.50 for a complaint about air conditioning), so the cutoff has to be checked by reading. Happy with both lists, it tags them, clears the two false matches and counts by department.</p>
+      <div class="cellrow"><span class="no">[3]</span><div class="cell"><pre class="in"><span class="tg">tag</span>(word | meaning, <span class="st">"topic"</span>, <span class="st">"parking"</span>)
+<span class="tg">tag</span>(Field(<span class="st">"id"</span>).isin([<span class="st">"r04"</span>, <span class="st">"r13"</span>]), <span class="st">"topic"</span>, None)
+count(where=Field(<span class="st">"topic"</span>) == <span class="st">"parking"</span>, by=Field(<span class="st">"dept"</span>))</pre><pre class="out">Counter({'admin': 4, 'it': 3, 'facilities': 2, 'research': 1})</pre></div></div>
+    </div>
+
+    <div class="restart">KERNEL RESTARTED</div>
+
+    <div class="step">
+      <p class="say">As in Jupyter, a restart clears the variables. The tags survive, because each cell&rsquo;s tags were saved to the session log before its reply came back. (A cell that fails saves none of its tags.)</p>
+      <div class="cellrow"><span class="no">[4]</span><div class="cell"><pre class="in">count(by=Field(<span class="st">"topic"</span>))</pre><pre class="out">Counter({None: 20, 'parking': 10})</pre></div></div>
+    </div>
+    <div class="step" style="margin-bottom:0">
+      <div class="cellrow"><span class="no">[5]</span><div class="cell"><pre class="in">word</pre><pre class="out err">NameError: name 'word' is not defined. Did you mean: 'ord'?</pre></div></div>
     </div>
   </div>
 </section>
 
+<section id="cell">
+  <h2><span class="n">4</span>How a cell runs</h2>
+  <p>The first cell in a session starts a small background process, the session host, which keeps that session&rsquo;s Python kernel running. The kernel reads the dataset from one SQLite file holding the rows, a keyword index, stored embeddings and the current tags, but it cannot write to it. When a cell tags rows, the host saves the cell to the session log first and only then updates the index and replies, so a reply means the work is already on disk.</p>
+  <figure style="margin-bottom:0"><img src="figures/architecture.svg" alt="The agent sends a cell to the session host, which runs it in a sandboxed Python kernel, saves it to the session log, then updates the SQLite dataset index; the host fetches missing embeddings from an embedding model"></figure>
+</section>
+
+</div>
+
+<div class="col">
+
 <section id="study">
-  <h2><span class="n">6</span>Studies live in git</h2>
-  <p>A study is a directory of plain text. Each kernel run writes its own log file, so agents working in parallel don&rsquo;t overwrite each other&rsquo;s history, and a new session can fork a closed one to try another coding scheme.</p>
-  <figure style="margin-bottom:0"><img src="figures/study.svg" alt="Study directory tree next to two agents sharing it through a git remote"></figure>
+  <h2><span class="n">5</span>Studies live in git</h2>
+  <p>A study is an ordinary folder of text files, so git can share it the way it shares code. Each kernel run writes its own log file, which means agents working in parallel never edit the same file. To try another approach without disturbing the first, <code>quail fork</code> copies a closed session&rsquo;s tags and history into a new session.</p>
+  <figure><img src="figures/study.svg" alt="Study folder next to two agents sharing it through git; below, four shards of embedding work are saved to warm/"></figure>
+  <p>Semantic search needs an embedding for every distinct text, and computing them the first time can take minutes on a large dataset. <code>quail warm</code> can do that work in advance, split across several machines, and save it in <code>warm/</code>, so every clone of the study starts with it.</p>
 </section>
 
 <section id="where">
-  <h2><span class="n">7</span>Where Quail runs</h2>
-  <p>Quail runs beside the agent, on a laptop or a cloud VM. Its first real study, <span style="white-space:nowrap">Allen-News</span>, covers TV news transcripts from six U.S. election years.</p>
-  <figure><img src="figures/deploy.svg" alt="A Slack message starts a VM from a snapshot; the agent runs Quail cells and replies in the thread"></figure>
+  <h2><span class="n">6</span>Where Quail runs</h2>
+  <p>Quail needs only a shell, so it runs wherever an agent does, on a laptop or a cloud VM. In one setup, a study of TV news transcripts from six U.S. presidential elections is available in Slack. Mentioning @Cursor in a thread starts a cloud VM from a snapshot that already has Quail installed and the study fully processed, embeddings included, so the agent can search the whole dataset from its first cell.</p>
+  <figure><img src="figures/deploy.svg" alt="A Slack question starts a cloud VM from a snapshot holding Quail, the processed study and its embeddings; the agent runs Quail cells and replies in the thread"></figure>
   <div class="thread">
     <div><span class="who">Dashiell Coyier</span><span class="meta">#quail-allen-news</span></div>
     <p class="q"><span class="mention">@Cursor</span> how is Obama characterized?</p>
@@ -104,39 +130,13 @@ r17 I would come in more often if I could reliably find somewh</pre></div>
   </div>
 </section>
 
-<div id="right">
-
-<section id="cell">
-  <h2><span class="n">3</span>How a cell runs</h2>
-  <p>The first <code>quail exec</code> in a session starts a host that keeps a Python kernel alive between commands. Queries compile to SQL inside the kernel, and every cell is written to the session log before the agent sees its reply. The SQLite index is only a cache, rebuilt from the study&rsquo;s files when needed.</p>
-  <figure style="margin-bottom:0"><img src="figures/architecture.svg" alt="Agent, session host, sandboxed Python kernel, SQLite index, vector cache, embedding model and session log"></figure>
-</section>
-
-<section id="lasts">
-  <h2><span class="n">5</span>What persists</h2>
-  <p>The source CSV is never modified. Tags commit with the cell that wrote them, all or nothing, and outlast the kernel; variables do not.</p>
-  <figure><img src="figures/lifetimes.svg" alt="Timeline: source unchanged, tags kept across reset and clone, variables cleared at each reset"></figure>
-  <div class="term"><span class="cm">After step C, the agent resets its kernel.</span>
-<b>$ quail exec first-pass --reset</b>
-Reset kernel for 'first-pass'; committed tags retained.
-<b>$ quail exec first-pass -c 'count(by=Field("topic"))'</b>
-Counter({None: 20, 'parking': 10})
-<b>$ quail exec first-pass -c 'word'</b>
-NameError: name 'word' is not defined. Did you mean: 'ord'?</div>
-</section>
-
 <section id="status">
-  <h2><span class="n">8</span>Status and next steps</h2>
-  <p>Quail 0.94 is an alpha release for Linux and macOS. The <span style="white-space:nowrap">Allen-News</span> study runs on cloud agents, but nothing it has produced has been evaluated yet. Next, we want to learn:</p>
-  <ul class="plain">
-    <li>how an agent&rsquo;s tags compare with a human coder&rsquo;s,</li>
-    <li>when an analyst should review or revise the agent&rsquo;s coding,</li>
-    <li>and what an auditor needs from the session logs.</li>
-  </ul>
-  <div class="term"><span class="cm">To try it (Linux or macOS, Python 3.12+, uv):</span>
-<b>$</b> git clone --depth 1 https://github.com/dcoyier/Quail.git
-<b>$</b> cd Quail &amp;&amp; uv sync --locked --no-dev --python 3.12
-<b>$</b> . .venv/bin/activate &amp;&amp; quail init ../my-study</div>
+  <h2><span class="n">7</span>Status and next steps</h2>
+  <p>Quail 0.94 is an alpha release for Linux and macOS, open source under the Apache 2.0 license, and it works with any agent that can run shell commands. Nothing it has produced has been formally evaluated yet, and working out how to do that well is our next step. If you have a collection of text you would like to understand, we would love to hear about it.</p>
+  <div class="term"><span class="cmt">To try it, with Python 3.12+ and uv:</span>
+$ git clone --depth 1 https://github.com/dcoyier/Quail.git
+$ cd Quail &amp;&amp; uv sync --locked --no-dev --python 3.12
+$ . .venv/bin/activate &amp;&amp; quail init ../my-study</div>
 </section>
 
 </div>

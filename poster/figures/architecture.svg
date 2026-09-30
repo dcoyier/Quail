@@ -1,115 +1,64 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1260 1140" width="1260" height="1140">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 504" width="1200" height="504">
   <style>
-    text { font-family: Inter, sans-serif; fill: #141414; font-variant-ligatures: none; }
-    .t { font-size: 30px; font-weight: 800; }
-    .l { font-size: 26px; font-weight: 700; }
-    .s { font-size: 23px; fill: #6A6A6A; }
-    .w { font-size: 23px; fill: #CFCFCF; }
-    .m { font-family: 'JetBrains Mono', monospace; font-size: 23px; }
-    .ln { fill: none; stroke: #141414; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
-    .chip { fill: #fff; stroke: #BDBDBD; stroke-width: 2.5; }
-    .ch { font-size: 24px; font-weight: 700; text-anchor: middle; }
-    .cs { font-size: 22px; fill: #6A6A6A; text-anchor: middle; }
+    text { font-family: 'Source Sans 3', sans-serif; fill: #1C1B19; }
+    .h { font-size: 30px; font-weight: 700; }
+    .b { font-size: 25px; }
+    .s { font-size: 24px; fill: #6F6B64; }
+    .cap { font-size: 21px; font-weight: 700; letter-spacing: 2.5px; fill: #6F6B64; }
+    .m { font-family: 'Source Code Pro', monospace; font-size: 24px; font-weight: 500; font-variant-ligatures: none; }
+    .ln { fill: none; stroke: #1C1B19; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
   </style>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#141414"/>
-    </marker>
-    <marker id="g" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#8C8C8C"/>
+      <path d="M0,0 L10,5 L0,10 z" fill="#1C1B19"/>
     </marker>
   </defs>
-
-  <!-- agent -->
-  <rect x="330" y="8" width="600" height="116" rx="58" fill="#141414"/>
-  <text x="630" y="62" text-anchor="middle" style="font-size:34px;font-weight:800;fill:#fff">Agent</text>
-  <text class="w" x="630" y="98" text-anchor="middle">any harness that can run a shell command</text>
-
-  <path class="ln" d="M540,132 L540,262" marker-end="url(#a)"/>
-  <text class="l" x="520" y="182" text-anchor="end">one cell per command</text>
-  <text class="m" x="520" y="216" text-anchor="end">quail exec S -c CODE</text>
-  <path class="ln" d="M720,262 L720,132" marker-end="url(#a)"/>
-  <text class="l" x="740" y="182">result; the client exits</text>
-  <text class="s" x="740" y="216">text or one JSON object</text>
-
-  <!-- machine boundary -->
-  <rect x="4" y="240" width="1252" height="892" rx="26" fill="none" stroke="#8C8C8C" stroke-width="3" stroke-dasharray="12 10"/>
-  <rect x="970" y="224" width="268" height="34" fill="#fff"/>
-  <text class="s" x="1224" y="249" text-anchor="end">your machine or a VM</text>
-
-  <!-- host -->
-  <rect x="36" y="276" width="1188" height="200" rx="18" fill="#F2F2F1" stroke="#141414" stroke-width="3"/>
-  <text class="t" x="64" y="320">Session host</text>
-  <text class="s" x="282" y="319">one background process per session, on a Unix socket</text>
-  <rect class="chip" x="64" y="344" width="268" height="100" rx="12"/>
-  <text class="ch" x="198" y="386">runs one cell</text>
-  <text class="cs" x="198" y="418">at a time</text>
-  <rect class="chip" x="352" y="344" width="268" height="100" rx="12"/>
-  <text class="ch" x="486" y="386">enforces limits</text>
-  <text class="cs" x="486" y="418">CPU, wall time, memory</text>
-  <rect class="chip" x="640" y="344" width="268" height="100" rx="12"/>
-  <text class="ch" x="774" y="386">writes the log</text>
-  <text class="cs" x="774" y="418">before it replies</text>
-  <rect class="chip" x="928" y="344" width="268" height="100" rx="12"/>
-  <text class="ch" x="1062" y="386">fetches embeddings</text>
-  <text class="cs" x="1062" y="418">for unseen text only</text>
-
-  <!-- host to kernel and log -->
-  <path class="ln" d="M290,484 L290,552" marker-end="url(#a)"/>
-  <text class="s" x="306" y="526">cell code</text>
-  <path class="ln" d="M590,552 L590,484" marker-end="url(#a)"/>
-  <text class="s" x="606" y="526">output, tag changes</text>
-  <path class="ln" d="M960,484 L960,552" marker-end="url(#a)"/>
-  <path class="ln" d="M1206,484 L1206,778" marker-end="url(#g)" style="stroke:#8C8C8C"/>
-
-  <!-- kernel -->
-  <rect x="36" y="560" width="780" height="330" rx="18" fill="#fff" stroke="#141414" stroke-width="4"/>
-  <text class="t" x="64" y="604">Python kernel</text>
-  <text class="s" x="282" y="603">sandboxed child process</text>
-  <rect x="64" y="630" width="300" height="58" rx="10" fill="#F2F2F1" stroke="#BDBDBD" stroke-width="2"/>
-  <text class="m" x="84" y="667">[1] body = Field(&#8230;)</text>
-  <rect x="64" y="698" width="300" height="58" rx="10" fill="#F2F2F1" stroke="#BDBDBD" stroke-width="2"/>
-  <text class="m" x="84" y="735">[2] retrieve(&#8230;)</text>
-  <rect x="64" y="766" width="300" height="58" rx="10" fill="#F6E4DA" stroke="#B9572B" stroke-width="2.5"/>
-  <text class="m" x="84" y="803">[3] <tspan style="fill:#B9572B;font-weight:700">tag</tspan>(&#8230;)</text>
-  <text class="l" x="394" y="656">persistent namespace</text>
-  <text class="s" x="394" y="688">variables, functions, classes</text>
-  <text class="l" x="394" y="746">analysis language</text>
-  <text class="m" x="394" y="780">Field count retrieve</text>
-  <text class="m" x="394" y="812">values tag</text>
-  <text x="64" y="864" style="font-size:24px;font-weight:700">no network, no file writes, no subprocesses</text>
-
-  <!-- log -->
-  <rect x="866" y="560" width="316" height="196" rx="18" fill="#141414"/>
-  <text class="t" x="892" y="604" style="fill:#fff">Session log</text>
-  <text class="w" x="892" y="640">code, output and tags,</text>
-  <text class="w" x="892" y="670">one file per kernel run</text>
-  <text x="892" y="722" style="font-size:25px;font-weight:700;fill:#fff">the source of truth</text>
-
-  <!-- embedding model -->
-  <rect x="866" y="786" width="358" height="150" rx="18" fill="#fff" stroke="#8C8C8C" stroke-width="3" stroke-dasharray="10 8"/>
-  <text class="t" x="892" y="830">Embedding model</text>
-  <text class="s" x="892" y="866">Ollama or OpenAI-</text>
-  <text class="s" x="892" y="896">compatible; may be remote</text>
-
-  <!-- storage -->
-  <rect x="36" y="960" width="500" height="156" rx="18" fill="#E4E4E2"/>
-  <text class="t" x="64" y="1004">SQLite, read-only</text>
-  <text class="s" x="64" y="1040" style="fill:#3B3B3B">source rows, FTS5 keyword index,</text>
-  <text class="s" x="64" y="1070" style="fill:#3B3B3B">private tag tables per kernel;</text>
-  <text class="s" x="64" y="1100" style="fill:#3B3B3B">rebuilt from study files</text>
-
-  <rect x="576" y="960" width="270" height="156" rx="18" fill="#E4E4E2"/>
-  <text class="t" x="602" y="1004">Vector cache</text>
-  <text class="s" x="602" y="1040" style="fill:#3B3B3B">NumPy cosine scores;</text>
-  <text class="s" x="602" y="1070" style="fill:#3B3B3B">each distinct text</text>
-  <text class="s" x="602" y="1100" style="fill:#3B3B3B">embedded once</text>
-
-  <path class="ln" d="M270,952 L270,898" marker-end="url(#a)"/>
-  <path class="ln" d="M310,898 L310,952" marker-end="url(#a)"/>
-  <text class="s" x="330" y="933">compiled SQL</text>
-  <path class="ln" d="M700,952 L700,898" marker-end="url(#a)"/>
-  <text class="s" x="716" y="933">scores</text>
-  <path class="ln" d="M950,944 L950,992 Q950,1036 906,1036 L856,1036" marker-end="url(#g)" style="stroke:#8C8C8C"/>
+  <rect x="0" y="0" width="280" height="150" rx="18" fill="#EBE7DF"/>
+  <text class="h" x="26" y="48" style="font-size:30px">Agent</text>
+  <text class="s" x="26" y="88">any harness that can</text>
+  <text class="s" x="26" y="120">run shell commands</text>
+  <rect x="380" y="0" width="380" height="150" rx="18" fill="#fff" stroke="#1C1B19" stroke-width="3"/>
+  <text class="h" x="406" y="48" style="font-size:30px">Session host</text>
+  <text class="s" x="406" y="88">starts with the first cell,</text>
+  <text class="s" x="406" y="120">then runs one at a time</text>
+  <rect x="860" y="0" width="340" height="150" rx="18" fill="#F7E5DA" stroke="#B5522A" stroke-width="3"/>
+  <text class="h" x="886" y="48" style="font-size:30px;fill:#B5522A">Session log</text>
+  <text class="s" x="886" y="88">code, output and tags,</text>
+  <text class="s" x="886" y="120">saved before the reply</text>
+  <rect x="0" y="300" width="280" height="200" rx="18" fill="#DFEFE8" stroke="#2A7F63" stroke-width="3"/>
+  <text class="h" x="26" y="348" style="font-size:28px;fill:#2A7F63">Embedding model</text>
+  <text class="s" x="26" y="388">Ollama or an</text>
+  <text class="s" x="26" y="420">OpenAI-compatible</text>
+  <text class="s" x="26" y="452">API; may be remote</text>
+  <rect x="380" y="300" width="380" height="200" rx="18" fill="#fff" stroke="#1C1B19" stroke-width="3" stroke-dasharray="12 9"/>
+  <text class="h" x="406" y="348" style="font-size:30px">Python kernel</text>
+  <text class="s" x="406" y="388">keeps variables between cells;</text>
+  <text class="s" x="406" y="420">no network, file writes</text>
+  <text class="s" x="406" y="452">or subprocesses</text>
+  <rect x="860" y="300" width="340" height="200" rx="18" fill="#EBE7DF"/>
+  <text class="h" x="886" y="348" style="font-size:30px">Dataset index</text>
+  <text class="s" x="886" y="388">one SQLite file: rows,</text>
+  <text class="s" x="886" y="420">keyword index, embeddings</text>
+  <text class="s" x="886" y="452">and tags; rebuilt from the</text>
+  <text class="s" x="886" y="484">study files when needed</text>
+  <path class="ln" d="M288,52 L372,52" marker-end="url(#a)"/>
+  <text class="s" x="330.0" y="38" text-anchor="middle">cell</text>
+  <path class="ln" d="M372,102 L288,102" marker-end="url(#a)"/>
+  <text class="s" x="330.0" y="138" text-anchor="middle">reply</text>
+  <path class="ln" d="M768,75 L852,75" marker-end="url(#a)"/>
+  <text class="s" x="810.0" y="60" text-anchor="middle">first</text>
+  <path class="ln" d="M500,158 L500,292" marker-end="url(#a)"/>
+  <text class="s" x="488" y="234" text-anchor="end">code</text>
+  <path class="ln" d="M600,292 L600,158" marker-end="url(#a)"/>
+  <text class="s" x="614" y="222">output,</text>
+  <text class="s" x="614" y="250">tag changes</text>
+  <path class="ln" d="M404,158 L262,292" marker-end="url(#a)"/>
+  <text class="s" x="250" y="214" text-anchor="end">missing</text>
+  <text class="s" x="250" y="242" text-anchor="end">embeddings</text>
+  <path class="ln" d="M736,158 L878,292" marker-end="url(#a)"/>
+  <text class="s" x="880" y="214">then tags and</text>
+  <text class="s" x="880" y="242">new embeddings</text>
+  <path class="ln" d="M768,400 L852,400" marker-end="url(#a)"/>
+  <text class="s" x="810.0" y="386" text-anchor="middle">reads</text>
 </svg>

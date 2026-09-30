@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 478" width="1200" height="478">
+  <style>
+    text { font-family: 'Source Sans 3', sans-serif; fill: #1C1B19; }
+    .h { font-size: 30px; font-weight: 700; }
+    .b { font-size: 25px; }
+    .s { font-size: 24px; fill: #6F6B64; }
+    .cap { font-size: 21px; font-weight: 700; letter-spacing: 2.5px; fill: #6F6B64; }
+    .m { font-family: 'Source Code Pro', monospace; font-size: 24px; font-weight: 500; font-variant-ligatures: none; }
+    .ln { fill: none; stroke: #1C1B19; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1C1B19"/>
+    </marker>
+  </defs>
+  <text class="h" x="2" y="30" style="font-size:28px">As separate tool calls</text>
+  <rect x="0" y="54" width="116" height="76" rx="38" fill="#EBE7DF"/>
+  <text class="b" x="58.0" y="101" text-anchor="middle" style="font-weight:700">agent</text>
+  <path class="ln" d="M124,92.0 L161,92.0" marker-end="url(#a)"/>
+  <rect x="168.66666666666666" y="54" width="140" height="76" rx="14" fill="#fff" stroke="#1C1B19" stroke-width="3"/>
+  <text class="m" x="238.66666666666666" y="100" text-anchor="middle" style="font-weight:700">search</text>
+  <path class="ln" d="M317,92.0 L353,92.0" marker-end="url(#a)"/>
+  <rect x="361.3333333333333" y="54" width="116" height="76" rx="38" fill="#EBE7DF"/>
+  <text class="b" x="419.3333333333333" y="101" text-anchor="middle" style="font-weight:700">agent</text>
+  <path class="ln" d="M485,92.0 L522,92.0" marker-end="url(#a)"/>
+  <rect x="530.0" y="54" width="140" height="76" rx="14" fill="#fff" stroke="#1C1B19" stroke-width="3"/>
+  <text class="m" x="600.0" y="100" text-anchor="middle" style="font-weight:700">search</text>
+  <path class="ln" d="M678,92.0 L715,92.0" marker-end="url(#a)"/>
+  <rect x="722.6666666666666" y="54" width="116" height="76" rx="38" fill="#EBE7DF"/>
+  <text class="b" x="780.6666666666666" y="101" text-anchor="middle" style="font-weight:700">agent</text>
+  <path class="ln" d="M847,92.0 L883,92.0" marker-end="url(#a)"/>
+  <rect x="891.3333333333333" y="54" width="140" height="76" rx="14" fill="#fff" stroke="#1C1B19" stroke-width="3"/>
+  <text class="m" x="961.3333333333333" y="100" text-anchor="middle" style="font-weight:700">count</text>
+  <path class="ln" d="M1039,92.0 L1076,92.0" marker-end="url(#a)"/>
+  <rect x="1084.0" y="54" width="116" height="76" rx="38" fill="#EBE7DF"/>
+  <text class="b" x="1142.0" y="101" text-anchor="middle" style="font-weight:700">agent</text>
+  <text class="s" x="0" y="172">Every result goes back through the agent before its next call.</text>
+  <text class="h" x="2" y="238" style="font-size:28px">As one Quail cell</text>
+  <rect x="0" y="302.0" width="116" height="76" rx="38" fill="#EBE7DF"/>
+  <text class="b" x="58.0" y="349.0" text-anchor="middle" style="font-weight:700">agent</text>
+  <path class="ln" d="M124,340.0 L161,340.0" marker-end="url(#a)"/>
+  <rect x="168.66666666666666" y="262" width="862.6666666666666" height="156" rx="16" fill="#F6F4EF" stroke="#D9D5CC" stroke-width="3"/>
+  <text class="m" x="196.66666666666666" y="310" style="font-size:23px">word = body.<tspan style="fill:#2F6497;font-weight:700">lexical</tspan>("parking") &gt; 0</text>
+  <text class="m" x="196.66666666666666" y="350" style="font-size:23px">meaning = body.<tspan style="fill:#2A7F63;font-weight:700">semantic</tspan>("no place to park") &gt; 0.52</text>
+  <text class="m" x="196.66666666666666" y="390" style="font-size:23px">count(where=word | meaning, by=Field("dept"))</text>
+  <path class="ln" d="M1039,340.0 L1076,340.0" marker-end="url(#a)"/>
+  <rect x="1084" y="302.0" width="116" height="76" rx="38" fill="#EBE7DF"/>
+  <text class="b" x="1142.0" y="349.0" text-anchor="middle" style="font-weight:700">agent</text>
+  <text class="s" x="0" y="462">Only the final counts come back, and <tspan class="m" style="font-size:22px">word</tspan> and <tspan class="m" style="font-size:22px">meaning</tspan> stay defined for the next cell.</text>
+</svg>
