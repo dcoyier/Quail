@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 556" width="1200" height="556">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 606" width="1200" height="606">
   <style>
     text { font-family: 'Source Sans 3', sans-serif; fill: #141414; }
     .h { font-size: 30px; font-weight: 700; }
@@ -14,37 +14,36 @@
       <path d="M0,0 L10,5 L0,10 z" fill="#141414"/>
     </marker>
   </defs>
-  <path d="M20,60 H220 Q240,60 240,80 V180 Q240,200 220,200 H62 L22,228 L40,200 H20 Q0,200 0,180 V80 Q0,60 20,60 Z" fill="#fff" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
-  <text class="h" x="26" y="108" style="font-size:30px">Slack</text>
-  <text class="s" x="26" y="146">@Cursor and</text>
-  <text class="s" x="26" y="176">a question</text>
-  <path class="ln" d="M248,130 L312,130" marker-end="url(#a)"/>
-  <rect x="320" y="0" width="560" height="280" rx="24" fill="#F2F4F6"/>
-  <text class="cap" x="348" y="50">CLOUD VM &#183; 4 CPUS, 16 GB</text>
-  <rect x="348" y="88" width="212" height="164" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
-  <text class="h" x="374" y="136" style="font-size:30px">Agent</text>
-  <text class="s" x="374" y="174">writes and</text>
-  <text class="s" x="374" y="204">reads cells</text>
-  <rect x="640" y="88" width="212" height="164" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
-  <text class="h" x="666" y="136" style="font-size:30px">Quail</text>
-  <text class="s" x="666" y="174">the study&#8217;s</text>
-  <text class="s" x="666" y="204">sessions</text>
-  <path class="ln" d="M568,150 L632,150" marker-end="url(#a)"/>
-  <path class="ln" d="M632,196 L568,196" marker-end="url(#a)"/>
-  <path class="ln" d="M888,130 L952,130" marker-end="url(#a)"/>
-  <path d="M980,60 H1180 Q1200,60 1200,80 V180 Q1200,200 1180,200 H1160 L1178,228 L1138,200 H980 Q960,200 960,180 V80 Q960,60 980,60 Z" fill="#fff" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
-  <text class="h" x="986" y="108" style="font-size:30px">Reply</text>
-  <text class="s" x="986" y="146">posted back</text>
-  <text class="s" x="986" y="176">in the thread</text>
-  <path class="ln" d="M600.0,348 L600.0,288" marker-end="url(#a)"/>
-  <text class="s" x="616" y="322">boots from</text>
-  <path d="M320,372 V536 A280.0,16 0 0 0 880,536 V372" fill="#E3E7EC" stroke="#141414" stroke-width="3"/>
-  <ellipse cx="600.0" cy="372" rx="280.0" ry="16" fill="#fff" stroke="#141414" stroke-width="3"/>
-  <text class="h" x="346" y="428" style="font-size:30px">Snapshot</text>
-  <text class="s" x="346" y="466">Quail and a local embedding model,</text>
-  <text class="s" x="346" y="496">the election news study, fully processed:</text>
-  <text class="s" x="346" y="526">39 GB of indexes, 2.8 million embeddings</text>
-  <text class="s" x="296" y="442" text-anchor="end">prepared once,</text>
-  <text class="s" x="296" y="472" text-anchor="end">reused by every</text>
-  <text class="s" x="296" y="502" text-anchor="end">request</text>
+  <rect x="320" y="0" width="880" height="360" rx="24" fill="#F2F4F6"/>
+  <text class="cap" x="348" y="50">CLOUD VM</text>
+  <rect x="348" y="76" width="300" height="256" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="374" y="124" style="font-size:30px">Agent</text>
+  <text class="s" x="374" y="162">reads the question,</text>
+  <text class="s" x="374" y="192">runs cells, replies</text>
+  <rect x="872" y="76" width="300" height="256" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="898" y="124" style="font-size:30px">Quail</text>
+  <text class="s" x="898" y="162">the study&#8217;s</text>
+  <text class="s" x="898" y="192">sessions</text>
+  <path class="ln" d="M656,176 L864,176" marker-end="url(#a)"/>
+  <path class="ln" d="M864,232 L656,232" marker-end="url(#a)"/>
+  <path d="M20,10 H220 Q240,10 240,30 V130 Q240,150 220,150 H62 L22,178 L40,150 H20 Q0,150 0,130 V30 Q0,10 20,10 Z" fill="#fff" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+  <text class="h" x="26" y="58" style="font-size:30px">Slack</text>
+  <text class="s" x="26" y="96">@Cursor and</text>
+  <text class="s" x="26" y="126">a question</text>
+  <path class="ln" d="M248,96 L340,96" marker-end="url(#a)"/>
+  <path d="M20,200 H220 Q240,200 240,220 V320 Q240,340 220,340 H62 L22,368 L40,340 H20 Q0,340 0,320 V220 Q0,200 20,200 Z" fill="#fff" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+  <text class="h" x="26" y="248" style="font-size:30px">Reply</text>
+  <text class="s" x="26" y="286">posted back</text>
+  <text class="s" x="26" y="316">in the thread</text>
+  <path class="ln" d="M340,270 L248,270" marker-end="url(#a)"/>
+  <path class="ln" d="M760.0,428 L760.0,368" marker-end="url(#a)"/>
+  <text class="s" x="776" y="406">boots from</text>
+  <path d="M320,452 V586 A440.0,16 0 0 0 1200,586 V452" fill="#E3E7EC" stroke="#141414" stroke-width="3"/>
+  <ellipse cx="760.0" cy="452" rx="440.0" ry="16" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="346" y="508" style="font-size:30px">Snapshot</text>
+  <text class="s" x="346" y="546">Quail, an embedding model and</text>
+  <text class="s" x="346" y="576">the fully processed dataset</text>
+  <text class="s" x="296" y="516" text-anchor="end">prepared once,</text>
+  <text class="s" x="296" y="546" text-anchor="end">reused by every</text>
+  <text class="s" x="296" y="576" text-anchor="end">request</text>
 </svg>
