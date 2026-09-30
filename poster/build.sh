@@ -1,12 +1,27 @@
 #!/usr/bin/env bash
 # Renders the poster to PDF and PNG, and each figure to its own PNG.
 # Usage: poster/build.sh [OUT_DIR]   (default: poster/build)
+# On macOS, install the fonts in poster/fonts first; elsewhere fontconfig finds them.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 out="${1:-$here/build}"
 chrome="${CHROME:-$(command -v google-chrome-stable || command -v google-chrome || command -v chromium)}"
 flags=(--headless=new --no-sandbox --disable-gpu --hide-scrollbars --no-first-run)
 mkdir -p "$out/figures"
+
+# Figures load as images and so can only use installed fonts.
+fc="$(mktemp -d)"
+trap 'rm -rf "$fc"' EXIT
+cat > "$fc/fonts.conf" <<EOF
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
+  <dir>$here/fonts</dir>
+  <cachedir>$fc/cache</cachedir>
+</fontconfig>
+EOF
+export FONTCONFIG_FILE="$fc/fonts.conf"
 
 render_png() {  # file width height scale output
   timeout 60 "$chrome" "${flags[@]}" --force-device-scale-factor="$4" \
