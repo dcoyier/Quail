@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 694" width="1200" height="694">
+  <style>
+    text { font-family: 'Source Sans 3', sans-serif; fill: #141414; }
+    .h { font-size: 30px; font-weight: 700; }
+    .b { font-size: 25px; }
+    .s { font-size: 24px; fill: #676C73; }
+    .cap { font-size: 21px; font-weight: 700; letter-spacing: 2.5px; fill: #676C73; }
+    .m { font-family: 'Source Code Pro', monospace; font-size: 24px; font-weight: 500; font-variant-ligatures: none; }
+    .ln { fill: none; stroke: #141414; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#141414"/>
+    </marker>
+  </defs>
+  <text class="s" x="28" y="28">Each square is one passage in a dataset.</text>
+  <text class="h" x="28" y="96" style="font-size:30px">Retrieval (RAG)</text>
+  <text class="s" x="28" y="136">hands the model the</text>
+  <text class="s" x="28" y="166">passages closest to</text>
+  <text class="s" x="28" y="196">a question</text>
+  <rect x="340" y="62" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="378" y="62" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="416" y="62" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="454" y="62" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="492" y="62" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="530" y="62" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="568" y="62" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="606" y="62" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="644" y="62" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="682" y="62" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="340" y="104" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="378" y="104" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="416" y="104" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="454" y="104" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="492" y="104" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="530" y="104" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="568" y="104" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="606" y="104" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="644" y="104" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="682" y="104" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="340" y="146" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="378" y="146" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="416" y="146" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="454" y="146" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="492" y="146" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="530" y="146" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="568" y="146" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="606" y="146" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="644" y="146" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="682" y="146" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="340" y="188" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="378" y="188" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="416" y="188" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="454" y="188" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="492" y="188" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="530" y="188" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="568" y="188" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="606" y="188" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="644" y="188" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="682" y="188" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="790" y="74" width="46" height="58" rx="6" fill="#fff" stroke="#3B3F45" stroke-width="3"/>
+  <path d="M800,92 H826" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <path d="M800,104 H826" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <path d="M800,116 H818" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <rect x="854" y="74" width="46" height="58" rx="6" fill="#fff" stroke="#3B3F45" stroke-width="3"/>
+  <path d="M864,92 H890" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <path d="M864,104 H890" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <path d="M864,116 H882" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <rect x="918" y="74" width="46" height="58" rx="6" fill="#fff" stroke="#3B3F45" stroke-width="3"/>
+  <path d="M928,92 H954" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <path d="M928,104 H954" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <path d="M928,116 H946" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <rect x="982" y="74" width="46" height="58" rx="6" fill="#fff" stroke="#3B3F45" stroke-width="3"/>
+  <path d="M992,92 H1018" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <path d="M992,104 H1018" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <path d="M992,116 H1010" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <rect x="1046" y="74" width="46" height="58" rx="6" fill="#fff" stroke="#3B3F45" stroke-width="3"/>
+  <path d="M1056,92 H1082" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <path d="M1056,104 H1082" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <path d="M1056,116 H1074" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <text class="s" x="790" y="174">a few passages for</text>
+  <text class="s" x="790" y="206">the model to read</text>
+  <rect x="0" y="262" width="1200" height="432" rx="24" fill="#F2F4F6"/>
+  <text class="cap" x="28" y="308">WHAT QUAIL ADDS</text>
+  <text class="h" x="28" y="372" style="font-size:30px">Counting</text>
+  <text class="s" x="28" y="412">finds every match,</text>
+  <text class="s" x="28" y="442">not only the closest</text>
+  <rect x="340" y="338" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="378" y="338" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="416" y="338" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="454" y="338" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="492" y="338" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="530" y="338" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="568" y="338" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="606" y="338" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="644" y="338" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="682" y="338" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="340" y="380" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="378" y="380" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="416" y="380" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="454" y="380" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="492" y="380" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="530" y="380" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="568" y="380" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="606" y="380" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="644" y="380" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="682" y="380" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="340" y="422" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="378" y="422" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="416" y="422" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="454" y="422" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="492" y="422" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="530" y="422" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="568" y="422" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="606" y="422" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="644" y="422" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="682" y="422" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="340" y="464" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="378" y="464" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="416" y="464" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="454" y="464" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="492" y="464" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="530" y="464" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="568" y="464" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="606" y="464" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="644" y="464" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="682" y="464" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <text class="h" x="790" y="404" style="font-size:72px">12</text>
+  <text class="b" x="890" y="378" style="font-weight:700">of 40</text>
+  <text class="s" x="890" y="408">passages match</text>
+  <text class="s" x="790" y="450">and the total can be broken</text>
+  <text class="s" x="790" y="482">down by year or network</text>
+  <text class="h" x="28" y="552" style="font-size:30px">Labeling</text>
+  <text class="s" x="28" y="592">the agent reads the</text>
+  <text class="s" x="28" y="622">matches and marks</text>
+  <text class="s" x="28" y="652">the ones that fit</text>
+  <rect x="340" y="518" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="378" y="518" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M386,536 L391,542 L400,529" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="416" y="518" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="454" y="518" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="492" y="518" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="530" y="518" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="568" y="518" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M576,536 L581,542 L590,529" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="606" y="518" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="644" y="518" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="682" y="518" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M690,536 L695,542 L704,529" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="340" y="560" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="378" y="560" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="416" y="560" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="454" y="560" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M462,578 L467,584 L476,571" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="492" y="560" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="530" y="560" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M538,578 L543,584 L552,571" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="568" y="560" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="606" y="560" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="645.5" y="561.5" width="27" height="31" rx="4" fill="#fff" stroke="#676C73" stroke-width="3"/>
+  <path d="M653,571 L665,583 M665,571 L653,583" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <rect x="682" y="560" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="340" y="602" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M348,620 L353,626 L362,613" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="378" y="602" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="416" y="602" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="454" y="602" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="492" y="602" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M500,620 L505,626 L514,613" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="530" y="602" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="568" y="602" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="606" y="602" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="644" y="602" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="682" y="602" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M690,620 L695,626 L704,613" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="340" y="644" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="378" y="644" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="417.5" y="645.5" width="27" height="31" rx="4" fill="#fff" stroke="#676C73" stroke-width="3"/>
+  <path d="M425,655 L437,667 M437,655 L425,667" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <rect x="454" y="644" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="492" y="644" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="530" y="644" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M538,662 L543,668 L552,655" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="568" y="644" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="606" y="644" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M614,662 L619,668 L628,655" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="644" y="644" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="682" y="644" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="790" y="528" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M798,546 L803,552 L812,539" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="b" x="834" y="554" style="font-weight:700">10 fit</text>
+  <rect x="951.5" y="529.5" width="27" height="31" rx="4" fill="#fff" stroke="#676C73" stroke-width="3"/>
+  <path d="M959,539 L971,551 M971,539 L959,551" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <text class="b" x="994" y="554" style="font-weight:700">2 don&#8217;t</text>
+  <text class="s" x="790" y="630">the labels are saved and</text>
+  <text class="s" x="790" y="662">can be counted too</text>
+</svg>

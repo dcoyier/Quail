@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Introducing Quail: An Environment for Agentic Qualitative Analysis</title>
+<!-- Layout copies the USRSE'26 Poster Submission Template as filled in for the submitted abstract:
+     US Letter, 1 in margins, Google Sans 11 pt at 1.15 line spacing, 12 pt above and below paragraphs.
+     Google Docs applies line spacing to a font's natural line height (1.26 em for Google Sans,
+     1.32 em for Roboto Mono), hence 1.449 and 1.518 below. The Abstract section must fit on its own page. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans&family=Roboto+Mono&display=block">
+<style>
+  @page { size: letter; margin: 1in; }
+  body { margin: 0; font: 11pt/1.449 "Google Sans", Arial, sans-serif; color: #000; }
+  h2 { font-size: 16pt; font-weight: 400; margin: 0; padding: 18pt 0 6pt; }
+  p { margin: 0; }
+  .page { break-after: page; }
+  #abstract p { padding: 12pt 0; }
+  #abstract pre { margin: 0; padding: 0 0 0 18pt; font: 9.5pt/1.518 "Roboto Mono", monospace; }
+  code { font: 9.5pt "Roboto Mono", monospace; }
+  ol { margin: 0; padding-left: 36pt; }
+  a { color: #1155cc; }
+</style>
+</head>
+<body>
+
+<div class="page">
+<h2>Introducing Quail: An Environment for Agentic Qualitative Analysis</h2>
+<h2>Presenters</h2>
+<p>Dashiell Coyier &lt;<a href="mailto:coyierd@carleton.edu">coyierd@carleton.edu</a>&gt;, Data Scientist for the DataSquad, Carleton College, 0009-0003-1650-9370</p>
+<h2>Keywords</h2>
+<p>Agentic AI, qualitative analysis, research software</p>
+</div>
+
+<div class="page" id="abstract">
+<h2>Abstract</h2>
+<p>Through our work on the Carleton College DataSquad [1], a student-staffed data and software support group, we have seen campus offices collect rich open-ended survey answers and review them superficially, for lack of time and infrastructure. Retrieval-augmented generation (RAG) [2] helps by giving a language model the passages that best match a question. That can show what students said about waiting for health center appointments, but not how often they said it or whether it varied by class year, since both depend on every entry.</p>
+<p>Quail is an environment in which an AI agent analyzes a text dataset the way an analyst works in a Jupyter notebook [3]. With <code>quail exec</code>, the agent sends a cell of Python to a kernel that stays alive between calls and reads back its output. Cells use an analysis language, a Python library whose expressions select and rank entries using keyword scores (BM25 [4]), semantic scores, regular expressions and comparisons, and whose four verbs <code>retrieve</code>, <code>count</code>, <code>values</code> and <code>tag</code> act on them. For the survey, a cell might count answers about waiting by class year:</p>
+<pre>waits = Field("answer").semantic("waited weeks for an appointment") &gt; 0.5
+print(count(waits, by=Field("class_year")))</pre>
+<p>A later cell can read a random sample of those answers and, if they fit, label them with <code>tag(waits, "theme", "waiting")</code>. Quail thus builds on RAG, adding counts over the whole dataset and tags that record what the agent decided. Unlike Cloudflare&rsquo;s Code Mode [5], which also gives agents their tools as a code library, Quail keeps its kernel between cells.</p>
+<p>Quail records each step so an analysis can be checked and continued. The tags a cell writes are saved to the session log, with the cell&rsquo;s code and output, before the agent sees the result. Tags survive kernel resets, and each can be traced to the code that produced it, which matters because an agent&rsquo;s labels can carry a model&rsquo;s biases. Cells run in a sandbox with no network, file or subprocess access, and the source data is never modified.</p>
+<p>A study is a folder of text files, including the source CSVs and session logs, that git can share like code. Each kernel run writes its own log, so agents in separate sessions can push work without conflicts, and <code>quail fork</code> copies a session to try another coding scheme. Needing only a shell, Quail runs wherever an agent does, including cloud agents&rsquo; temporary virtual machines [6, 7], which can start from a snapshot that already holds Quail and a prepared study. Quail 0.94 is an alpha release for Linux and macOS under the Apache 2.0 license [8]. Its results have not yet been formally evaluated, and working out how to do that well is our next step.</p>
+</div>
+
+<div>
+<h2>References</h2>
+<ol>
+  <li>The DataSquad Experiment: Lessons for Preparing Data and Computer Scientists for Work. Paula Lackie, Elliot Pickens, and Dashiell Coyier. arXiv:2511.19688. 2025. <a href="https://arxiv.org/abs/2511.19688">https://arxiv.org/abs/2511.19688</a></li>
+  <li>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks. Patrick Lewis et al. Advances in Neural Information Processing Systems 33. 2020. <a href="https://arxiv.org/abs/2005.11401">https://arxiv.org/abs/2005.11401</a></li>
+  <li>Jupyter Notebooks &ndash; a publishing format for reproducible computational workflows. Thomas Kluyver et al. Positioning and Power in Academic Publishing: Players, Agents and Agendas. IOS Press. 2016. <a href="https://doi.org/10.3233/978-1-61499-649-1-87">https://doi.org/10.3233/978-1-61499-649-1-87</a></li>
+  <li>The Probabilistic Relevance Framework: BM25 and Beyond. Stephen Robertson and Hugo Zaragoza. Foundations and Trends in Information Retrieval. 2009. <a href="https://doi.org/10.1561/1500000019">https://doi.org/10.1561/1500000019</a></li>
+  <li>Code Mode: the better way to use MCP. Kenton Varda and Sunil Pai. Cloudflare Blog. September 26, 2025. <a href="https://blog.cloudflare.com/code-mode/">https://blog.cloudflare.com/code-mode/</a></li>
+  <li>Introducing Codex. OpenAI. May 16, 2025. <a href="https://openai.com/index/introducing-codex/">https://openai.com/index/introducing-codex/</a></li>
+  <li>Cursor agents can now control their own computers. Jonas Nelle and Alexi Robbins. Cursor. February 24, 2026. <a href="https://cursor.com/blog/agent-computer-use">https://cursor.com/blog/agent-computer-use</a></li>
+  <li>Quail. Dashiell Coyier. GitHub repository. 2026. <a href="https://github.com/dcoyier/Quail">https://github.com/dcoyier/Quail</a></li>
+</ol>
+
+<h2>Connection to Mission, Goals, &amp; Interests of US-RSE Community</h2>
+<p>This poster connects to US-RSE&rsquo;s Resources and Advocacy goals. For Resources, Quail is an open-source reference, under the Apache 2.0 license, for research software engineers building AI-assisted tools whose results researchers need to be able to check. The design decisions it presents come up in other projects as well: giving an agent a code interface to research data instead of many separate tool calls, keeping the source data read-only and running the agent&rsquo;s code in a sandbox, writing each step to a log before the agent sees its result, and storing a study as plain files that git can share and review. The poster gives the reasons for each decision, so that it is useful to people building their own tools as well as to people who might use Quail.</p>
+<p style="padding-top:11pt">For Advocacy, Quail is an example of what a campus data and software support group can build in response to a local need. It came out of the DataSquad, a student-staffed group at Carleton College, after we saw campus offices collect open-ended survey answers they did not have time to analyze. It also addresses this year&rsquo;s theme, Advancing Science in the Age of AI, for qualitative research, where readers need to see how an analysis reached its conclusions before they can rely on it.</p>
+
+<h2>AI Acknowledgement</h2>
+<p>OpenAI ChatGPT (GPT-5.6 Thinking) was used during the revision of the submitted abstract. For this camera-ready version, Anthropic Claude (Claude Opus 5.5, used through a Cursor cloud agent) drafted the revised Abstract, References, and Connection sections from the submitted abstract and the Quail documentation. The author reviewed and verified all content and takes responsibility for the submitted content.</p>
+</div>
+
+</body>
+</html>
