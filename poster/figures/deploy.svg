@@ -18,12 +18,50 @@
   <text class="cap" x="348" y="50">CLOUD VM</text>
   <rect x="348" y="76" width="300" height="256" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
   <text class="h" x="374" y="124" style="font-size:30px">Agent</text>
-  <text class="s" x="374" y="162">reads the question,</text>
-  <text class="s" x="374" y="192">runs cells, replies</text>
+  <path class="ln" d="M527.0,171.8 A58,58 0 1 1 464.7,174.5" marker-end="url(#a)" style="stroke-width:4"/>
+  <text class="h" x="498" y="232" text-anchor="middle" style="font-size:30px">LLM</text>
   <rect x="872" y="76" width="300" height="256" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
   <text class="h" x="898" y="124" style="font-size:30px">Quail</text>
-  <text class="s" x="898" y="162">the study&#8217;s</text>
-  <text class="s" x="898" y="192">sessions</text>
+  <g transform="translate(898,160) scale(0.8)">
+  <rect x="0" y="0" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="38" y="0" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M46,18 L51,24 L60,11" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="76" y="0" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="114" y="0" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="152" y="0" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="190" y="0" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="228" y="0" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="266" y="0" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="0" y="42" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="38" y="42" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="76" y="42" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="114" y="42" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M122,60 L127,66 L136,53" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="152" y="42" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="190" y="42" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="228" y="42" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M236,60 L241,66 L250,53" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="266" y="42" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="0" y="84" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="38" y="84" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="76" y="84" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="114" y="84" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="152" y="84" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M160,102 L165,108 L174,95" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="190" y="84" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="228" y="84" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="267.5" y="85.5" width="27" height="31" rx="4" fill="#fff" stroke="#676C73" stroke-width="3"/>
+  <path d="M275,95 L287,107 M287,95 L275,107" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <rect x="0" y="126" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="38" y="126" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="76" y="126" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M84,144 L89,150 L98,137" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="114" y="126" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="152" y="126" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="190" y="126" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="228" y="126" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="266" y="126" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  </g>
   <path class="ln" d="M656,176 L864,176" marker-end="url(#a)"/>
   <path class="ln" d="M864,232 L656,232" marker-end="url(#a)"/>
   <path d="M20,10 H220 Q240,10 240,30 V130 Q240,150 220,150 H62 L22,178 L40,150 H20 Q0,150 0,130 V30 Q0,10 20,10 Z" fill="#fff" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>

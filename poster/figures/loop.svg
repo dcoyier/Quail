@@ -15,10 +15,10 @@
     </marker>
   </defs>
   <rect x="0" y="0" width="230" height="300" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
-  <text class="h" x="26" y="112" style="font-size:30px">Agent</text>
-  <text class="s" x="26" y="150">a language</text>
-  <text class="s" x="26" y="180">model with</text>
-  <text class="s" x="26" y="210">a shell</text>
+  <text class="h" x="26" y="48" style="font-size:30px">Agent</text>
+  <text class="s" x="26" y="86">needs a shell</text>
+  <path class="ln" d="M144.0,145.8 A58,58 0 1 1 81.7,148.5" marker-end="url(#a)" style="stroke-width:4"/>
+  <text class="h" x="115" y="206" text-anchor="middle" style="font-size:30px">LLM</text>
   <rect x="970" y="0" width="230" height="300" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
   <text class="h" x="996" y="48">Quail</text>
   <text class="s" x="996" y="82">one session</text>
