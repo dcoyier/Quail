@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Renders the poster to PDF and PNG, and each figure to its own PNG.
+# Renders the poster to PDF and PNG, each figure to its own PNG, and the abstract to PDF.
 # Usage: poster/build.sh [OUT_DIR]   (default: poster/build)
 # On macOS, install the fonts in poster/fonts first; elsewhere fontconfig finds them.
 set -euo pipefail
@@ -39,4 +39,8 @@ done
 timeout 120 "$chrome" "${flags[@]}" --no-pdf-header-footer \
   --print-to-pdf="$out/poster.pdf" "file://$here/poster.html" >/dev/null 2>&1
 render_png "$here/poster.html" 4224 4224 0.5 "$out/poster-preview.png"
+
+# The abstract loads Google Sans from Google Fonts, so it needs network access to match the doc.
+timeout 60 "$chrome" "${flags[@]}" --no-pdf-header-footer --virtual-time-budget=20000 \
+  --print-to-pdf="$out/abstract.pdf" "file://$here/abstract.html" >/dev/null 2>&1
 echo "Wrote $out"
