@@ -1,0 +1,205 @@
+@page { size: 44in 44in; margin: 0; }
+
+@font-face { font-family: "Inter"; src: url("fonts/Inter-SemiBold.ttf"); font-weight: 600; }
+@font-face { font-family: "Inter"; src: url("fonts/Inter-Bold.ttf"); font-weight: 700; }
+@font-face { font-family: "Source Sans 3"; src: url("fonts/SourceSans3.ttf"); font-weight: 200 900; font-style: normal; }
+@font-face { font-family: "Source Sans 3"; src: url("fonts/SourceSans3-Italic.ttf"); font-weight: 200 900; font-style: italic; }
+@font-face { font-family: "Source Code Pro"; src: url("fonts/SourceCodePro.ttf"); font-weight: 200 900; }
+
+:root {
+  --ink: #141414;
+  --ink-2: #3B3F45;
+  --muted: #676C73;
+  --rule: #D3D8DE;
+  --fill: #F2F4F6;
+  --fill-2: #E3E7EC;
+  --kw: #2B5F9E;
+  --sem: #23785A;
+  --pad: 110px;
+  --gap: 110px;
+  --sans: "Source Sans 3", sans-serif;
+  --display: "Inter", sans-serif;
+  --mono: "Source Code Pro", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  width: 4224px;
+  height: 4224px;
+  background: #fff;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 35px;
+  line-height: 1.42;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.poster {
+  width: 4224px;
+  height: 4224px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+header {
+  flex: none;
+  background: var(--ink);
+  color: #fff;
+  padding: 70px var(--pad);
+  display: grid;
+  grid-template-columns: 330px 1fr 400px;
+  gap: 84px;
+  align-items: center;
+}
+header .logo { width: 497px; height: 497px; margin: -48px -82px -48px -85px; transform: translateY(10px); display: block; filter: invert(1); mix-blend-mode: screen; }
+header h1 { margin: 0; font-family: var(--display); font-weight: 700; line-height: 1; }
+header h1 .name { display: block; font-size: 200px; letter-spacing: -7px; margin-left: -8px; }
+header h1 .sub { display: block; font-size: 86px; font-weight: 600; letter-spacing: -2px; margin-top: 10px; }
+header .authors { margin-top: 34px; font-size: 42px; color: #C8CCD1; }
+header .authors b { color: #fff; font-weight: 700; }
+
+.qr {
+  justify-self: end;
+  width: 400px;
+  background: #fff;
+  color: var(--ink);
+  border-radius: 28px;
+  padding: 32px 28px 26px;
+  text-align: center;
+  font-size: 30px;
+  line-height: 1.3;
+}
+.qr img { width: 250px; height: 250px; display: block; margin: 0 auto 14px; }
+.qr b { font-weight: 700; }
+
+main {
+  flex: 1;
+  min-height: 0;
+  padding: 72px var(--pad) 0;
+  display: grid;
+  grid-template-columns: 1200px 1fr 1200px;
+  column-gap: var(--gap);
+}
+.col { display: flex; flex-direction: column; gap: 84px; min-width: 0; min-height: 0; }
+
+section { min-width: 0; }
+
+h2 {
+  margin: 0 0 28px;
+  font-family: var(--display);
+  font-size: 62px;
+  line-height: 1.08;
+  font-weight: 700;
+  letter-spacing: -1.5px;
+}
+
+p { margin: 0 0 26px; }
+p:last-child { margin-bottom: 0; }
+.lede { font-size: 46px; line-height: 1.3; font-weight: 600; margin-bottom: 40px; }
+.small { font-size: 31px; line-height: 1.4; }
+figure { margin: 34px 0; }
+figure:last-child { margin-bottom: 0; }
+figure img { display: block; width: 100%; height: auto; }
+b { font-weight: 700; }
+
+code, .mono { font-family: var(--mono); font-size: 0.84em; font-weight: 500; }
+code, pre, .mono { font-variant-ligatures: none; font-feature-settings: "calt" 0, "liga" 0; }
+.kw { color: var(--kw); font-weight: 700; }
+.sem { color: var(--sem); font-weight: 700; }
+
+/* the language, as a glossary */
+table.lang { width: 100%; border-collapse: collapse; margin: 0 0 40px; font-size: 31px; line-height: 1.3; }
+table.lang td { padding: 12px 0; border-top: 3px solid var(--rule); vertical-align: baseline; }
+table.lang tr:last-child td { border-bottom: 3px solid var(--rule); }
+table.lang td:first-child { width: 600px; padding-right: 24px; font-family: var(--mono); font-size: 26px; white-space: nowrap; }
+
+/* the example notebook */
+.notebook {
+  background: var(--fill);
+  border-radius: 36px;
+  padding: 48px 56px 50px;
+}
+.notebook .intro { margin-bottom: 34px; }
+.say { margin: 0 0 14px; }
+.step { margin-bottom: 30px; }
+.cellrow { display: grid; grid-template-columns: 70px 1fr; align-items: start; }
+.cellrow .no { font-family: var(--mono); font-size: 24px; color: var(--muted); padding-top: 16px; }
+.cell { border-radius: 16px; overflow: hidden; background: #fff; border: 3px solid var(--rule); }
+.cell pre {
+  margin: 0;
+  padding: 14px 24px;
+  font-family: var(--mono);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.38;
+  white-space: pre;
+}
+.cell .out { background: #FAFBFC; color: var(--ink-2); border-top: 3px solid var(--rule); }
+.st { color: #5F656D; }
+.el { color: var(--muted); }
+
+.restart {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin: 6px 0 26px;
+  color: var(--muted);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+}
+.restart::before, .restart::after { content: ""; flex: 1; border-top: 3px dashed #B4BAC2; }
+.restart code { font-size: 25px; letter-spacing: 0; font-weight: 500; color: var(--ink-2); }
+
+/* Slack excerpt */
+.thread {
+  border: 3px solid var(--rule);
+  border-radius: 22px;
+  padding: 22px 30px 24px;
+  font-size: 31px;
+  line-height: 1.38;
+}
+.thread .who { font-weight: 700; }
+.thread .meta { color: var(--muted); font-size: 27px; margin-left: 10px; }
+.thread .q { margin: 2px 0 14px; }
+.thread .a { margin: 4px 0 0; color: var(--ink-2); }
+.thread .mention { font-weight: 700; color: var(--kw); }
+
+.term {
+  margin-top: 34px;
+  border-radius: 16px;
+  background: #fff;
+  border: 3px solid var(--rule);
+  color: var(--ink);
+  padding: 22px 28px;
+  font-family: var(--mono);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.55;
+  white-space: pre;
+  font-variant-ligatures: none;
+}
+.term .cmt { font-family: var(--sans); font-size: 27px; color: var(--muted); }
+
+footer {
+  flex: none;
+  margin: 50px var(--pad) 0;
+  padding: 26px 0 50px;
+  border-top: 4px solid var(--ink);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 80px;
+  font-size: 27px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+footer ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, auto); gap: 4px 60px; }
+footer ol li span { color: var(--ink); font-weight: 700; margin-right: 10px; }
+footer .right { text-align: right; }
+.cell .fp { color: #A0A6AD; }
+.cell .note { font-family: var(--sans); font-size: 26px; font-weight: 700; color: var(--ink); }
+.cell .note::before { content: "\2190\00a0"; font-family: var(--mono); }

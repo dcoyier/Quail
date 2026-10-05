@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Quail: An Environment for Agentic Qualitative Analysis</title>
+<link rel="stylesheet" href="poster.css">
+</head>
+<body>
+<div class="poster">
+
+<header>
+  <img class="logo" src="../quail.png" alt="Quail logo">
+  <div>
+    <h1><span class="name">Quail</span><span class="sub">An Environment for Agentic Qualitative Analysis</span></h1>
+    <div class="authors"><b>Dashiell Coyier</b> &nbsp;&middot;&nbsp; DataSquad, Carleton College &nbsp;&middot;&nbsp; coyierd@carleton.edu</div>
+  </div>
+  <div class="qr">
+    <img src="figures/qr.svg" alt="QR code for github.com/dcoyier/Quail">
+    <b>github.com/dcoyier/Quail</b><br>Apache-2.0
+  </div>
+</header>
+
+<main>
+
+<div class="col">
+
+<section id="why">
+  <h2>Moving beyond retrieval</h2>
+  <p class="lede">Quail lets an AI agent make sense of a large text dataset the way an analyst would in a notebook, one cell at a time, with every step saved.</p>
+  <p>Researchers often have more text than anyone can read closely. Campus offices, for example, collect open-ended survey answers that nobody has time to read in full.<sup>1</sup> Retrieval-augmented generation (RAG)<sup>2</sup> helps a language model with a dataset like that by handing it the few passages that best match a question. That can answer &ldquo;what did the news say about lines at the polls?&rdquo; but not &ldquo;how often did it come up, and on which networks?&rdquo;</p>
+  <figure><img src="figures/corpus.svg" alt="The same dataset three times: retrieval picks five passages; counting finds all twelve matches; labeling marks ten as fitting and two as not"></figure>
+  <p>Quail builds on RAG by letting the agent count as well as retrieve. A count covers every match in the dataset and can be split by any field, so the agent can check how common something is instead of guessing from a few examples. Labels, which Quail calls tags, record what it decides as it reads.</p>
+</section>
+
+<section id="notebook">
+  <h2>A notebook for an agent</h2>
+  <p>A Jupyter notebook lets an analyst try something, read the result and decide what to try next, and Quail gives an agent the same loop. Each <code>quail exec</code> sends one cell of Python to a kernel that stays alive between calls, and the agent reads back what a notebook would show: printed output, the last line&rsquo;s value, or a traceback.</p>
+  <p>Searching, counting and tagging could have been separate tool calls. Instead they form a small Python library, so one cell can combine them and return only what matters. Cloudflare&rsquo;s Code Mode makes the same choice for MCP tools but starts a fresh sandbox for each snippet;<sup>3</sup> Quail keeps its kernel from one cell to the next.</p>
+  <figure><img src="figures/loop.svg" alt="The agent sends a cell to Quail and reads back its output. Inside Quail, a session host runs the cell in a sandboxed Python kernel, writes it to the session log, then updates the SQLite dataset index; missing embeddings come from an embedding model"></figure>
+  <p>The host saves each cell to the session log before replying, so any reply means the work is on disk. The index can be rebuilt from the study&rsquo;s files.</p>
+</section>
+
+</div>
+
+<div class="col">
+
+<section id="example">
+  <h2>An example session</h2>
+  <div class="notebook">
+    <p class="intro">This session comes from a study of 3.3 million segments of TV news from six elections, 2004 to 2024. The agent searches the 323,464 segments from 2012 for voters waiting in line at the polls. Five cells follow, verbatim; gaps in numbering are cells left out.</p>
+    <table class="lang">
+      <tr><td>Field("body")</td><td>a column of the dataset</td></tr>
+      <tr><td>body.<span class="kw">lexical</span>("polls")</td><td>keyword score (BM25); <code>&gt; 0</code> means the word appears</td></tr>
+      <tr><td>body.<span class="sem">semantic</span>("&hellip;")</td><td>closeness in meaning, from embeddings</td></tr>
+      <tr><td>count(where, by=&hellip;)</td><td>how many rows match, per year or network</td></tr>
+      <tr><td>retrieve(where, rank=&hellip;)</td><td>the matching rows themselves, to read</td></tr>
+      <tr><td>tag(where, "topic", "polling")</td><td>labels rows; the only thing a cell can write</td></tr>
+    </table>
+
+    <div class="step">
+      <p class="say">Words like <i>poll</i> appear in 22,658 segments. Ranked by keyword score, the strongest matches are all about opinion polls.</p>
+      <div class="cellrow"><span class="no">[3]</span><div class="cell"><pre class="in">s = Field(<span class="st">"body"</span>).<span class="kw">lexical</span>(<span class="st">"polls"</span>)
+for e in retrieve(s &gt; 0, rank=s, limit=6):
+    b = <span class="st">" "</span>.join(e[<span class="st">"body"</span>].split())
+    i = b.lower().find(<span class="st">"poll"</span>)
+    print(round(e.score, 2), e[<span class="st">"network"</span>], b[max(0, i - 10):i + 28])</pre><pre class="out">5.36 MSNBC  TRACKING POLL PUTS MITT ROMNEY LEADIN
+5.36 CNN SIDENTIAL POLLS LATELY? THAT WAS RETOR
+5.35 MSNBC UDING THE POLLSTERS. WE KNOW THESE POL
+5.35 CNN SIDENTIAL POLLS LATELY? THAT WAS RHETO
+5.34 MSNBC  NATIONAL POLLING NOW FOR WHAT IT'S WO
+5.33 MSNBC  NATIONAL POLLING NOW FOR WHAT IT'S WO</pre></div></div>
+    </div>
+
+    <div class="step">
+      <p class="say">So it searches by meaning instead, and none of the six closest segments contains <i>poll</i> at all, as the <code>False</code> column shows.</p>
+      <div class="cellrow"><span class="no">[5]</span><div class="cell"><pre class="in">q = <span class="st">"voters waiting in long lines to cast their ballots"</span>
+sem = Field(<span class="st">"body"</span>).<span class="sem">semantic</span>(q)
+for e in retrieve(rank=sem, limit=6):
+    b = <span class="st">" "</span>.join(e[<span class="st">"body"</span>].split())
+    print(round(e.score, 3), e[<span class="st">"network"</span>], <span class="st">"poll"</span> in b.lower(), b[:18])</pre><pre class="out">0.629 MSNBC False STILL AHEAD, VOTER
+0.629 MSNBC False STILL AHEAD, VOTER
+0.575 MSNBC False YES, THE LINES TO 
+0.574 MSNBC False UP NEST, THE SHAME
+0.574 MSNBC False UP NEST, THE SHAME
+0.567 MSNBC False NEXT, FROM LONG LI</pre></div></div>
+    </div>
+
+    <div class="step">
+      <p class="say">Further down the ranking, just under 0.50, a crowd in Detroit and a line for a new iPhone appear among the voting lines, so it keeps scores above 0.50.</p>
+      <div class="cellrow"><span class="no">[10]</span><div class="cell"><pre class="in">for e in retrieve(rank=sem, limit=6, offset=36):
+    b = <span class="st">" "</span>.join(e[<span class="st">"body"</span>].split())
+    i = b.lower().find(<span class="st">"line"</span>)
+    if i &lt; 0: i = b.lower().find(<span class="st">"vote"</span>)
+    print(round(e.score, 3), b[max(0, i - 12):i + 28])</pre><pre class="out">0.492 LONG VOTING LINES IN FLORIDA DIDN'T HAPP
+<span class="fp">0.489 THE CROWD IN DETROIT.</span>                    <span class="note">off topic</span>
+<span class="fp">0.487 S WAITED IN LINE TO GET THE NEW IPHONE. </span> <span class="note">off topic</span>
+0.485 IS HARD THE LINES ARE SURPRISINGLY LONG.
+0.485 F PEOPLE IN LINE. THEY WERE ENTHUSIASTIC
+0.483 VOICE, YOUR VOTE, TENS OF MILLIONS OF AM</pre></div></div>
+    </div>
+
+    <div class="step">
+      <p class="say">It tags the 31 segments above 0.50 and computes their rate per 10,000 segments.</p>
+      <div class="cellrow"><span class="no">[13]</span><div class="cell"><pre class="in">p = sem &gt; 0.5
+tag(p, <span class="st">"topic"</span>, <span class="st">"polling"</span>)
+b = count(by=Field(<span class="st">"year"</span>))
+h = count(Field(<span class="st">"topic"</span>) == <span class="st">"polling"</span>, by=Field(<span class="st">"year"</span>))
+for y in b: print(y, round(10000 * h.get(y, 0) / b[y], 2))</pre><pre class="out">2012 0.96</pre></div></div>
+    </div>
+
+    <div class="restart">KERNEL RESTARTED</div>
+
+    <div class="step">
+      <p class="say">The agent resets its kernel with <code>quail exec first-pass --reset</code>, and numbering starts again at 1, as in Jupyter. Variables such as <code>p</code> are gone, but the tags remain, because they were saved in the session log before cell 13 replied.</p>
+      <div class="cellrow"><span class="no">[1]</span><div class="cell"><pre class="in">print(count(by=Field(<span class="st">"topic"</span>)))</pre><pre class="out">Counter({None: 323433, 'polling': 31})</pre></div></div>
+    </div>
+    <p class="small" style="margin:0;color:var(--muted)">The first keyword search took 44&nbsp;s and the first semantic one 93&nbsp;s; most later cells took under 1&nbsp;s.</p>
+  </div>
+</section>
+
+</div>
+
+<div class="col">
+
+<section id="study">
+  <h2>Studies live in git</h2>
+  <p>A study is an ordinary folder of text files, so git can share it the way it shares code. Each kernel run writes its own log file, which means agents working in parallel never edit the same file. To try another approach without disturbing the first, <code>quail fork</code> copies a closed session&rsquo;s tags and history into a new session.</p>
+  <figure><img src="figures/study.svg" alt="Study folder next to two agents sharing it through git; below, four parts of the embedding work are saved to warm/"></figure>
+  <p>Semantic search needs an embedding for every distinct text, and computing them the first time can take hours. <code>quail warm</code> can do that work in advance, split across several machines, and save it in <code>warm/</code>, so every clone of the study starts with it.</p>
+</section>
+
+<section id="where">
+  <h2>Where Quail can run</h2>
+  <p>Quail needs only a shell, so it can run wherever an agent does, on a laptop or a cloud VM. In one tested setup, the TV news study from the example was available in Slack. Mentioning @Cursor in a thread started a Cursor cloud agent on its own VM, booted from a snapshot that already held Quail, an embedding model and the fully processed dataset, so the agent could search all six years without any setup.</p>
+  <figure><img src="figures/deploy.svg" alt="A Slack question starts a cloud VM from a snapshot holding Quail, an embedding model and the processed dataset; the agent runs Quail cells and replies in the thread"></figure>
+  <div class="thread">
+    <div><span class="who">Dashiell Coyier</span><span class="meta">#quail-allen-news</span></div>
+    <p class="q"><span class="mention">@Cursor</span> how is Obama characterized?</p>
+    <div><span class="who">Cursor</span><span class="meta">27 minutes later</span></div>
+    <p class="a">&ldquo;The portrait moves from rising uniter (2004), to a fight over whether he is a historic, gifted candidate or an unready celebrity (2008) &hellip; and by 2024 to a celebrated speaker.&rdquo;</p>
+  </div>
+</section>
+
+<section id="status">
+  <h2>Status and next steps</h2>
+  <p>Quail 0.94 is an alpha release for Linux and macOS, open source under the Apache 2.0 license, and it works with any agent that can run shell commands. Nothing it has produced has been formally evaluated yet, and working out how to do that well is our next step. If you have a text dataset you would like to understand, we would love to hear about it.</p>
+  <div class="term"><span class="cmt">To try it, with Python 3.12+ and uv:</span>
+$ git clone --depth 1 https://github.com/dcoyier/Quail.git
+$ cd Quail &amp;&amp; uv sync --locked --no-dev --python 3.12
+$ . .venv/bin/activate &amp;&amp; quail init ../my-study</div>
+</section>
+
+</div>
+
+</main>
+
+<footer>
+  <ol>
+    <li><span>1</span>P. Lackie, E. Pickens, D. Coyier. The DataSquad Experiment. arXiv:2511.19688, 2025.</li>
+    <li><span>3</span>K. Varda, S. Pai. Code Mode: the better way to use MCP. Cloudflare blog, 2025.</li>
+    <li><span>2</span>P. Lewis et al. Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks. NeurIPS 2020.</li>
+    <li>Built on Python, SQLite FTS5, NumPy, RE2, and Ollama or OpenAI-compatible embeddings.</li>
+  </ol>
+  <div class="right">US-RSE&rsquo;26, San Jose<br>Session output from Quail 0.94.0a0 with the embeddinggemma model</div>
+</footer>
+
+</div>
+</body>
+</html>

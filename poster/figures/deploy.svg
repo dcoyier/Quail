@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 606" width="1200" height="606">
+  <style>
+    text { font-family: 'Source Sans 3', sans-serif; fill: #141414; }
+    .h { font-size: 30px; font-weight: 700; }
+    .b { font-size: 25px; }
+    .s { font-size: 24px; fill: #676C73; }
+    .cap { font-size: 21px; font-weight: 700; letter-spacing: 2.5px; fill: #676C73; }
+    .m { font-family: 'Source Code Pro', monospace; font-size: 24px; font-weight: 500; font-variant-ligatures: none; }
+    .ln { fill: none; stroke: #141414; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#141414"/>
+    </marker>
+  </defs>
+  <rect x="320" y="0" width="880" height="360" rx="24" fill="#F2F4F6"/>
+  <text class="cap" x="348" y="50">CLOUD VM</text>
+  <rect x="348" y="76" width="300" height="256" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="374" y="124" style="font-size:30px">Agent</text>
+  <path class="ln" d="M525.2,170.8 A58,58 0 1 1 490.9,164.4" marker-end="url(#a)" style="stroke-width:4"/>
+  <text class="h" x="498" y="232" text-anchor="middle" style="font-size:30px">LLM</text>
+  <rect x="872" y="76" width="300" height="256" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="898" y="124" style="font-size:30px">Quail</text>
+  <g transform="translate(898,160) scale(0.8)">
+  <rect x="0" y="0" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="38" y="0" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M46,18 L51,24 L60,11" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="76" y="0" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="114" y="0" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="152" y="0" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="190" y="0" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="228" y="0" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="266" y="0" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="0" y="42" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="38" y="42" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="76" y="42" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="114" y="42" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M122,60 L127,66 L136,53" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="152" y="42" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="190" y="42" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="228" y="42" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M236,60 L241,66 L250,53" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="266" y="42" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="0" y="84" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="38" y="84" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="76" y="84" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="114" y="84" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="152" y="84" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M160,102 L165,108 L174,95" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="190" y="84" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="228" y="84" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="267.5" y="85.5" width="27" height="31" rx="4" fill="#fff" stroke="#676C73" stroke-width="3"/>
+  <path d="M275,95 L287,107 M287,95 L275,107" stroke="#676C73" stroke-width="3" stroke-linecap="round"/>
+  <rect x="0" y="126" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="38" y="126" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="76" y="126" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <path d="M84,144 L89,150 L98,137" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="114" y="126" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="152" y="126" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="190" y="126" width="30" height="34" rx="5" fill="#3B3F45"/>
+  <rect x="228" y="126" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  <rect x="266" y="126" width="30" height="34" rx="5" fill="#E3E7EC"/>
+  </g>
+  <path class="ln" d="M656,176 L864,176" marker-end="url(#a)"/>
+  <path class="ln" d="M864,232 L656,232" marker-end="url(#a)"/>
+  <path d="M20,10 H220 Q240,10 240,30 V130 Q240,150 220,150 H62 L22,178 L40,150 H20 Q0,150 0,130 V30 Q0,10 20,10 Z" fill="#fff" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+  <text class="h" x="26" y="58" style="font-size:30px">Slack</text>
+  <text class="s" x="26" y="96">@Cursor and</text>
+  <text class="s" x="26" y="126">a question</text>
+  <path class="ln" d="M248,96 L340,96" marker-end="url(#a)"/>
+  <path d="M20,200 H220 Q240,200 240,220 V320 Q240,340 220,340 H62 L22,368 L40,340 H20 Q0,340 0,320 V220 Q0,200 20,200 Z" fill="#fff" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+  <text class="h" x="26" y="248" style="font-size:30px">Reply</text>
+  <text class="s" x="26" y="286">posted back</text>
+  <text class="s" x="26" y="316">in the thread</text>
+  <path class="ln" d="M340,270 L248,270" marker-end="url(#a)"/>
+  <path class="ln" d="M760.0,428 L760.0,368" marker-end="url(#a)"/>
+  <text class="s" x="776" y="406">boots from</text>
+  <path d="M530.0,452 V586 A230.0,16 0 0 0 990.0,586 V452" fill="#E3E7EC" stroke="#141414" stroke-width="3"/>
+  <ellipse cx="760.0" cy="452" rx="230.0" ry="16" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="556" y="508" style="font-size:30px">Snapshot</text>
+  <text class="s" x="556" y="546">Quail, an embedding model and</text>
+  <text class="s" x="556" y="576">the fully processed dataset</text>
+  <text class="s" x="506" y="516" text-anchor="end">prepared once,</text>
+  <text class="s" x="506" y="546" text-anchor="end">reused by every</text>
+  <text class="s" x="506" y="576" text-anchor="end">request</text>
+</svg>

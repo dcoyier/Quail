@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 678" width="1200" height="678">
+  <style>
+    text { font-family: 'Source Sans 3', sans-serif; fill: #141414; }
+    .h { font-size: 30px; font-weight: 700; }
+    .b { font-size: 25px; }
+    .s { font-size: 24px; fill: #676C73; }
+    .cap { font-size: 21px; font-weight: 700; letter-spacing: 2.5px; fill: #676C73; }
+    .m { font-family: 'Source Code Pro', monospace; font-size: 24px; font-weight: 500; font-variant-ligatures: none; }
+    .ln { fill: none; stroke: #141414; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#141414"/>
+    </marker>
+  </defs>
+  <rect x="1.5" y="1.5" width="600" height="470" rx="18" fill="#fff" stroke="#D3D8DE" stroke-width="3"/>
+  <text class="m" x="28" y="52" style="font-weight:700">my-study/</text>
+  <text class="m" x="28" y="98">&#9500;&#9472; quail.toml</text>
+  <text class="s" x="360" y="98" style="font-size:23px">settings</text>
+  <text class="m" x="28" y="144">&#9500;&#9472; notes.csv</text>
+  <text class="s" x="360" y="144" style="font-size:23px">source, never changed</text>
+  <text class="m" x="28" y="190">&#9500;&#9472; sessions/first-pass/</text>
+  <text class="m" x="28" y="236">&#9474;  &#9500;&#9472; session.toml</text>
+  <text class="m" x="28" y="282">&#9474;  &#9492;&#9472; log/*.jsonl</text>
+  <text class="s" x="360" y="282" style="font-size:23px">one per kernel run</text>
+  <text class="m" x="28" y="328">&#9500;&#9472; exports/</text>
+  <text class="s" x="360" y="328" style="font-size:23px">tags as CSV</text>
+  <text class="m" x="28" y="374">&#9500;&#9472; warm/</text>
+  <text class="s" x="360" y="374" style="font-size:23px">saved embeddings</text>
+  <text class="m" x="28" y="420">&#9492;&#9472; .quail/</text>
+  <text class="s" x="360" y="420" style="font-size:23px">local index, not shared</text>
+  <path d="M850,18 V96 A70.0,16 0 0 0 990,96 V18" fill="#E3E7EC" stroke="#141414" stroke-width="3"/>
+  <ellipse cx="920.0" cy="18" rx="70.0" ry="16" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="920" y="82" text-anchor="middle" style="font-size:27px">git</text>
+  <rect x="640" y="230" width="260" height="200" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="664" y="274" style="font-size:28px">Agent A</text>
+  <rect x="664" y="292" width="212" height="46" rx="12" fill="#fff" stroke="#D3D8DE" stroke-width="3"/>
+  <text class="m" x="770" y="323" text-anchor="middle" style="font-size:22px;font-weight:700">first-pass</text>
+  <text class="s" x="664" y="376" style="font-size:23px">the original</text>
+  <text class="s" x="664" y="406" style="font-size:23px">session</text>
+  <rect x="940" y="230" width="260" height="200" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <text class="h" x="964" y="274" style="font-size:28px">Agent B</text>
+  <rect x="964" y="292" width="212" height="46" rx="12" fill="#fff" stroke="#D3D8DE" stroke-width="3"/>
+  <text class="m" x="1070" y="323" text-anchor="middle" style="font-size:22px;font-weight:700">second-pass</text>
+  <text class="s" x="964" y="376" style="font-size:23px">forked from</text>
+  <text class="s" x="964" y="406" style="font-size:23px">first-pass</text>
+  <path class="ln" d="M770,222 C770,170 800,124 838,108" marker-end="url(#a)" marker-start="url(#a)"/>
+  <path class="ln" d="M1070,222 C1070,170 1040,124 1002,108" marker-end="url(#a)" marker-start="url(#a)"/>
+  <text class="s" x="752" y="176" text-anchor="end" style="font-size:23px">push, pull</text>
+  <text class="s" x="1088" y="176" style="font-size:23px">push, pull</text>
+  <text class="h" x="2" y="530" style="font-size:28px">Embedding ahead of time</text>
+  <path d="M12,556 H82 Q92,556 92,566 V618 C67,600 27,638 2,618 V566 Q2,556 12,556 Z" fill="#E3E7EC" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+  <text class="b" x="47" y="594" text-anchor="middle" style="font-weight:700">1/4</text>
+  <path d="M116,556 H186 Q196,556 196,566 V618 C171,600 131,638 106,618 V566 Q106,556 116,556 Z" fill="#E3E7EC" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+  <text class="b" x="151" y="594" text-anchor="middle" style="font-weight:700">2/4</text>
+  <path d="M220,556 H290 Q300,556 300,566 V618 C275,600 235,638 210,618 V566 Q210,556 220,556 Z" fill="#E3E7EC" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+  <text class="b" x="255" y="594" text-anchor="middle" style="font-weight:700">3/4</text>
+  <path d="M324,556 H394 Q404,556 404,566 V618 C379,600 339,638 314,618 V566 Q314,556 324,556 Z" fill="#E3E7EC" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+  <text class="b" x="359" y="594" text-anchor="middle" style="font-weight:700">4/4</text>
+  <path class="ln" d="M422,588 L478,588" marker-end="url(#a)"/>
+  <text class="m" x="494" y="597" style="font-weight:700">warm/</text>
+  <path class="ln" d="M594,588 L650,588" marker-end="url(#a)"/>
+  <text class="s" x="666" y="584">every clone&#8217;s first</text>
+  <text class="s" x="666" y="612">semantic search is fast</text>
+  <text class="s" x="2" y="664">each part can run on a different machine</text>
+</svg>
