@@ -29,7 +29,7 @@
   <p class="lede">Quail lets an AI agent make sense of a large text dataset the way an analyst would in a notebook, one cell at a time, with every step saved.</p>
   <p>Researchers often have more text than anyone can read closely, from the open&#8209;ended survey answers that campus offices collect<sup>1</sup> to TV news coverage of six elections. Retrieval-augmented generation (RAG)<sup>2</sup> helps a language model with a dataset like that by handing it the few entries that best match a question. That can answer &ldquo;what did the news say about lines at the polls?&rdquo; but not &ldquo;how often did it come up, and on which networks?&rdquo;</p>
   <figure><img src="figures/corpus.svg" alt="The same 40-entry dataset three times: retrieval picks five entries; counting finds all twelve matches; tagging marks ten as fitting and two as not"></figure>
-  <p>Quail builds on RAG: the agent can count and tag as well as retrieve. A count covers every match in the dataset and can be split by any field, so the agent can check how common something is instead of guessing from a few examples. Tags record what the agent decides as it reads.</p>
+  <p>Quail builds on RAG: the agent can count and tag as well as retrieve. A count covers every match in the dataset and can be split by any field, so the agent can check how common something is instead of guessing from a few examples. Tags record what the agent decides, such as which matches fit.</p>
 </section>
 
 <section id="notebook">

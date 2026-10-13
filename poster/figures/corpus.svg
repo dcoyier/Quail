@@ -132,9 +132,9 @@
   <text class="s" x="790" y="450">and the count can be split</text>
   <text class="s" x="790" y="482">by year or network</text>
   <text class="h" x="28" y="552" style="font-size:30px">Tagging</text>
-  <text class="s" x="28" y="592">records which</text>
-  <text class="s" x="28" y="622">matches fit, as the</text>
-  <text class="s" x="28" y="652">agent reads them</text>
+  <text class="s" x="28" y="592">records what the</text>
+  <text class="s" x="28" y="622">agent decides about</text>
+  <text class="s" x="28" y="652">each match</text>
   <rect x="340" y="518" width="30" height="34" rx="5" fill="#E3E7EC"/>
   <rect x="378" y="518" width="30" height="34" rx="5" fill="#3B3F45"/>
   <path d="M386,536 L391,542 L400,529" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
