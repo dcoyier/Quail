@@ -19,15 +19,15 @@
   <text class="m" x="28" y="98">&#9500;&#9472; quail.toml</text>
   <text class="s" x="360" y="98" style="font-size:23px">settings</text>
   <text class="m" x="28" y="144">&#9500;&#9472; notes.csv</text>
-  <text class="s" x="360" y="144" style="font-size:23px">source, never changed</text>
+  <text class="s" x="360" y="144" style="font-size:23px">dataset, read-only</text>
   <text class="m" x="28" y="190">&#9500;&#9472; sessions/first-pass/</text>
   <text class="m" x="28" y="236">&#9474;  &#9500;&#9472; session.toml</text>
   <text class="m" x="28" y="282">&#9474;  &#9492;&#9472; log/*.jsonl</text>
   <text class="s" x="360" y="282" style="font-size:23px">one per kernel run</text>
   <text class="m" x="28" y="328">&#9500;&#9472; exports/</text>
-  <text class="s" x="360" y="328" style="font-size:23px">tags as CSV</text>
+  <text class="s" x="360" y="328" style="font-size:23px">fields and tags as CSV</text>
   <text class="m" x="28" y="374">&#9500;&#9472; warm/</text>
-  <text class="s" x="360" y="374" style="font-size:23px">saved embeddings</text>
+  <text class="s" x="360" y="374" style="font-size:23px">shared embeddings</text>
   <text class="m" x="28" y="420">&#9492;&#9472; .quail/</text>
   <text class="s" x="360" y="420" style="font-size:23px">local index, not shared</text>
   <path d="M850,18 V96 A70.0,16 0 0 0 990,96 V18" fill="#E3E7EC" stroke="#141414" stroke-width="3"/>
@@ -63,5 +63,5 @@
   <path class="ln" d="M594,588 L650,588" marker-end="url(#a)"/>
   <text class="s" x="666" y="584">every clone&#8217;s first</text>
   <text class="s" x="666" y="612">semantic search is fast</text>
-  <text class="s" x="2" y="664">each part can run on a different machine</text>
+  <text class="s" x="2" y="664">each shard can run on a different machine</text>
 </svg>

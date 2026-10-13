@@ -40,7 +40,7 @@
   <text class="m" x="356" y="128" style="fill:#676C73">&#8230;</text>
   <text class="s" x="846" y="44" text-anchor="end" style="font-size:21px">cell</text>
   <path class="ln" d="M878,82 L962,82" marker-end="url(#a)"/>
-  <text class="s" x="600" y="182" text-anchor="middle" style="font-size:23px">sem was defined back in cell 5</text>
+  <text class="s" x="600" y="182" text-anchor="middle" style="font-size:23px"><tspan class="m" style="font-size:21px">sem</tspan> was defined back in cell 5</text>
   <path class="ln" d="M962,236 L878,236" marker-end="url(#a)"/>
   <rect x="330" y="198" width="540" height="76" rx="14" fill="#fff" stroke="#D3D8DE" stroke-width="3"/>
   <text class="m" x="356" y="246">2012 0.96</text>
@@ -53,12 +53,12 @@
   <rect x="1.5" y="401.5" width="1197" height="503" rx="23" fill="none" stroke="#676C73" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 9"/>
   <rect x="28" y="436" width="250" height="136" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
   <text class="h" x="54" y="484" style="font-size:30px">Embeddings</text>
-  <text class="s" x="54" y="522">local (Ollama) or</text>
-  <text class="s" x="54" y="552">a hosted API</text>
+  <text class="s" x="54" y="522">Ollama or</text>
+  <text class="s" x="54" y="552">OpenAI-compatible</text>
   <rect x="418" y="436" width="364" height="136" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
   <text class="h" x="444" y="484" style="font-size:30px">Session host</text>
   <text class="s" x="444" y="522">one per session;</text>
-  <text class="s" x="444" y="552">runs cells in order</text>
+  <text class="s" x="444" y="552">runs one cell at a time</text>
   <path d="M916,436 H1158 Q1172,436 1172,450 V576 C1096,546 978,606 902,576 V450 Q902,436 916,436 Z" fill="#E3E7EC" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
   <text class="h" x="928" y="484" style="font-size:30px">Session log</text>
   <text class="s" x="928" y="522">code, output and</text>
@@ -74,8 +74,9 @@
   <ellipse cx="1037.0" cy="654" rx="135.0" ry="16" fill="#fff" stroke="#141414" stroke-width="3"/>
   <text class="h" x="928" y="710" style="font-size:30px">Dataset index</text>
   <text class="s" x="928" y="748">one SQLite file:</text>
-  <text class="s" x="928" y="778">rows, keyword index,</text>
-  <text class="s" x="928" y="808">embeddings and tags</text>
+  <text class="s" x="928" y="778">entries, tags,</text>
+  <text class="s" x="928" y="808">a keyword index</text>
+  <text class="s" x="928" y="838">and embeddings</text>
   <path class="ln" d="M286,504 L410,504" marker-end="url(#a)" marker-start="url(#a)"/>
   <text class="s" x="348" y="462" text-anchor="middle" style="font-size:22px">missing</text>
   <text class="s" x="348" y="488" text-anchor="middle" style="font-size:22px">embeddings</text>
