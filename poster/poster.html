@@ -35,7 +35,7 @@
 <section id="notebook">
   <h2>A notebook for an agent</h2>
   <p>A Jupyter notebook lets a researcher try something, read the result and decide what to try next. Quail gives an agent the same loop. Each cell the agent sends runs in a kernel that stays alive between cells, and the agent gets back what a notebook would show: printed output, then the last line&rsquo;s value or a traceback.</p>
-  <p>Many systems give an agent a separate tool for each operation, such as search or count. Quail gives it a Python kernel instead, with its analysis language available as a library. Searching, counting and tagging are Python functions, so one cell can combine them and return only what matters. Cloudflare&rsquo;s Code Mode makes the same choice for MCP tools but starts a fresh sandbox for each snippet;<sup>3</sup> Quail keeps its kernel from one cell to the next.</p>
+  <p>Many systems give an agent a separate tool for each operation, such as search or count. Quail gives it a Python kernel instead, with its analysis language preloaded. Searching, counting and tagging are Python functions, so one cell can combine them and return only what matters. Agents often work better this way than by calling tools one at a time,<sup>3</sup> an approach now commonly called &ldquo;code mode.&rdquo;<sup>4</sup></p>
   <figure><img src="figures/loop.svg" alt="The agent sends cell 13 to Quail and reads back its output. Inside Quail, a session host passes the cell to a sandboxed Python kernel, which reads the SQLite dataset index and returns its result; the host writes the cell and its result to the session log, then updates the index and replies. Numbered arrows mark the seven steps; missing embeddings come from an embedding model"></figure>
   <p>The session host saves each cell to the session log (5) before replying (7), so every result is already on disk. The index is only a cache of the study&rsquo;s files.</p>
 </section>
@@ -46,7 +46,7 @@
 
 <section id="language">
   <h2>The analysis language</h2>
-  <p>Cells combine ordinary Python with Quail&rsquo;s analysis language. Its pieces build on one another, from the columns of a dataset to four core functions.</p>
+  <p>Cells combine ordinary Python with Quail&rsquo;s analysis language. Its pieces build on one another, from the columns of a dataset to four core functions. The language also gives a researcher and an agent a shared vocabulary: what the agent counts, reads or tags is defined in code, such as <code>close = sem &gt; 0.5</code>, so a researcher can see exactly what it did and question&nbsp;it.</p>
   <figure><img src="figures/language.svg" alt="The analysis language in three levels. Fields, the columns of the dataset, such as body, year and network, build recipes: expressions, a value for each entry, such as a semantic or keyword score, and predicates, true or false for each entry, such as close = sem &gt; 0.5. Recipes are kept in variables and nothing runs until a function uses them. They plug into four functions: count, retrieve, values and tag. Tag writes a new field, such as topic, that can be used like any other"></figure>
 </section>
 
@@ -115,9 +115,9 @@ $ . .venv/bin/activate &amp;&amp; quail init ../my-study</div>
 <footer>
   <ol>
     <li><span>1</span>P. Lackie, E. Pickens, D. Coyier. The DataSquad Experiment: Lessons for Preparing Data and Computer Scientists for Work. arXiv:2511.19688, 2025.</li>
-    <li><span>3</span>K. Varda, S. Pai. Code Mode: the better way to use MCP. Cloudflare Blog, 2025.</li>
+    <li><span>3</span>X. Wang et al. Executable Code Actions Elicit Better LLM Agents. ICML, 2024.</li>
     <li><span>2</span>P. Lewis et al. Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks. NeurIPS, 2020.</li>
-    <li>Built on Python, SQLite FTS5, NumPy and RE2, with embeddings from Ollama or an OpenAI-compatible endpoint.</li>
+    <li><span>4</span>K. Varda, S. Pai. Code Mode: the better way to use MCP. Cloudflare Blog, 2025.</li>
   </ol>
   <div class="right">USRSE&rsquo;26, San Jose</div>
 </footer>
