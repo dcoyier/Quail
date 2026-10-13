@@ -110,6 +110,7 @@ figure { margin: 34px 0; }
 figure:last-child { margin-bottom: 0; }
 figure img { display: block; width: 100%; height: auto; }
 b { font-weight: 700; }
+sup { position: relative; top: -0.45em; vertical-align: baseline; font-size: 0.72em; line-height: 0; }
 
 code, .mono { font-family: var(--mono); font-size: 0.84em; font-weight: 500; }
 code, pre, .mono { font-variant-ligatures: none; font-feature-settings: "calt" 0, "liga" 0; }

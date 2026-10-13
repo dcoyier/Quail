@@ -47,14 +47,14 @@
 <section id="example">
   <h2>An example session</h2>
   <div class="notebook">
-    <p class="intro">This session comes from a study of 3.3 million segments of TV news from six elections, 2004 to 2024. The agent searches the 323,464 segments from 2012 for voters waiting in line at the polls. Five cells follow, verbatim; gaps in numbering are cells left out.</p>
+    <p class="intro">This session comes from a study of 3.3 million segments of TV news from six elections, 2004 to 2024. The agent searches the 323,464 segments from 2012 for voters waiting in line at the polls. Five cells follow, verbatim apart from one renamed tag; gaps in numbering are cells left out.</p>
     <table class="lang">
       <tr><td>Field("body")</td><td>a column of the dataset</td></tr>
       <tr><td>body.<span class="kw">lexical</span>("polls")</td><td>keyword score (BM25); <code>&gt; 0</code> means the word appears</td></tr>
       <tr><td>body.<span class="sem">semantic</span>("&hellip;")</td><td>closeness in meaning, from embeddings</td></tr>
       <tr><td>count(where, by=&hellip;)</td><td>how many rows match, per year or network</td></tr>
       <tr><td>retrieve(where, rank=&hellip;)</td><td>the matching rows themselves, to read</td></tr>
-      <tr><td>tag(where, "topic", "polling")</td><td>labels rows; the only thing a cell can write</td></tr>
+      <tr><td>tag(where, "topic", "voting lines")</td><td>labels rows; the only thing a cell can write</td></tr>
     </table>
 
     <div class="step">
@@ -102,9 +102,9 @@ for e in retrieve(rank=sem, limit=6):
     <div class="step">
       <p class="say">It tags the 31 segments above 0.50 and computes their rate per 10,000 segments.</p>
       <div class="cellrow"><span class="no">[13]</span><div class="cell"><pre class="in">p = sem &gt; 0.5
-tag(p, <span class="st">"topic"</span>, <span class="st">"polling"</span>)
+tag(p, <span class="st">"topic"</span>, <span class="st">"voting lines"</span>)
 b = count(by=Field(<span class="st">"year"</span>))
-h = count(Field(<span class="st">"topic"</span>) == <span class="st">"polling"</span>, by=Field(<span class="st">"year"</span>))
+h = count(Field(<span class="st">"topic"</span>) == <span class="st">"voting lines"</span>, by=Field(<span class="st">"year"</span>))
 for y in b: print(y, round(10000 * h.get(y, 0) / b[y], 2))</pre><pre class="out">2012 0.96</pre></div></div>
     </div>
 
@@ -112,7 +112,7 @@ for y in b: print(y, round(10000 * h.get(y, 0) / b[y], 2))</pre><pre class="out"
 
     <div class="step">
       <p class="say">The agent resets its kernel with <code>quail exec first-pass --reset</code>, and numbering starts again at 1, as in Jupyter. Variables such as <code>p</code> are gone, but the tags remain, because they were saved in the session log before cell 13 replied.</p>
-      <div class="cellrow"><span class="no">[1]</span><div class="cell"><pre class="in">print(count(by=Field(<span class="st">"topic"</span>)))</pre><pre class="out">Counter({None: 323433, 'polling': 31})</pre></div></div>
+      <div class="cellrow"><span class="no">[1]</span><div class="cell"><pre class="in">print(count(by=Field(<span class="st">"topic"</span>)))</pre><pre class="out">Counter({None: 323433, 'voting lines': 31})</pre></div></div>
     </div>
     <p class="small" style="margin:0;color:var(--muted)">The first keyword search took 44&nbsp;s and the first semantic one 93&nbsp;s; most later cells took under 1&nbsp;s.</p>
   </div>
@@ -134,7 +134,7 @@ for y in b: print(y, round(10000 * h.get(y, 0) / b[y], 2))</pre><pre class="out"
   <p>Quail needs only a shell, so it can run wherever an agent does, on a laptop or a cloud VM. In one tested setup, the TV news study from the example was available in Slack. Mentioning @Cursor in a thread started a Cursor cloud agent on its own VM, booted from a snapshot that already held Quail, an embedding model and the fully processed dataset, so the agent could search all six years without any setup.</p>
   <figure><img src="figures/deploy.svg" alt="A Slack question starts a cloud VM from a snapshot holding Quail, an embedding model and the processed dataset; the agent runs Quail cells and replies in the thread"></figure>
   <div class="thread">
-    <div><span class="who">Dashiell Coyier</span><span class="meta">#quail-allen-news</span></div>
+    <div><span class="who">Dashiell Coyier</span></div>
     <p class="q"><span class="mention">@Cursor</span> how is Obama characterized?</p>
     <div><span class="who">Cursor</span><span class="meta">27 minutes later</span></div>
     <p class="a">&ldquo;The portrait moves from rising uniter (2004), to a fight over whether he is a historic, gifted candidate or an unready celebrity (2008) &hellip; and by 2024 to a celebrated speaker.&rdquo;</p>

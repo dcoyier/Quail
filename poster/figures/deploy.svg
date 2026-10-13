@@ -64,12 +64,12 @@
   </g>
   <path class="ln" d="M656,176 L864,176" marker-end="url(#a)"/>
   <path class="ln" d="M864,232 L656,232" marker-end="url(#a)"/>
-  <path d="M20,10 H220 Q240,10 240,30 V130 Q240,150 220,150 H62 L22,178 L40,150 H20 Q0,150 0,130 V30 Q0,10 20,10 Z" fill="#fff" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M20,10 H220 Q240,10 240,30 V130 Q240,150 220,150 H62 L22,178 L40,150 H20 Q1.5,150 1.5,130 V30 Q1.5,10 20,10 Z" fill="#fff" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
   <text class="h" x="26" y="58" style="font-size:30px">Slack</text>
   <text class="s" x="26" y="96">@Cursor and</text>
   <text class="s" x="26" y="126">a question</text>
   <path class="ln" d="M248,96 L340,96" marker-end="url(#a)"/>
-  <path d="M20,200 H220 Q240,200 240,220 V320 Q240,340 220,340 H62 L22,368 L40,340 H20 Q0,340 0,320 V220 Q0,200 20,200 Z" fill="#fff" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M20,200 H220 Q240,200 240,220 V320 Q240,340 220,340 H62 L22,368 L40,340 H20 Q1.5,340 1.5,320 V220 Q1.5,200 20,200 Z" fill="#fff" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
   <text class="h" x="26" y="248" style="font-size:30px">Reply</text>
   <text class="s" x="26" y="286">posted back</text>
   <text class="s" x="26" y="316">in the thread</text>

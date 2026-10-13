@@ -39,7 +39,7 @@
   <text class="m" x="770" y="323" text-anchor="middle" style="font-size:22px;font-weight:700">first-pass</text>
   <text class="s" x="664" y="376" style="font-size:23px">the original</text>
   <text class="s" x="664" y="406" style="font-size:23px">session</text>
-  <rect x="940" y="230" width="260" height="200" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
+  <rect x="940" y="230" width="258.5" height="200" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
   <text class="h" x="964" y="274" style="font-size:28px">Agent B</text>
   <rect x="964" y="292" width="212" height="46" rx="12" fill="#fff" stroke="#D3D8DE" stroke-width="3"/>
   <text class="m" x="1070" y="323" text-anchor="middle" style="font-size:22px;font-weight:700">second-pass</text>
