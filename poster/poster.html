@@ -63,13 +63,13 @@
 
 <section id="where">
   <h2>Where Quail can run</h2>
-  <p>Quail needs only a shell, so it runs wherever an agent does, on a laptop or a cloud VM. For example, in one tested setup, mentioning @Cursor in a Slack thread started a Cursor cloud agent on its own VM. The VM booted from a snapshot that already held Quail, an embedding model and the dataset, indexed and embedded, so the agent could start without any setup.</p>
+  <p>Quail needs only a shell, so it runs wherever an agent does, on a laptop or a cloud VM. In one tested setup, a study of TV news transcripts from six U.S. presidential election years, 2004 to 2024, held 3.3 million segments, one dataset per year. Mentioning @Cursor in a Slack thread started a Cursor cloud agent on its own VM. The VM booted from a snapshot that already held Quail, an embedding model and the study, indexed and embedded, so the agent could start without any setup.</p>
   <figure><img src="figures/deploy.svg" alt="A question in Slack starts a cloud VM that boots from a snapshot holding Quail, an embedding model and the dataset, indexed and embedded; on the VM the agent sends cells to Quail, reads their output and posts its reply in the same thread"></figure>
   <div class="thread">
     <div><span class="who">Dashiell Coyier</span></div>
     <p class="q"><span class="mention">@Cursor</span> how is Obama characterized?</p>
     <div class="work">
-      <p>Before responding, the agent ran nearly 20 cells on TV news transcripts from six election years. Part of one cell, executed on a dataset of 2008 news transcripts:</p>
+      <p>Before responding, the agent ran nearly 20 cells. Part of one cell, executed on a dataset of 2008 news transcripts:</p>
       <div class="cell"><pre>labels = [
     <span class="el">&hellip;</span>
     ("is_celebrity", r"(?i)\bObama is a celebrity\b"),
