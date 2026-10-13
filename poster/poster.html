@@ -124,15 +124,15 @@ for y in b: print(y, round(10000 * h.get(y, 0) / b[y], 2))</pre><pre class="out"
 
 <section id="study">
   <h2>Studies live in git</h2>
-  <p>A study is an ordinary folder of text files, so git can share it the way it shares code. Each kernel run writes its own log file, so agents working in parallel push separate files that merge without conflicts. To try another approach without disturbing the first, <code>quail fork</code> copies a closed session&rsquo;s tags and history into a new session.</p>
+  <p>A study is an ordinary folder of text files, so git can share it the way it shares code. Each kernel run writes its own log file, so agents working in parallel push separate files that merge without conflicts. To branch an analysis without disturbing the original, an agent can copy a closed session&rsquo;s tags and history into a new session.</p>
   <figure><img src="figures/study.svg" alt="A study folder holding quail.toml, the notes.csv dataset, a session with one log per kernel run, exports/, warm/ and a local .quail/ index, next to two agents sharing it through git: one works in session first-pass, the other in second-pass, forked from it. Below, embeddings computed in four shards are saved to warm/, so every clone&rsquo;s first semantic search is fast"></figure>
   <p>Semantic search needs embeddings of every distinct value in a field, which can take hours to compute. <code>quail warm</code> can compute them ahead of time, in shards on several machines, and save them in <code>warm/</code>, so every clone starts with them.</p>
 </section>
 
 <section id="where">
   <h2>Where Quail can run</h2>
-  <p>Quail needs only a shell, so it runs wherever an agent does: on a laptop or a cloud VM. In one tested setup, mentioning @Cursor in a Slack thread started a Cursor cloud agent on its own VM. The VM booted from a snapshot that already held Quail, an embedding model and the example&rsquo;s TV news study, indexed and embedded, so the agent could search all six elections without any setup.</p>
-  <figure><img src="figures/deploy.svg" alt="A question in Slack starts a cloud VM that boots from a snapshot holding Quail, an embedding model and the study, indexed and embedded; on the VM the agent sends cells to Quail, reads their output and posts its reply in the same thread"></figure>
+  <p>Quail needs only a shell, so it runs wherever an agent does, on a laptop or a cloud VM. For example, in one tested setup, mentioning @Cursor in a Slack thread started a Cursor cloud agent on its own VM. The VM booted from a snapshot that already held Quail, an embedding model and the dataset, indexed and embedded, so the agent could start without any setup.</p>
+  <figure><img src="figures/deploy.svg" alt="A question in Slack starts a cloud VM that boots from a snapshot holding Quail, an embedding model and the dataset, indexed and embedded; on the VM the agent sends cells to Quail, reads their output and posts its reply in the same thread"></figure>
   <div class="thread">
     <div><span class="who">Dashiell Coyier</span></div>
     <p class="q"><span class="mention">@Cursor</span> how is Obama characterized?</p>
