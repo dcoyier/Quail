@@ -18,8 +18,8 @@
   --rule: #D8D3CD;
   --fill: #F4F2EF;
   --fill-2: #E4E2DE;
-  --kw: #2B5F9E;
-  --sem: #23785A;
+  --blue: #003069;    /* Carleton Blue, PMS 294 */
+  --maize: #FFD24F;   /* Carleton Maize, PMS 120 */
   --pad: 110px;
   --gap: 110px;
   --sans: "Source Sans 3", sans-serif;
@@ -52,8 +52,8 @@ html, body {
 
 header {
   flex: none;
-  background: #003069;
-  border-bottom: 18px solid #FFD24F;
+  background: var(--blue);
+  border-bottom: 18px solid var(--maize);
   color: #fff;
   padding: 70px var(--pad);
   display: grid;
@@ -96,7 +96,7 @@ section { min-width: 0; }
 
 h2 {
   margin: 0 0 28px;
-  color: #003069;
+  color: var(--blue);
   font-family: var(--display);
   font-size: 62px;
   line-height: 1.08;
@@ -116,8 +116,6 @@ sup { position: relative; top: -0.45em; vertical-align: baseline; font-size: 0.7
 
 code, .mono { font-family: var(--mono); font-size: 0.84em; font-weight: 500; }
 code, pre, .mono { font-variant-ligatures: none; font-feature-settings: "calt" 0, "liga" 0; }
-.kw { color: var(--kw); font-weight: 700; }
-.sem { color: var(--sem); font-weight: 700; }
 
 /* the language, as a glossary */
 table.lang { width: 100%; border-collapse: collapse; margin: 0 0 40px; font-size: 31px; line-height: 1.3; }
@@ -174,21 +172,20 @@ table.lang td:first-child { width: 600px; padding-right: 24px; font-family: var(
 .thread .meta { color: var(--muted); font-size: 27px; margin-left: 10px; }
 .thread .q { margin: 2px 0 14px; }
 .thread .a { margin: 4px 0 0; color: var(--ink-2); }
-.thread .mention { font-weight: 700; color: var(--kw); }
+.thread .mention { font-weight: 700; color: var(--blue); }
 
 /* open questions, set apart to invite conversation */
 .questions {
   margin: 36px 0 30px;
   background: var(--fill);
-  border-left: 12px solid #003069;
-  border-radius: 0 24px 24px 0;
-  padding: 32px 44px 30px 40px;
+  border-radius: 24px;
+  padding: 32px 44px 34px;
 }
-.questions h3 { margin: 0 0 16px; font-family: var(--display); font-size: 48px; font-weight: 700; letter-spacing: -1px; color: #003069; }
+.questions h3 { margin: 0 0 16px; font-family: var(--display); font-size: 48px; font-weight: 700; letter-spacing: -1px; color: var(--blue); }
 .questions ol { margin: 0; padding-left: 1.3em; }
 .questions li { margin: 0 0 16px; font-size: 37px; line-height: 1.32; }
 .questions li:last-child { margin-bottom: 0; }
-.questions li::marker { font-weight: 700; color: #003069; }
+.questions li::marker { font-weight: 700; color: var(--blue); }
 
 .term {
   margin-top: 34px;
@@ -198,19 +195,19 @@ table.lang td:first-child { width: 600px; padding-right: 24px; font-family: var(
   color: var(--ink);
   padding: 22px 28px;
   font-family: var(--mono);
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 500;
   line-height: 1.55;
   white-space: pre;
   font-variant-ligatures: none;
 }
-.term .cmt { font-family: var(--sans); font-size: 27px; color: var(--muted); }
+.term .cmt { font-family: var(--sans); font-size: 32px; color: var(--muted); }
 
 footer {
   flex: none;
   margin: 50px var(--pad) 0;
   padding: 26px 0 50px;
-  border-top: 4px solid #003069;
+  border-top: 4px solid var(--blue);
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 80px;
