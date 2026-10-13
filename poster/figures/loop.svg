@@ -35,17 +35,17 @@
   <path d="M1066,254 H1136" fill="none" stroke="#003069" stroke-width="7" stroke-linecap="round"/>
   <path class="ln" d="M238,82 L322,82" marker-end="url(#a)"/>
   <rect x="330" y="12" width="540" height="140" rx="14" fill="#fff" stroke="#D8D3CD" stroke-width="3"/>
-  <text class="m" x="356" y="56">p = sem &gt; 0.5</text>
-  <text class="m" x="356" y="92">tag(p, "topic", "voting lines")</text>
-  <text class="m" x="356" y="128" style="fill:#625D58">&#8230;</text>
+  <text class="m" x="356" y="56">close = sem &gt; 0.5</text>
+  <text class="m" x="356" y="92">tag(close, "topic", "voting lines")</text>
+  <text class="m" x="356" y="128">count(close)</text>
   <text class="s" x="846" y="44" text-anchor="end" style="font-size:21px">cell</text>
   <path class="ln" d="M878,82 L962,82" marker-end="url(#a)"/>
-  <text class="s" x="600" y="182" text-anchor="middle" style="font-size:23px"><tspan class="m" style="font-size:21px">sem</tspan> was defined back in cell 5</text>
+  <text class="s" x="600" y="182" text-anchor="middle" style="font-size:23px"><tspan class="m" style="font-size:21px">sem</tspan> was defined in an earlier cell</text>
   <path class="ln" d="M962,236 L878,236" marker-end="url(#a)"/>
   <rect x="330" y="198" width="540" height="76" rx="14" fill="#fff" stroke="#D8D3CD" stroke-width="3"/>
-  <text class="m" x="356" y="246">2012 0.96</text>
+  <text class="m" x="356" y="246">31</text>
   <text class="s" x="846" y="224" text-anchor="end" style="font-size:21px">output</text>
-  <text class="s" x="516" y="246">what a notebook would show</text>
+  <text class="s" x="410" y="246">what a notebook would show</text>
   <path class="ln" d="M322,236 L238,236" marker-end="url(#a)"/>
   <rect x="994" y="236" width="182" height="36" rx="8" fill="none" stroke="#625D58" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 9"/>
   <path d="M994,272 L3,414 M1176,272 L1197,414" fill="none" stroke="#625D58" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 9"/>

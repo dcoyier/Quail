@@ -176,6 +176,20 @@ table.lang td:first-child { width: 600px; padding-right: 24px; font-family: var(
 .thread .a { margin: 4px 0 0; color: var(--ink-2); }
 .thread .mention { font-weight: 700; color: var(--kw); }
 
+/* open questions, set apart to invite conversation */
+.questions {
+  margin: 36px 0 30px;
+  background: var(--fill);
+  border-left: 12px solid #003069;
+  border-radius: 0 24px 24px 0;
+  padding: 32px 44px 30px 40px;
+}
+.questions h3 { margin: 0 0 16px; font-family: var(--display); font-size: 48px; font-weight: 700; letter-spacing: -1px; color: #003069; }
+.questions ol { margin: 0; padding-left: 1.3em; }
+.questions li { margin: 0 0 16px; font-size: 37px; line-height: 1.32; }
+.questions li:last-child { margin-bottom: 0; }
+.questions li::marker { font-weight: 700; color: #003069; }
+
 .term {
   margin-top: 34px;
   border-radius: 16px;

@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1384 1600" width="1384" height="1600">
+  <style>
+    text { font-family: 'Source Sans 3', sans-serif; fill: #141414; }
+    .s { font-size: 24px; fill: #625D58; }
+    .lvtitle { font-size: 34px; font-weight: 700; fill: #fff; }
+    .lvgloss { font-size: 26px; fill: #D6E2F0; }
+    .coltitle { font-size: 32px; font-weight: 700; }
+    .idea { font-size: 27px; font-weight: 600; }
+    .chain { font-size: 22px; font-weight: 700; fill: #625D58; }
+    .fname { font-family: 'Source Code Pro', monospace; font-size: 36px; font-weight: 700; fill: #003069; font-variant-ligatures: none; }
+    .code { font-family: 'Source Code Pro', monospace; font-size: 22px; font-weight: 500; font-variant-ligatures: none; }
+    .ln { fill: none; stroke: #141414; stroke-width: 4; stroke-linecap: butt; }
+    .loop { fill: none; stroke: #141414; stroke-width: 4; stroke-linecap: butt; stroke-linejoin: round; }
+    .card { fill: #fff; stroke: #141414; stroke-width: 3; }
+    .predchip { fill: #D6E2F0; stroke: #003069; stroke-width: 2.5; }
+    .exprchip { fill: #fff; stroke: #141414; stroke-width: 2.5; }
+    .fieldchip { fill: #E4E2DE; stroke: #141414; stroke-width: 2.5; }
+    .tagchip { fill: #FFD24F; stroke: #141414; stroke-width: 2.5; }
+    .fieldmark { fill: #E4E2DE; stroke: #141414; stroke-width: 1.5; }
+    .exprmark { fill: #fff; stroke: #141414; stroke-width: 1.5; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#141414"/>
+    </marker>
+    <marker id="b" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#141414"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1300" height="184" rx="22" fill="#F4F2EF"/>
+  <path d="M0,64 V22 Q0,0 22,0 H1278 Q1300,0 1300,22 V64 Z" fill="#003069"/>
+  <rect x="2" y="2" width="1296" height="180" rx="20" fill="none" stroke="#003069" stroke-width="4"/>
+  <text class="lvtitle" x="28" y="45">Fields</text>
+  <text class="lvgloss" x="168" y="44">the columns of the dataset</text>
+  <rect class="fieldchip" x="28" y="112" width="300" height="48" rx="6"/>
+  <text class="code" x="46" y="144" xml:space="preserve">body = Field("body")</text>
+  <rect class="fieldchip" x="352" y="112" width="300" height="48" rx="6"/>
+  <text class="code" x="370" y="144" xml:space="preserve">year = Field("year")</text>
+  <rect class="fieldchip" x="676" y="112" width="247.2" height="48" rx="6"/>
+  <text class="code" x="694" y="144" xml:space="preserve">Field("network")</text>
+  <rect class="tagchip" x="979.2" y="112" width="220.8" height="48" rx="6"/>
+  <text class="code" x="997.2" y="144" xml:space="preserve">Field("topic")</text>
+  <text class="s" x="1089.6" y="100" text-anchor="middle">a tag becomes a field</text>
+  <rect x="0" y="314" width="1300" height="620" rx="22" fill="#F4F2EF"/>
+  <path d="M0,378 V336 Q0,314 22,314 H1278 Q1300,314 1300,336 V378 Z" fill="#003069"/>
+  <rect x="2" y="316" width="1296" height="616" rx="20" fill="none" stroke="#003069" stroke-width="4"/>
+  <text class="lvtitle" x="28" y="359">Recipes</text>
+  <text class="lvgloss" x="187" y="358">kept in variables and reused; nothing runs until a function uses them</text>
+  <text class="coltitle" x="28" y="434">Expressions</text>
+  <text class="s" x="28" y="468">a value for each entry</text>
+  <text class="coltitle" x="674" y="434">Predicates</text>
+  <text class="s" x="674" y="468">true or false for each entry, built from expressions</text>
+  <rect class="exprchip" x="28" y="510" width="551.6" height="44" rx="22"/>
+  <text class="code" x="46" y="540" xml:space="preserve">sem</text>
+  <text class="code" x="85.6" y="540" xml:space="preserve"> = </text>
+  <rect class="fieldmark" x="128.2" y="518" width="60.8" height="30" rx="4"/>
+  <text class="code" x="132.2" y="540" xml:space="preserve">body</text>
+  <text class="code" x="192" y="540" xml:space="preserve">.semantic("waiting to vote")</text>
+  <text class="s" x="32" y="582">closeness in meaning to a phrase</text>
+  <rect class="exprchip" x="28" y="606" width="393.2" height="44" rx="22"/>
+  <text class="code" x="46" y="636" xml:space="preserve">kw</text>
+  <text class="code" x="72.4" y="636" xml:space="preserve"> = </text>
+  <rect class="fieldmark" x="115" y="614" width="60.8" height="30" rx="4"/>
+  <text class="code" x="119" y="636" xml:space="preserve">body</text>
+  <text class="code" x="178.8" y="636" xml:space="preserve">.lexical("polls")</text>
+  <text class="s" x="32" y="678">keyword score; above 0 when the word appears</text>
+  <path d="M28,700 H626" stroke="#CFC9C2" stroke-width="2"/>
+  <text class="chain" x="28" y="732">Chain them</text>
+  <rect class="exprchip" x="28" y="748" width="498.8" height="44" rx="22"/>
+  <rect class="fieldmark" x="49" y="756" width="60.8" height="30" rx="4"/>
+  <text class="code" x="53" y="778" xml:space="preserve">body</text>
+  <text class="code" x="112.8" y="778" xml:space="preserve">.lower().search("long lines?")</text>
+  <text class="s" x="32" y="820">methods in a row: the first match, or none</text>
+  <rect class="exprchip" x="28" y="844" width="220.8" height="44" rx="22"/>
+  <text class="code" x="46" y="874" xml:space="preserve">sem + 0.2 * kw</text>
+  <text class="s" x="32" y="916">scores added together</text>
+  <path class="predchip" d="M696,510 H938.4 L960.4,532 L938.4,554 H696 L674,532 Z"/>
+  <text class="code" x="698" y="540" xml:space="preserve">close = </text>
+  <rect class="exprmark" x="805.6" y="518" width="49.6" height="30" rx="15"/>
+  <text class="code" x="810.6" y="540" xml:space="preserve">sem</text>
+  <text class="code" x="857.2" y="540" xml:space="preserve"> &gt; 0.5</text>
+  <text class="s" x="678" y="582">close in meaning</text>
+  <path class="predchip" d="M696,606 H1030.8 L1052.8,628 L1030.8,650 H696 L674,628 Z"/>
+  <text class="code" x="698" y="636" xml:space="preserve">in_2012 = </text>
+  <rect class="fieldmark" x="833" y="614" width="60.8" height="30" rx="4"/>
+  <text class="code" x="837" y="636" xml:space="preserve">year</text>
+  <text class="code" x="896.8" y="636" xml:space="preserve"> == "2012"</text>
+  <text class="s" x="678" y="678">aired in 2012</text>
+  <path d="M674,700 H1272" stroke="#CFC9C2" stroke-width="2"/>
+  <text class="chain" x="674" y="732">Chain them</text>
+  <path class="predchip" d="M696,748 H911.2 L933.2,770 L911.2,792 H696 L674,770 Z"/>
+  <text class="code" x="698" y="778" xml:space="preserve">close &amp; ~in_2012</text>
+  <text class="s" x="678" y="820">close in meaning, and not from 2012</text>
+  <path class="predchip" d="M696,844 H925.2 L947.2,866 L925.2,888 H696 L674,866 Z"/>
+  <text class="code" x="698" y="874" xml:space="preserve">close | (</text>
+  <rect class="exprmark" x="818.8" y="852" width="36.4" height="30" rx="15"/>
+  <text class="code" x="823.8" y="874" xml:space="preserve">kw</text>
+  <text class="code" x="857.2" y="874" xml:space="preserve"> &gt; 0)</text>
+  <text class="s" x="678" y="916">close in meaning, or says “polls”</text>
+  <rect x="0" y="1064" width="1300" height="536" rx="22" fill="#F4F2EF"/>
+  <path d="M0,1128 V1086 Q0,1064 22,1064 H1278 Q1300,1064 1300,1086 V1128 Z" fill="#003069"/>
+  <rect x="2" y="1066" width="1296" height="532" rx="20" fill="none" stroke="#003069" stroke-width="4"/>
+  <text class="lvtitle" x="28" y="1109">Functions</text>
+  <text class="lvgloss" x="225" y="1108">the four core operations of the analysis language</text>
+  <rect class="card" x="28" y="1156" width="610" height="196" rx="18"/>
+  <text class="fname" x="54" y="1210">count</text>
+  <text class="idea" x="54" y="1254">Counts the matching entries</text>
+  <text class="code" x="54" y="1310" xml:space="preserve">count(</text>
+  <path class="predchip" d="M158.2,1283 H218.2 L237.2,1302 L218.2,1321 H158.2 L139.2,1302 Z"/>
+  <text class="code" x="155.2" y="1310" xml:space="preserve">close</text>
+  <text class="code" x="243.2" y="1310" xml:space="preserve">, by=</text>
+  <rect class="fieldchip" x="315.2" y="1283" width="72.8" height="38" rx="6"/>
+  <text class="code" x="325.2" y="1310" xml:space="preserve">year</text>
+  <text class="code" x="394" y="1310" xml:space="preserve">)</text>
+  <rect class="card" x="662" y="1156" width="610" height="196" rx="18"/>
+  <text class="fname" x="688" y="1210">retrieve</text>
+  <text class="idea" x="688" y="1254">Returns the matching entries to read</text>
+  <text class="code" x="688" y="1310" xml:space="preserve">retrieve(</text>
+  <path class="predchip" d="M831.8,1283 H891.8 L910.8,1302 L891.8,1321 H831.8 L812.8,1302 Z"/>
+  <text class="code" x="828.8" y="1310" xml:space="preserve">close</text>
+  <text class="code" x="916.8" y="1310" xml:space="preserve">, rank=</text>
+  <rect class="exprchip" x="1015.2" y="1283" width="63.6" height="38" rx="19"/>
+  <text class="code" x="1027.2" y="1310" xml:space="preserve">sem</text>
+  <text class="code" x="1084.8" y="1310" xml:space="preserve">)</text>
+  <rect class="card" x="28" y="1376" width="610" height="196" rx="18"/>
+  <text class="fname" x="54" y="1430">values</text>
+  <text class="idea" x="54" y="1474">Returns a Python list, one value per entry</text>
+  <text class="code" x="54" y="1530" xml:space="preserve">values(</text>
+  <rect class="exprchip" x="152.4" y="1503" width="195.6" height="38" rx="19"/>
+  <text class="code" x="164.4" y="1530" xml:space="preserve">body.length()</text>
+  <text class="code" x="354" y="1530" xml:space="preserve">, where=</text>
+  <path class="predchip" d="M484.6,1503 H544.6 L563.6,1522 L544.6,1541 H484.6 L465.6,1522 Z"/>
+  <text class="code" x="481.6" y="1530" xml:space="preserve">close</text>
+  <text class="code" x="569.6" y="1530" xml:space="preserve">)</text>
+  <rect class="card" x="662" y="1376" width="610" height="196" rx="18"/>
+  <text class="fname" x="688" y="1430">tag</text>
+  <text class="idea" x="688" y="1474">Records a decision on the matching entries</text>
+  <text class="code" x="688" y="1530" xml:space="preserve">tag(</text>
+  <path class="predchip" d="M765.8,1503 H825.8 L844.8,1522 L825.8,1541 H765.8 L746.8,1522 Z"/>
+  <text class="code" x="762.8" y="1530" xml:space="preserve">close</text>
+  <text class="code" x="850.8" y="1530" xml:space="preserve">, "topic", "voting lines")</text>
+  <path d="M627,198 H673 V252 H706 L650,302 L594,252 H627 Z" fill="#003069"/>
+  <path d="M627,948 H673 V1002 H706 L650,1052 L594,1002 H627 Z" fill="#003069"/>
+  <path class="loop" d="M1272,1474 C1376,1474 1376,136 1212,136" marker-end="url(#b)"/>
+</svg>

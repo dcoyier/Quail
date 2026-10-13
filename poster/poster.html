@@ -29,7 +29,7 @@
   <p class="lede">Quail lets an AI agent make sense of a large text dataset in a notebook, with tools it can combine in code.</p>
   <p>Researchers often have more text than anyone can read closely.<sup>1</sup> Retrieval-augmented generation (RAG)<sup>2</sup> helps an agent with a large dataset by handing it the few entries that best match a question. This can answer &ldquo;what did the news say about lines at the polls?&rdquo; but not &ldquo;how often, and on which networks?&rdquo;</p>
   <figure><img src="figures/corpus.svg" alt="The same 40-entry dataset three times: retrieval picks five entries; counting finds all twelve matches; tagging marks ten as fitting and two as not"></figure>
-  <p>Quail builds on RAG. It keeps retrieval and adds three more verbs: <code>count</code> and <code>values</code> work over every matching entry, not just the closest few, so the agent can check how common something is instead of guessing from examples; <code>tag</code> records what it decides.</p>
+  <p>Quail builds on RAG. It keeps retrieval and adds three more functions: <code>count</code> and <code>values</code> work over every matching entry, not just the closest few, so the agent can check how common something is instead of guessing from examples; <code>tag</code> records what it decides.</p>
 </section>
 
 <section id="notebook">
@@ -44,83 +44,11 @@
 
 <div class="col">
 
-<section id="example">
-  <h2>An example session</h2>
-  <div class="notebook">
-    <p class="intro">This session comes from a study of 3.3 million segments of TV news from six elections, 2004 to 2024. The agent searches the 323,464 segments from 2012 for voters waiting in line at the polls. Five cells follow, verbatim apart from one renamed tag; gaps in numbering are cells left out.</p>
-    <table class="lang">
-      <tr><td>Field("body")</td><td>a column of the dataset</td></tr>
-      <tr><td>body.<span class="kw">lexical</span>("polls")</td><td>keyword score (BM25); <code>&gt; 0</code> means the word appears</td></tr>
-      <tr><td>body.<span class="sem">semantic</span>("&hellip;")</td><td>closeness in meaning, from embeddings</td></tr>
-      <tr><td>count(where, by=&hellip;)</td><td>how many rows match, per year or network</td></tr>
-      <tr><td>retrieve(where, rank=&hellip;)</td><td>the matching rows themselves, to read</td></tr>
-      <tr><td>tag(where, "topic", "voting lines")</td><td>labels rows; the only thing a cell can write</td></tr>
-    </table>
-
-    <div class="step">
-      <p class="say">Words like <i>poll</i> appear in 22,658 segments. Ranked by keyword score, the strongest matches are all about opinion polls.</p>
-      <div class="cellrow"><span class="no">[3]</span><div class="cell"><pre class="in">s = Field(<span class="st">"body"</span>).<span class="kw">lexical</span>(<span class="st">"polls"</span>)
-for e in retrieve(s &gt; 0, rank=s, limit=6):
-    b = <span class="st">" "</span>.join(e[<span class="st">"body"</span>].split())
-    i = b.lower().find(<span class="st">"poll"</span>)
-    print(round(e.score, 2), e[<span class="st">"network"</span>], b[max(0, i - 10):i + 28])</pre><pre class="out">5.36 MSNBC  TRACKING POLL PUTS MITT ROMNEY LEADIN
-5.36 CNN SIDENTIAL POLLS LATELY? THAT WAS RETOR
-5.35 MSNBC UDING THE POLLSTERS. WE KNOW THESE POL
-5.35 CNN SIDENTIAL POLLS LATELY? THAT WAS RHETO
-5.34 MSNBC  NATIONAL POLLING NOW FOR WHAT IT'S WO
-5.33 MSNBC  NATIONAL POLLING NOW FOR WHAT IT'S WO</pre></div></div>
-    </div>
-
-    <div class="step">
-      <p class="say">So it searches by meaning instead, and none of the six closest segments contains <i>poll</i> at all, as the <code>False</code> column shows.</p>
-      <div class="cellrow"><span class="no">[5]</span><div class="cell"><pre class="in">q = <span class="st">"voters waiting in long lines to cast their ballots"</span>
-sem = Field(<span class="st">"body"</span>).<span class="sem">semantic</span>(q)
-for e in retrieve(rank=sem, limit=6):
-    b = <span class="st">" "</span>.join(e[<span class="st">"body"</span>].split())
-    print(round(e.score, 3), e[<span class="st">"network"</span>], <span class="st">"poll"</span> in b.lower(), b[:18])</pre><pre class="out">0.629 MSNBC False STILL AHEAD, VOTER
-0.629 MSNBC False STILL AHEAD, VOTER
-0.575 MSNBC False YES, THE LINES TO 
-0.574 MSNBC False UP NEST, THE SHAME
-0.574 MSNBC False UP NEST, THE SHAME
-0.567 MSNBC False NEXT, FROM LONG LI</pre></div></div>
-    </div>
-
-    <div class="step">
-      <p class="say">Further down the ranking, just under 0.50, a crowd in Detroit and a line for a new iPhone appear among the voting lines, so it keeps scores above 0.50.</p>
-      <div class="cellrow"><span class="no">[10]</span><div class="cell"><pre class="in">for e in retrieve(rank=sem, limit=6, offset=36):
-    b = <span class="st">" "</span>.join(e[<span class="st">"body"</span>].split())
-    i = b.lower().find(<span class="st">"line"</span>)
-    if i &lt; 0: i = b.lower().find(<span class="st">"vote"</span>)
-    print(round(e.score, 3), b[max(0, i - 12):i + 28])</pre><pre class="out">0.492 LONG VOTING LINES IN FLORIDA DIDN'T HAPP
-<span class="fp">0.489 THE CROWD IN DETROIT.</span>                    <span class="note">off topic</span>
-<span class="fp">0.487 S WAITED IN LINE TO GET THE NEW IPHONE. </span> <span class="note">off topic</span>
-0.485 IS HARD THE LINES ARE SURPRISINGLY LONG.
-0.485 F PEOPLE IN LINE. THEY WERE ENTHUSIASTIC
-0.483 VOICE, YOUR VOTE, TENS OF MILLIONS OF AM</pre></div></div>
-    </div>
-
-    <div class="step">
-      <p class="say">It tags the 31 segments above 0.50 and computes their rate per 10,000 segments.</p>
-      <div class="cellrow"><span class="no">[13]</span><div class="cell"><pre class="in">p = sem &gt; 0.5
-tag(p, <span class="st">"topic"</span>, <span class="st">"voting lines"</span>)
-b = count(by=Field(<span class="st">"year"</span>))
-h = count(Field(<span class="st">"topic"</span>) == <span class="st">"voting lines"</span>, by=Field(<span class="st">"year"</span>))
-for y in b: print(y, round(10000 * h.get(y, 0) / b[y], 2))</pre><pre class="out">2012 0.96</pre></div></div>
-    </div>
-
-    <div class="restart">Kernel restarted</div>
-
-    <div class="step">
-      <p class="say">The agent resets its kernel with <code>quail exec first-pass --reset</code>, and numbering starts again at 1, as in Jupyter. Variables such as <code>p</code> are gone, but the tags remain, because they were saved in the session log before cell 13 replied.</p>
-      <div class="cellrow"><span class="no">[1]</span><div class="cell"><pre class="in">print(count(by=Field(<span class="st">"topic"</span>)))</pre><pre class="out">Counter({None: 323433, 'voting lines': 31})</pre></div></div>
-    </div>
-    <p class="small" style="margin:0;color:var(--muted)">The first keyword search took 44&nbsp;s and the first semantic one 93&nbsp;s; most later cells took under 1&nbsp;s.</p>
-  </div>
+<section id="language">
+  <h2>The analysis language</h2>
+  <p>Cells combine ordinary Python with Quail&rsquo;s analysis language. Its pieces build on one another, from the columns of a dataset to four core functions.</p>
+  <figure><img src="figures/language.svg" alt="The analysis language in three levels. Fields, the columns of the dataset, such as body, year and network, build recipes: expressions, a value for each entry, such as a semantic or keyword score, and predicates, true or false for each entry, such as close = sem &gt; 0.5. Recipes are kept in variables and nothing runs until a function uses them. They plug into four functions: count, retrieve, values and tag. Tag writes a new field, such as topic, that can be used like any other"></figure>
 </section>
-
-</div>
-
-<div class="col">
 
 <section id="study">
   <h2>Studies live in git</h2>
@@ -128,6 +56,10 @@ for y in b: print(y, round(10000 * h.get(y, 0) / b[y], 2))</pre><pre class="out"
   <figure><img src="figures/study.svg" alt="A study folder holding quail.toml, the notes.csv dataset, a session with one log per kernel run, exports/, warm/ and a local .quail/ index, next to two agents sharing it through git: one works in session first-pass, the other in second-pass, forked from it. Below, embeddings computed in four shards are saved to warm/, so every clone&rsquo;s first semantic search is fast"></figure>
   <p>Semantic search needs embeddings of every distinct value in a field, which can take hours to compute. <code>quail warm</code> can compute them ahead of time, in shards on several machines, and save them in <code>warm/</code>, so every clone starts with them.</p>
 </section>
+
+</div>
+
+<div class="col">
 
 <section id="where">
   <h2>Where Quail can run</h2>
@@ -143,7 +75,18 @@ for y in b: print(y, round(10000 * h.get(y, 0) / b[y], 2))</pre><pre class="out"
 
 <section id="status">
   <h2>Status and next steps</h2>
-  <p>Quail 0.94 is an alpha release for Linux and macOS, open source under the Apache-2.0 license. It works with any agent that can run shell commands. Its results have not yet been formally evaluated, and working out how to do that well is our next step. If you have a text dataset you would like to understand, we would love to hear about it.</p>
+  <p>Quail 0.94 is an alpha release for Linux and macOS, open source under the Apache-2.0 license. It works with any agent that can run shell commands.</p>
+  <div class="questions">
+    <h3>Open questions</h3>
+    <ol>
+      <li>How does Quail add value to coding agents such as Codex or Claude Code?</li>
+      <li>Is semantic search really helpful?</li>
+      <li>Could Quail search long texts without chunking them first?</li>
+      <li>How could &ldquo;System&nbsp;1&rdquo; decision models such as Jev be integrated into Quail?</li>
+      <li>How can an agent communicate its method efficiently, so that researchers can trust its analysis?</li>
+    </ol>
+  </div>
+  <p>If you have a text dataset you would like to understand, we would love to hear about it.</p>
   <div class="term"><span class="cmt">To try it, with git and uv installed:</span>
 $ git clone --depth 1 https://github.com/dcoyier/Quail.git
 $ cd Quail &amp;&amp; uv sync --locked --no-dev --python 3.12 &amp;&amp; . .venv/bin/activate
@@ -161,7 +104,7 @@ $ quail init ../my-study</div>
     <li><span>2</span>P. Lewis et al. Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks. NeurIPS, 2020.</li>
     <li>Built on Python, SQLite FTS5, NumPy and RE2, with embeddings from Ollama or an OpenAI-compatible endpoint.</li>
   </ol>
-  <div class="right">USRSE&rsquo;26, San Jose<br>Example session run with Quail 0.94.0a0 and EmbeddingGemma</div>
+  <div class="right">USRSE&rsquo;26, San Jose</div>
 </footer>
 
 </div>
