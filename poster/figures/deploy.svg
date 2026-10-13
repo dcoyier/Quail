@@ -71,7 +71,7 @@
   <text class="s" x="26" y="96">@Cursor in a</text>
   <text class="s" x="26" y="126">Slack thread</text>
   <path class="ln" d="M248,96 L340,96" marker-end="url(#a)"/>
-  <path d="M20,200 H220 Q240,200 240,220 V320 Q240,340 220,340 H62 L22,368 L40,340 H20 Q1.5,340 1.5,320 V220 Q1.5,200 20,200 Z" fill="#fff" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M20,200 H220 Q240,200 240,220 V320 Q240,340 220,340 H200 L218,368 L178,340 H20 Q1.5,340 1.5,320 V220 Q1.5,200 20,200 Z" fill="#fff" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
   <text class="h" x="26" y="248" style="font-size:30px">Reply</text>
   <text class="s" x="26" y="286">posted in the</text>
   <text class="s" x="26" y="316">same thread</text>
