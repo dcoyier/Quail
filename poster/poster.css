@@ -20,6 +20,7 @@
   --fill-2: #E4E2DE;
   --blue: #003069;    /* Carleton Blue, PMS 294 */
   --maize: #FFD24F;   /* Carleton Maize, PMS 120 */
+  --tint: #D6E2F0;    /* matched text, as in the predicate chips */
   --pad: 110px;
   --gap: 110px;
   --sans: "Source Sans 3", sans-serif;
@@ -173,6 +174,11 @@ table.lang td:first-child { width: 600px; padding-right: 24px; font-family: var(
 .thread .q { margin: 2px 0 14px; }
 .thread .a { margin: 4px 0 0; color: var(--ink-2); }
 .thread .mention { font-weight: 700; color: var(--blue); }
+.thread .a + .a { margin-top: 12px; }
+.thread .work { margin: 6px 0 22px; padding-left: 26px; border-left: 5px solid var(--rule); }
+.thread .work p { margin: 0 0 14px; color: var(--muted); font-size: 29px; line-height: 1.36; }
+.thread .cell pre { font-size: 23px; padding: 12px 22px; }
+.hl { background: var(--tint); border-radius: 4px; }
 
 /* open questions, set apart to invite conversation */
 .questions {
