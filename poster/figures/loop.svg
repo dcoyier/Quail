@@ -7,10 +7,10 @@
     .s { font-size: 24px; fill: #676C73; }
     .cap { font-size: 24px; font-weight: 700; fill: #676C73; }
     .m { font-family: 'Source Code Pro', monospace; font-size: 24px; font-weight: 500; font-variant-ligatures: none; }
-    .ln { fill: none; stroke: #141414; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+    .ln { fill: none; stroke: #141414; stroke-width: 4; stroke-linecap: butt; stroke-linejoin: round; }
   </style>
   <defs>
-    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
+    <marker id="a" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#141414"/>
     </marker>
   </defs>
