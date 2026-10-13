@@ -154,9 +154,8 @@ table.lang td:first-child { width: 600px; padding-right: 24px; font-family: var(
   gap: 24px;
   margin: 6px 0 26px;
   color: var(--muted);
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
-  letter-spacing: 2.5px;
 }
 .restart::before, .restart::after { content: ""; flex: 1; border-top: 3px dashed #B4BAC2; }
 .restart code { font-size: 25px; letter-spacing: 0; font-weight: 500; color: var(--ink-2); }

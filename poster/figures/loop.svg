@@ -5,7 +5,7 @@
     .h { font-size: 30px; font-weight: 700; }
     .b { font-size: 25px; }
     .s { font-size: 24px; fill: #676C73; }
-    .cap { font-size: 21px; font-weight: 700; letter-spacing: 2.5px; fill: #676C73; }
+    .cap { font-size: 24px; font-weight: 700; fill: #676C73; }
     .m { font-family: 'Source Code Pro', monospace; font-size: 24px; font-weight: 500; font-variant-ligatures: none; }
     .ln { fill: none; stroke: #141414; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
   </style>
@@ -64,7 +64,7 @@
   <text class="s" x="928" y="522">code, output and</text>
   <text class="s" x="928" y="552">tags, written first</text>
   <rect x="398" y="628" width="404" height="250" rx="22" fill="none" stroke="#141414" stroke-width="3" stroke-dasharray="12 9"/>
-  <text class="cap" x="422" y="664">SANDBOX</text>
+  <text class="cap" x="422" y="664">Sandbox</text>
   <rect x="422" y="686" width="356" height="170" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
   <text class="h" x="448" y="734" style="font-size:30px">Python kernel</text>
   <text class="s" x="448" y="772">keeps variables between</text>

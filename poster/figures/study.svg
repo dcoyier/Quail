@@ -5,7 +5,7 @@
     .h { font-size: 30px; font-weight: 700; }
     .b { font-size: 25px; }
     .s { font-size: 24px; fill: #676C73; }
-    .cap { font-size: 21px; font-weight: 700; letter-spacing: 2.5px; fill: #676C73; }
+    .cap { font-size: 24px; font-weight: 700; fill: #676C73; }
     .m { font-family: 'Source Code Pro', monospace; font-size: 24px; font-weight: 500; font-variant-ligatures: none; }
     .ln { fill: none; stroke: #141414; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
   </style>

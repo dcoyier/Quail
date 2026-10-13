@@ -5,7 +5,7 @@
     .h { font-size: 30px; font-weight: 700; }
     .b { font-size: 25px; }
     .s { font-size: 24px; fill: #676C73; }
-    .cap { font-size: 21px; font-weight: 700; letter-spacing: 2.5px; fill: #676C73; }
+    .cap { font-size: 24px; font-weight: 700; fill: #676C73; }
     .m { font-family: 'Source Code Pro', monospace; font-size: 24px; font-weight: 500; font-variant-ligatures: none; }
     .ln { fill: none; stroke: #141414; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
   </style>
@@ -15,7 +15,7 @@
     </marker>
   </defs>
   <rect x="320" y="0" width="880" height="360" rx="24" fill="#F2F4F6"/>
-  <text class="cap" x="348" y="50">CLOUD VM</text>
+  <text class="cap" x="348" y="50">Cloud VM</text>
   <rect x="348" y="76" width="300" height="256" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
   <text class="h" x="374" y="124" style="font-size:30px">Agent</text>
   <path class="ln" d="M525.2,170.8 A58,58 0 1 1 490.9,164.4" marker-end="url(#a)" style="stroke-width:4"/>
