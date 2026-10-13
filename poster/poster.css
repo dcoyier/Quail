@@ -201,6 +201,7 @@ table.lang td:first-child { width: 600px; padding-right: 24px; font-family: var(
   white-space: pre;
   font-variant-ligatures: none;
 }
+.after-term { margin-top: 26px; }
 .term .cmt { font-family: var(--sans); font-size: 32px; color: var(--muted); }
 
 footer {
