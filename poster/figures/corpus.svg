@@ -14,7 +14,7 @@
       <path d="M0,0 L10,5 L0,10 z" fill="#141414"/>
     </marker>
   </defs>
-  <text class="s" x="28" y="28">Each square is one entry in a dataset.</text>
+  <text class="s" x="340" y="28">Each square is one entry in a dataset.</text>
   <text class="h" x="28" y="96" style="font-size:30px">Retrieval (RAG)</text>
   <text class="s" x="28" y="136">hands the model the</text>
   <text class="s" x="28" y="166">entries closest to</text>
