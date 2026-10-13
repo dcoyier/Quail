@@ -132,9 +132,9 @@
   <text class="s" x="790" y="450">and the count can be split</text>
   <text class="s" x="790" y="482">by any metadata field</text>
   <text class="h" x="28" y="552" style="font-size:30px">Tagging</text>
-  <text class="s" x="28" y="592">records what the</text>
-  <text class="s" x="28" y="622">agent decides about</text>
-  <text class="s" x="28" y="652">each match</text>
+  <text class="s" x="28" y="592">marks the matches</text>
+  <text class="s" x="28" y="622">that fit, as in</text>
+  <text class="s" x="28" y="652">qualitative coding</text>
   <rect x="340" y="518" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="378" y="518" width="30" height="34" rx="5" fill="#FFD24F"/>
   <path d="M386,536 L391,542 L400,529" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
