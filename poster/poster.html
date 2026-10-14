@@ -36,6 +36,7 @@
   <p>Notebooks like Jupyter let researchers iteratively explore. Quail gives an agent the same loop, where each cell (a block of Python) from the agent runs in a kernel that stays alive between cells. After each one, the agent receives what a notebook would show: printed output and the last line&rsquo;s value.</p>
   <p>Many systems give an agent a separate tool for each operation. Quail instead relies on an analysis language inside its Python kernel, where functions to search, count, and tag are highly composable. Agents often work better this way than by calling tools one at a time,<sup>3</sup> an approach now commonly called &ldquo;code mode.&rdquo;<sup>4</sup></p>
   <figure><img src="figures/loop.svg" alt="The agent sends cell 13 to Quail and reads back its output. Inside Quail, a session host passes the cell to a sandboxed Python kernel, which reads the SQLite dataset index and returns its result; the host writes the cell and its result to the session log, then updates the index and replies. Numbered arrows mark the seven steps; missing embeddings come from an embedding model"></figure>
+  <p>The session host saves each cell to the session log (5) before replying (7), so every result is already on disk. The index is only a cache of the study&rsquo;s files.</p>
 </section>
 
 </div>
