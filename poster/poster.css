@@ -1,8 +1,8 @@
 @page { size: 44in 44in; margin: 0; }
 
-/* Headings use the Display optical size of Source Serif 4, the companion to Source Sans. */
-@font-face { font-family: "Source Serif 4 Display"; src: url("fonts/SourceSerif4Display-Semibold.ttf"); font-weight: 600; }
-@font-face { font-family: "Source Serif 4 Display"; src: url("fonts/SourceSerif4Display-Bold.ttf"); font-weight: 700; }
+/* Headings use Source Serif 4, the companion to Source Sans, in its sturdy small-text optical size. */
+@font-face { font-family: "Source Serif 4"; src: url("fonts/SourceSerif4SmText-Semibold.ttf"); font-weight: 600; }
+@font-face { font-family: "Source Serif 4"; src: url("fonts/SourceSerif4SmText-Bold.ttf"); font-weight: 700; }
 /* Static instances, not variable fonts: Chrome writes variable fonts into the PDF as Type 3. */
 @font-face { font-family: "Source Sans 3"; src: url("fonts/SourceSans3-Regular.ttf"); font-weight: 400; }
 @font-face { font-family: "Source Sans 3"; src: url("fonts/SourceSans3-Semibold.ttf"); font-weight: 600; }
@@ -25,7 +25,7 @@
   --pad: 110px;
   --gap: 110px;
   --sans: "Source Sans 3", sans-serif;
-  --display: "Source Serif 4 Display", serif;
+  --display: "Source Serif 4", serif;
   --mono: "Source Code Pro", monospace;
 }
 
