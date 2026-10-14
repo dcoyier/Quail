@@ -63,5 +63,5 @@
   <path class="ln" d="M594,588 L650,588" marker-end="url(#a)"/>
   <text class="s" x="666" y="584">every clone&#8217;s first</text>
   <text class="s" x="666" y="612">semantic search is fast</text>
-  <text class="s" x="2" y="664">each shard can be computed on a different machine</text>
+  <text class="s" x="2" y="664">each shard can be processed on a different machine</text>
 </svg>

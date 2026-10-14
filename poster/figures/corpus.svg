@@ -84,7 +84,7 @@
   <rect x="0" y="262" width="1200" height="612" rx="24" fill="#F4F2EF"/>
   <text class="cap" x="28" y="308">What Quail adds</text>
   <text class="h" x="28" y="372" style="font-size:30px">Counting</text>
-  <text class="s" x="28" y="412">finds every match,</text>
+  <text class="s" x="28" y="412">totals every match,</text>
   <text class="s" x="28" y="442">not only the closest</text>
   <rect x="340" y="338" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="378" y="338" width="30" height="34" rx="5" fill="#003069"/>
@@ -176,8 +176,7 @@
   <rect x="682" y="644" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <text class="m" x="790" y="566" style="fill:#003069;font-weight:700">[2012, 2008, 2012,</text>
   <text class="m" x="790" y="600" style="fill:#003069;font-weight:700"> 2004, 2016, &#8230;]</text>
-  <text class="s" x="790" y="650">a Python list, one value</text>
-  <text class="s" x="790" y="682">per match, for statistics</text>
+  <text class="s" x="790" y="650">a Python list, for statistics</text>
   <text class="h" x="28" y="732" style="font-size:30px">Tagging</text>
   <text class="s" x="28" y="772">marks the matches</text>
   <text class="s" x="28" y="802">that fit, as in</text>

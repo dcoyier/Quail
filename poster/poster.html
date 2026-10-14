@@ -26,18 +26,16 @@
 
 <section id="why">
   <h2>Beyond retrieval</h2>
-  <p class="lede">Quail lets an AI agent make sense of a large text dataset in a notebook, with tools it can combine in code.</p>
-  <p>Researchers often have more text than anyone can read closely.<sup>1</sup> Retrieval-augmented generation (RAG)<sup>2</sup> helps an agent with a large dataset by handing it the few entries that best match a question. This can answer &ldquo;what did the news say about lines at the polls?&rdquo; but not &ldquo;how often, and on which networks?&rdquo;</p>
+  <p class="lede">While text retrieval shows an agent a few examples, Quail gives it a Python kernel and an analysis language, in order to make sense of the whole dataset.</p>
+  <p>Researchers often have more text than anyone can read closely.<sup>1</sup> LLMs can help, and one common way is through retrieval-augmented generation (RAG),<sup>2</sup> which gives a language model the few entries that best match a query. Standard RAG can answer &ldquo;what did the news say about lines at the polls?&rdquo; but not &ldquo;how often, and on which networks?&rdquo;</p>
   <figure><img src="figures/corpus.svg" alt="The same 40-entry dataset four times: retrieval picks five entries; counting finds all twelve matches; values returns one value from each match as a Python list; tagging marks ten as fitting and two as not"></figure>
-  <p>Quail builds on RAG. It keeps retrieval and adds three more functions: <code>count</code> and <code>values</code> work over every matching entry, not just the closest few, so the agent can check how common something is instead of guessing from examples, and <code>tag</code> saves its analysis on the entries themselves.</p>
 </section>
 
 <section id="notebook">
   <h2>A notebook for an agent</h2>
-  <p>A Jupyter notebook lets a researcher try something, read the result and decide what to try next. Quail gives an agent the same loop. Each cell the agent sends runs in a kernel that stays alive between cells, and the agent gets back what a notebook would show: printed output, then the last line&rsquo;s value or a traceback.</p>
-  <p>Many systems give an agent a separate tool for each operation, such as search or count. Quail gives it a Python kernel instead, with its analysis language preloaded. Searching, counting and tagging are Python functions, so one cell can combine them and return only what matters. Agents often work better this way than by calling tools one at a time,<sup>3</sup> an approach now commonly called &ldquo;code mode.&rdquo;<sup>4</sup></p>
+  <p>Notebooks like Jupyter let researchers iteratively explore. Quail gives an agent the same loop, where each command from the agent runs in a kernel that stays alive between executions. After each cell, the agent receives the same as a notebook would show: printed output and the last line&rsquo;s value.</p>
+  <p>Many systems give an agent a separate tool for each operation. Quail instead relies on an analysis language inside its Python kernel, where functions to search, count, and tag are highly composable. Agents often work better this way than by calling tools one at a time,<sup>3</sup> an approach now commonly called &ldquo;code mode.&rdquo;<sup>4</sup></p>
   <figure><img src="figures/loop.svg" alt="The agent sends cell 13 to Quail and reads back its output. Inside Quail, a session host passes the cell to a sandboxed Python kernel, which reads the SQLite dataset index and returns its result; the host writes the cell and its result to the session log, then updates the index and replies. Numbered arrows mark the seven steps; missing embeddings come from an embedding model"></figure>
-  <p>The session host saves each cell to the session log (5) before replying (7), so every result is already on disk. The index is only a cache of the study&rsquo;s files.</p>
 </section>
 
 </div>
@@ -46,15 +44,15 @@
 
 <section id="language">
   <h2>The analysis language</h2>
-  <p>Cells combine ordinary Python with Quail&rsquo;s analysis language. Its pieces build on one another, from the columns of a dataset to four core functions. The language also gives a researcher and an agent a shared vocabulary: what the agent counts, reads or tags is defined in code, such as <code>close = sem &gt; 0.5</code>, so a researcher can see exactly what it did and question&nbsp;it.</p>
+  <p>Inside the Python kernel, Quail&rsquo;s analysis language acts as the bridge between the kernel and the dataset. The components of the language build on one another, from the columns of a dataset to the four core functions. The language also gives a researcher and an agent a concise, shared vocabulary; this allows a researcher to efficiently interrogate an agent&rsquo;s actions.</p>
   <figure><img src="figures/language.svg" alt="The analysis language in three levels. Fields, the columns of the dataset, such as body, year and network, build recipes: expressions, a value for each entry, such as a semantic or keyword score, and predicates, true or false for each entry, such as close = sem &gt; 0.5. Recipes are kept in variables and nothing runs until a function uses them. They plug into four functions: count, retrieve, values and tag. Tag writes a new field, such as topic, that can be used like any other"></figure>
 </section>
 
 <section id="study">
   <h2>Studies live in git</h2>
-  <p>A study is an ordinary folder of text files, so git can share it the way it shares code. Each kernel run writes its own log file, so agents working in parallel push separate files that merge without conflicts. To branch an analysis without disturbing the original, an agent can copy a closed session&rsquo;s tags and history into a new session.</p>
+  <p>Sessions in Quail are organized into studies, and being a folder of text files, git can share a study the way it shares any piece of code. The file structure is designed so that agents working in parallel can push logs without conflict and pick up where another agent left off.</p>
   <figure><img src="figures/study.svg" alt="A study folder holding quail.toml, the notes.csv dataset, a session with one log per kernel run, exports/, warm/ and a local .quail/ index, next to two agents sharing it through git: one works in session first-pass, the other in second-pass, forked from it. Below, embeddings computed in four shards are saved to warm/, so every clone&rsquo;s first semantic search is fast"></figure>
-  <p>Semantic search needs embeddings of every distinct value in a field, which can take hours to compute. <code>quail warm</code> can compute them ahead of time, in shards on several machines, and save them in <code>warm/</code>, so every clone starts with them.</p>
+  <p>Semantic search needs the entire search space to be embedded, which can take hours to compute. <code>quail warm</code> can do this work ahead of time, in shards on several machines, and saving them in <code>warm/</code>.</p>
 </section>
 
 </div>
@@ -63,7 +61,7 @@
 
 <section id="where">
   <h2>Where Quail can run</h2>
-  <p>Quail needs only a shell, so it runs wherever an agent does, on a laptop or a cloud VM. In one tested setup, TV news transcripts from six U.S. presidential election years, 2004 to 2024, were prepared as a study, with one dataset per year. Mentioning @Cursor in a Slack thread started a Cursor cloud agent on its own VM. The VM booted from a snapshot that already held Quail, an embedding model and the study, indexed and embedded, so the agent could start with minimal setup.</p>
+  <p>Quail needs only a shell, so it can run wherever an agent does, on a laptop or a cloud VM. In one tested setup, using a Carleton College research dataset, TV news transcripts from six U.S. presidential election years were prepared as a study. Using cloud agents through Cursor, we processed the dataset and set up a Cursor-Slack integration. Once connected to Slack, mentioning @Cursor in a Slack thread started a new Cursor cloud agent, whose VM booted from a snapshot that already held Quail, an embedding model, and the processed dataset. This allowed the agent&rsquo;s responses to be easily visible and its work to begin with minimal setup.</p>
   <figure><img src="figures/deploy.svg" alt="A question in Slack starts a cloud VM that boots from a snapshot holding Quail, an embedding model and the dataset, indexed and embedded; on the VM the agent sends cells to Quail, reads their output and posts its reply in the same thread"></figure>
   <div class="thread">
     <div><span class="who">Dashiell Coyier</span></div>
@@ -90,9 +88,9 @@ for name, pat in labels:
 
 <section id="status">
   <h2>Status and next steps</h2>
-  <p>Quail 0.94 is an alpha release for Linux and macOS, open source under the Apache-2.0 license. It works with any agent that can run shell commands.</p>
+  <p>Quail 0.94 is an early release for Linux and macOS, open source under the <span class="nowrap">Apache-2.0</span> license.</p>
   <div class="questions">
-    <h3>Open questions</h3>
+    <h3>Key open questions</h3>
     <ol>
       <li>How does Quail add value to coding agents such as Codex or Claude&nbsp;Code?</li>
       <li>Should Quail run on a central server or locally for each&nbsp;agent?</li>
@@ -100,6 +98,7 @@ for name, pat in labels:
       <li>Could Quail search and tag passages within a text without chunking&nbsp;it&nbsp;first?</li>
       <li>How could &ldquo;System&nbsp;1&rdquo; decision models such as Jev be integrated into&nbsp;Quail?</li>
       <li>How can an agent communicate its method efficiently, so that researchers can trust its analysis?</li>
+      <li>Could a small analysis language in a persistent kernel help agents in other&nbsp;domains?</li>
     </ol>
   </div>
   <div class="term"><span class="cmt">To try it, with git and uv installed:</span>

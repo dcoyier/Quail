@@ -92,7 +92,7 @@ main {
   grid-template-columns: 1200px 1fr 1200px;
   column-gap: var(--gap);
 }
-.col { display: flex; flex-direction: column; gap: 84px; min-width: 0; min-height: 0; }
+.col { display: flex; flex-direction: column; gap: 64px; min-width: 0; min-height: 0; }
 
 section { min-width: 0; }
 
@@ -162,6 +162,9 @@ table.lang td:first-child { width: 600px; padding-right: 24px; font-family: var(
 .restart::before, .restart::after { content: ""; flex: 1; border-top: 3px dashed #BDB7B1; }
 .restart code { font-size: 25px; letter-spacing: 0; font-weight: 500; color: var(--ink-2); }
 
+#where figure { margin: 24px 0; }
+.nowrap { white-space: nowrap; }
+
 /* Slack excerpt */
 .thread {
   border: 3px solid var(--rule);
@@ -183,14 +186,14 @@ table.lang td:first-child { width: 600px; padding-right: 24px; font-family: var(
 
 /* open questions, set apart to invite conversation */
 .questions {
-  margin: 36px 0 30px;
+  margin: 28px 0 24px;
   background: var(--fill);
   border-radius: 24px;
-  padding: 32px 44px 34px;
+  padding: 26px 44px 28px;
 }
-.questions h3 { margin: 0 0 16px; font-family: var(--display); font-size: 48px; font-weight: 700; letter-spacing: 0; color: var(--blue); }
+.questions h3 { margin: 0 0 10px; font-family: var(--display); font-size: 48px; font-weight: 700; letter-spacing: 0; color: var(--blue); }
 .questions ol { margin: 0; padding-left: 1.3em; }
-.questions li { margin: 0 0 16px; font-size: 37px; line-height: 1.32; }
+.questions li { margin: 0 0 8px; font-size: 34px; line-height: 1.32; }
 .questions li:last-child { margin-bottom: 0; }
 .questions li::marker { font-weight: 700; color: var(--blue); }
 

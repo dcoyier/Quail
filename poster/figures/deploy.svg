@@ -81,7 +81,7 @@
   <path d="M530.0,452 V586 A230.0,16 0 0 0 990.0,586 V452" fill="#E4E2DE" stroke="#141414" stroke-width="3"/>
   <ellipse cx="760.0" cy="452" rx="230.0" ry="16" fill="#fff" stroke="#141414" stroke-width="3"/>
   <text class="h" x="556" y="508" style="font-size:30px">Snapshot</text>
-  <text class="s" x="556" y="546">Quail, an embedding model and</text>
+  <text class="s" x="556" y="546">Quail, an embedding model, and</text>
   <text class="s" x="556" y="576">the dataset, indexed and embedded</text>
   <text class="s" x="506" y="516" text-anchor="end">prepared once,</text>
   <text class="s" x="506" y="546" text-anchor="end">reused for every</text>

@@ -40,7 +40,6 @@
   <text class="m" x="356" y="128">count(close)</text>
   <text class="s" x="846" y="44" text-anchor="end" style="font-size:21px">cell</text>
   <path class="ln" d="M878,82 L962,82" marker-end="url(#a)"/>
-  <text class="s" x="600" y="182" text-anchor="middle" style="font-size:23px"><tspan class="m" style="font-size:21px">sem</tspan> was defined in an earlier cell</text>
   <path class="ln" d="M962,236 L878,236" marker-end="url(#a)"/>
   <rect x="330" y="198" width="540" height="76" rx="14" fill="#fff" stroke="#D8D3CD" stroke-width="3"/>
   <text class="m" x="356" y="246">31</text>
@@ -61,21 +60,21 @@
   <text class="s" x="444" y="552">runs one cell at a time</text>
   <path d="M916,436 H1158 Q1172,436 1172,450 V576 C1096,546 978,606 902,576 V450 Q902,436 916,436 Z" fill="#E4E2DE" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
   <text class="h" x="928" y="484" style="font-size:30px">Session log</text>
-  <text class="s" x="928" y="522">code, output and</text>
+  <text class="s" x="928" y="522">code, output, and</text>
   <text class="s" x="928" y="552">tags, written first</text>
   <rect x="398" y="628" width="404" height="250" rx="22" fill="none" stroke="#141414" stroke-width="3" stroke-dasharray="12 9"/>
   <text class="cap" x="422" y="664">Sandbox</text>
   <rect x="422" y="686" width="356" height="170" rx="18" fill="#fff" stroke="#141414" stroke-width="3"/>
   <text class="h" x="448" y="734" style="font-size:30px">Python kernel</text>
   <text class="s" x="448" y="772">keeps variables between</text>
-  <text class="s" x="448" y="802">cells; no network, files</text>
+  <text class="s" x="448" y="802">cells; no network, files,</text>
   <text class="s" x="448" y="832">or subprocesses</text>
   <path d="M902,654 V852 A135.0,16 0 0 0 1172,852 V654" fill="#E4E2DE" stroke="#141414" stroke-width="3"/>
   <ellipse cx="1037.0" cy="654" rx="135.0" ry="16" fill="#fff" stroke="#141414" stroke-width="3"/>
   <text class="h" x="928" y="710" style="font-size:30px">Dataset index</text>
-  <text class="s" x="928" y="748">one SQLite file:</text>
+  <text class="s" x="928" y="748">one SQLite file with</text>
   <text class="s" x="928" y="778">entries, tags,</text>
-  <text class="s" x="928" y="808">a keyword index</text>
+  <text class="s" x="928" y="808">a keyword index,</text>
   <text class="s" x="928" y="838">and embeddings</text>
   <path class="ln" d="M286,504 L410,504" marker-end="url(#a)" marker-start="url(#a)"/>
   <text class="s" x="348" y="462" text-anchor="middle" style="font-size:22px">missing</text>
