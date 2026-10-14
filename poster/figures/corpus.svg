@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 694" width="1200" height="694">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 874" width="1200" height="874">
   <style>
     text { font-family: 'Source Sans 3', sans-serif; fill: #141414; }
     .h { font-size: 30px; font-weight: 700; }
@@ -81,7 +81,7 @@
   <path d="M1056,116 H1074" fill="none" stroke="#625D58" stroke-width="3" stroke-linecap="round"/>
   <text class="s" x="790" y="174">a few entries for</text>
   <text class="s" x="790" y="206">the model to read</text>
-  <rect x="0" y="262" width="1200" height="432" rx="24" fill="#F4F2EF"/>
+  <rect x="0" y="262" width="1200" height="612" rx="24" fill="#F4F2EF"/>
   <text class="cap" x="28" y="308">What Quail adds</text>
   <text class="h" x="28" y="372" style="font-size:30px">Counting</text>
   <text class="s" x="28" y="412">finds every match,</text>
@@ -131,68 +131,115 @@
   <text class="s" x="890" y="408">entries match</text>
   <text class="s" x="790" y="450">and the count can be split</text>
   <text class="s" x="790" y="482">by any metadata field</text>
-  <text class="h" x="28" y="552" style="font-size:30px">Tagging</text>
-  <text class="s" x="28" y="592">marks the matches</text>
-  <text class="s" x="28" y="622">that fit, as in</text>
-  <text class="s" x="28" y="652">qualitative coding</text>
+  <text class="h" x="28" y="552" style="font-size:30px">Values</text>
+  <text class="s" x="28" y="592">returns one value</text>
+  <text class="s" x="28" y="622">from every match</text>
   <rect x="340" y="518" width="30" height="34" rx="5" fill="#E4E2DE"/>
-  <rect x="378" y="518" width="30" height="34" rx="5" fill="#FFD24F"/>
-  <path d="M386,536 L391,542 L400,529" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="378" y="518" width="30" height="34" rx="5" fill="#003069"/>
   <rect x="416" y="518" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="454" y="518" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="492" y="518" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="530" y="518" width="30" height="34" rx="5" fill="#E4E2DE"/>
-  <rect x="568" y="518" width="30" height="34" rx="5" fill="#FFD24F"/>
-  <path d="M576,536 L581,542 L590,529" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="568" y="518" width="30" height="34" rx="5" fill="#003069"/>
   <rect x="606" y="518" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="644" y="518" width="30" height="34" rx="5" fill="#E4E2DE"/>
-  <rect x="682" y="518" width="30" height="34" rx="5" fill="#FFD24F"/>
-  <path d="M690,536 L695,542 L704,529" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="682" y="518" width="30" height="34" rx="5" fill="#003069"/>
   <rect x="340" y="560" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="378" y="560" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="416" y="560" width="30" height="34" rx="5" fill="#E4E2DE"/>
-  <rect x="454" y="560" width="30" height="34" rx="5" fill="#FFD24F"/>
-  <path d="M462,578 L467,584 L476,571" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="454" y="560" width="30" height="34" rx="5" fill="#003069"/>
   <rect x="492" y="560" width="30" height="34" rx="5" fill="#E4E2DE"/>
-  <rect x="530" y="560" width="30" height="34" rx="5" fill="#FFD24F"/>
-  <path d="M538,578 L543,584 L552,571" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="530" y="560" width="30" height="34" rx="5" fill="#003069"/>
   <rect x="568" y="560" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="606" y="560" width="30" height="34" rx="5" fill="#E4E2DE"/>
-  <rect x="645.5" y="561.5" width="27" height="31" rx="4" fill="#fff" stroke="#625D58" stroke-width="3"/>
-  <path d="M653,571 L665,583 M665,571 L653,583" stroke="#625D58" stroke-width="3" stroke-linecap="round"/>
+  <rect x="644" y="560" width="30" height="34" rx="5" fill="#003069"/>
   <rect x="682" y="560" width="30" height="34" rx="5" fill="#E4E2DE"/>
-  <rect x="340" y="602" width="30" height="34" rx="5" fill="#FFD24F"/>
-  <path d="M348,620 L353,626 L362,613" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="340" y="602" width="30" height="34" rx="5" fill="#003069"/>
   <rect x="378" y="602" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="416" y="602" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="454" y="602" width="30" height="34" rx="5" fill="#E4E2DE"/>
-  <rect x="492" y="602" width="30" height="34" rx="5" fill="#FFD24F"/>
-  <path d="M500,620 L505,626 L514,613" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="492" y="602" width="30" height="34" rx="5" fill="#003069"/>
   <rect x="530" y="602" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="568" y="602" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="606" y="602" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="644" y="602" width="30" height="34" rx="5" fill="#E4E2DE"/>
-  <rect x="682" y="602" width="30" height="34" rx="5" fill="#FFD24F"/>
-  <path d="M690,620 L695,626 L704,613" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="682" y="602" width="30" height="34" rx="5" fill="#003069"/>
   <rect x="340" y="644" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="378" y="644" width="30" height="34" rx="5" fill="#E4E2DE"/>
-  <rect x="417.5" y="645.5" width="27" height="31" rx="4" fill="#fff" stroke="#625D58" stroke-width="3"/>
-  <path d="M425,655 L437,667 M437,655 L425,667" stroke="#625D58" stroke-width="3" stroke-linecap="round"/>
+  <rect x="416" y="644" width="30" height="34" rx="5" fill="#003069"/>
   <rect x="454" y="644" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="492" y="644" width="30" height="34" rx="5" fill="#E4E2DE"/>
-  <rect x="530" y="644" width="30" height="34" rx="5" fill="#FFD24F"/>
-  <path d="M538,662 L543,668 L552,655" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="530" y="644" width="30" height="34" rx="5" fill="#003069"/>
   <rect x="568" y="644" width="30" height="34" rx="5" fill="#E4E2DE"/>
-  <rect x="606" y="644" width="30" height="34" rx="5" fill="#FFD24F"/>
-  <path d="M614,662 L619,668 L628,655" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="606" y="644" width="30" height="34" rx="5" fill="#003069"/>
   <rect x="644" y="644" width="30" height="34" rx="5" fill="#E4E2DE"/>
   <rect x="682" y="644" width="30" height="34" rx="5" fill="#E4E2DE"/>
-  <rect x="790" y="528" width="30" height="34" rx="5" fill="#FFD24F"/>
-  <path d="M798,546 L803,552 L812,539" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <text class="b" x="834" y="554" style="font-weight:700">10 fit</text>
-  <rect x="951.5" y="529.5" width="27" height="31" rx="4" fill="#fff" stroke="#625D58" stroke-width="3"/>
-  <path d="M959,539 L971,551 M971,539 L959,551" stroke="#625D58" stroke-width="3" stroke-linecap="round"/>
-  <text class="b" x="994" y="554" style="font-weight:700">2 don&#8217;t</text>
-  <text class="s" x="790" y="630">the tags are saved and</text>
-  <text class="s" x="790" y="662">can be counted too</text>
+  <text class="m" x="790" y="566" style="fill:#003069;font-weight:700">[2012, 2008, 2012,</text>
+  <text class="m" x="790" y="600" style="fill:#003069;font-weight:700"> 2004, 2016, &#8230;]</text>
+  <text class="s" x="790" y="650">a Python list, one value</text>
+  <text class="s" x="790" y="682">per match, for statistics</text>
+  <text class="h" x="28" y="732" style="font-size:30px">Tagging</text>
+  <text class="s" x="28" y="772">marks the matches</text>
+  <text class="s" x="28" y="802">that fit, as in</text>
+  <text class="s" x="28" y="832">qualitative coding</text>
+  <rect x="340" y="698" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="378" y="698" width="30" height="34" rx="5" fill="#FFD24F"/>
+  <path d="M386,716 L391,722 L400,709" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="416" y="698" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="454" y="698" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="492" y="698" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="530" y="698" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="568" y="698" width="30" height="34" rx="5" fill="#FFD24F"/>
+  <path d="M576,716 L581,722 L590,709" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="606" y="698" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="644" y="698" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="682" y="698" width="30" height="34" rx="5" fill="#FFD24F"/>
+  <path d="M690,716 L695,722 L704,709" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="340" y="740" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="378" y="740" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="416" y="740" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="454" y="740" width="30" height="34" rx="5" fill="#FFD24F"/>
+  <path d="M462,758 L467,764 L476,751" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="492" y="740" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="530" y="740" width="30" height="34" rx="5" fill="#FFD24F"/>
+  <path d="M538,758 L543,764 L552,751" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="568" y="740" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="606" y="740" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="645.5" y="741.5" width="27" height="31" rx="4" fill="#fff" stroke="#625D58" stroke-width="3"/>
+  <path d="M653,751 L665,763 M665,751 L653,763" stroke="#625D58" stroke-width="3" stroke-linecap="round"/>
+  <rect x="682" y="740" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="340" y="782" width="30" height="34" rx="5" fill="#FFD24F"/>
+  <path d="M348,800 L353,806 L362,793" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="378" y="782" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="416" y="782" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="454" y="782" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="492" y="782" width="30" height="34" rx="5" fill="#FFD24F"/>
+  <path d="M500,800 L505,806 L514,793" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="530" y="782" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="568" y="782" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="606" y="782" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="644" y="782" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="682" y="782" width="30" height="34" rx="5" fill="#FFD24F"/>
+  <path d="M690,800 L695,806 L704,793" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="340" y="824" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="378" y="824" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="417.5" y="825.5" width="27" height="31" rx="4" fill="#fff" stroke="#625D58" stroke-width="3"/>
+  <path d="M425,835 L437,847 M437,835 L425,847" stroke="#625D58" stroke-width="3" stroke-linecap="round"/>
+  <rect x="454" y="824" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="492" y="824" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="530" y="824" width="30" height="34" rx="5" fill="#FFD24F"/>
+  <path d="M538,842 L543,848 L552,835" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="568" y="824" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="606" y="824" width="30" height="34" rx="5" fill="#FFD24F"/>
+  <path d="M614,842 L619,848 L628,835" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="644" y="824" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="682" y="824" width="30" height="34" rx="5" fill="#E4E2DE"/>
+  <rect x="790" y="708" width="30" height="34" rx="5" fill="#FFD24F"/>
+  <path d="M798,726 L803,732 L812,719" fill="none" stroke="#003069" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="b" x="834" y="734" style="font-weight:700">10 fit</text>
+  <rect x="951.5" y="709.5" width="27" height="31" rx="4" fill="#fff" stroke="#625D58" stroke-width="3"/>
+  <path d="M959,719 L971,731 M971,719 L959,731" stroke="#625D58" stroke-width="3" stroke-linecap="round"/>
+  <text class="b" x="994" y="734" style="font-weight:700">2 don&#8217;t</text>
+  <text class="s" x="790" y="810">the tags are saved and</text>
+  <text class="s" x="790" y="842">can be counted too</text>
 </svg>
