@@ -11,7 +11,7 @@
 <style>
   @page { size: letter; margin: 1in; }
   body { margin: 0; font: 11pt/1.449 "Google Sans", Arial, sans-serif; color: #000; }
-  h2 { font-size: 16pt; font-weight: 400; margin: 0; padding: 18pt 0 6pt; }
+  h2 { font-size: 16pt; font-weight: 400; margin: 0; padding: 18pt 0 6pt; break-after: avoid; }
   p { margin: 0; }
   .page { break-after: page; }
   #abstract p { padding: 12pt 0; }
@@ -39,7 +39,7 @@
 print(count(close, by=Field("network")))</pre>
 <p>A later cell can tag the matches that fit, as in qualitative coding, and the tag becomes a field that can be counted like any other. Because all four are Python functions, one cell can combine them and return only what matters. Agents often work better this way than by calling tools one at a time [4], an approach now commonly called &ldquo;code mode&rdquo; [5]. The language also gives a researcher and an agent a shared vocabulary: what the agent counts, reads or tags is defined in code, so a researcher can see exactly what it did and question it.</p>
 <p>Each cell&rsquo;s code, output and tags are saved to the session log before the agent sees the result, and the kernel blocks network, file and subprocess access. A study is an ordinary folder of text files that git can share like code. Each kernel run writes its own log file, so agents working in parallel push separate files that merge without conflicts.</p>
-<p>Quail needs only a shell, so it runs wherever an agent does, on a laptop or a cloud VM. In one test, TV news transcripts from six U.S. presidential election years, 2004 to 2024, were prepared as a study. Asked in Slack how Obama is characterized, a Cursor cloud agent [6], started from a snapshot holding Quail and the indexed study, ran nearly 20 cells and replied 27 minutes later. One cell found &ldquo;Obama is not ready&rdquo; in 185 segments of 2008 coverage (CNN 70, Fox 41, MSNBC 37). Quail 0.94 is an alpha release for Linux and macOS under the Apache-2.0 license [7]. Its results have not yet been formally evaluated, which is our next step.</p>
+<p>Quail needs only a shell, so it runs wherever an agent does, on a laptop or a cloud VM. In one test, TV news transcripts from six U.S. presidential election years, 2004 to 2024, were prepared as a study. Asked in Slack how Obama is characterized, a Cursor cloud agent [6], started from a snapshot holding Quail and the indexed study, ran nearly 20 cells and replied 27 minutes later. One cell found &ldquo;Obama is not ready&rdquo; in 185 entries from 2008 (including CNN 70, Fox 41, MSNBC 37). Quail 0.94 is an alpha release for Linux and macOS under the Apache-2.0 license [7]. Its results have not yet been formally evaluated, which is our next step.</p>
 </div>
 
 <div>
@@ -55,11 +55,11 @@ print(count(close, by=Field("network")))</pre>
 </ol>
 
 <h2>Connection to Mission, Goals, &amp; Interests of US-RSE Community</h2>
-<p>This poster connects to US-RSE&rsquo;s Resources and Advocacy goals. For Resources, Quail is an open-source reference, under the Apache-2.0 license, for research software engineers building AI-assisted tools whose results researchers need to be able to check. The design decisions it presents come up in other projects as well: giving an agent a Python kernel with a small analysis language instead of many separate tool calls, so that a researcher can see exactly what it did; keeping the source data read-only; saving each cell to a log before the agent sees its result; and storing a study as plain files that git can share and review. The poster presents these decisions so that they are useful to people building their own tools as well as to people who might use Quail.</p>
-<p style="padding-top:11pt">For Advocacy, Quail is an example of what a campus data and software support group can build in response to a local need. It came out of the DataSquad, a student-staffed group at Carleton College, after we saw campus offices collect open-ended survey answers they did not have time to analyze. It also addresses this year&rsquo;s theme, Advancing Science in the Age of AI, for qualitative research, where researchers need to see exactly what an agent did, and question it, before they can trust its analysis.</p>
+<p>This poster connects to US-RSE&rsquo;s Resources and Advocacy goals. For Resources, Quail is an open-source reference, under the Apache-2.0 license, for research software engineers building AI-assisted tools whose results researchers need to be able to check. The design decisions it presents come up in other projects as well: giving an agent a Python kernel with a small analysis language instead of a separate tool for each operation, so that a researcher can see exactly what it did; keeping the source data read-only; saving each cell to a log before the agent sees its result; and storing a study as text files that git can share and review.</p>
+<p style="padding-top:11pt">For Advocacy, Quail is an example of what a campus data and software support group can build in response to a local need. It came out of the DataSquad, a student-staffed group at Carleton College, after we saw campus offices collect open-ended survey answers they did not have time to analyze. It also addresses this year&rsquo;s theme, Advancing Science in the Age of AI: in qualitative research, researchers need to see exactly what an agent did, and question it, before they can trust its analysis.</p>
 
 <h2>AI Acknowledgement</h2>
-<p>OpenAI ChatGPT (GPT-5.6 Thinking) was used during the revision of the submitted abstract. For this camera-ready version, Anthropic Claude (Claude Opus 5.5, used through a Cursor cloud agent) drafted the revised Abstract, References, and Connection sections from the submitted abstract and the Quail documentation. Anthropic Claude, used through Claude Code, then revised these sections to match the poster. The author reviewed and verified all content and takes responsibility for the submitted content.</p>
+<p>OpenAI ChatGPT (GPT-5.6 Thinking) was used during the revision of the submitted abstract. For this camera-ready version, Anthropic Claude (Claude Opus 5.5, used through a Cursor cloud agent) drafted the revised Abstract, References and Connection sections from the submitted abstract and the Quail documentation. Anthropic Claude, used through Claude Code, then revised these sections to match the poster. The author reviewed and verified all content and takes responsibility for it.</p>
 </div>
 
 </body>
