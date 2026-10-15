@@ -27,13 +27,13 @@
 <section id="why">
   <h2>Beyond retrieval</h2>
   <p class="lede">While text retrieval shows an agent a few examples, Quail gives it a Python kernel and an analysis language, in order to make sense of the whole dataset.</p>
-  <p>Researchers often have more text than anyone can read closely.<sup>1</sup> LLMs can help, and one common way is through retrieval-augmented generation (RAG),<sup>2</sup> which gives a language model the few entries that best match a query. Standard RAG can answer &ldquo;what did the news say about lines at the polls?&rdquo; but not &ldquo;how often, and on which networks?&rdquo;</p>
+  <p>Researchers often have more text than anyone can read closely.<sup>1</sup> LLMs can help, and one common way is through retrieval-augmented generation (RAG),<sup>2</sup> which gives a language model the few entries that best match a query. Standard RAG can find what was said about a topic but struggles with questions about the whole dataset: how often something was said, by whom, and how it changed over time.</p>
   <figure><img src="figures/corpus.svg" alt="The same 40-entry dataset four times: retrieval picks five entries; counting finds all twelve matches; values returns one value from each match as a Python list; tagging marks ten as fitting and two as not"></figure>
 </section>
 
 <section id="notebook">
   <h2>A notebook for an agent</h2>
-  <p>Notebooks like Jupyter let researchers iteratively explore. Quail gives an agent the same loop, where each cell (a block of Python) from the agent runs in a kernel that stays alive between cells. After each one, the agent receives what a notebook would show: printed output and the last line&rsquo;s value.</p>
+  <p>Notebooks like Jupyter let researchers iteratively explore. Quail gives an agent the same loop, where each cell (a block of Python) from the agent runs in a kernel that stays alive between cells. After each one, the agent receives printed output and the last line&rsquo;s value, just what a notebook would show.</p>
   <p>Many systems give an agent a separate tool for each operation. Quail instead relies on an analysis language inside its Python kernel, where functions to search, count, and tag are highly composable. Agents often work better this way than by calling tools one at a time,<sup>3</sup> an approach now commonly called &ldquo;code mode.&rdquo;<sup>4</sup></p>
   <figure><img src="figures/loop.svg" alt="The agent sends cell 13 to Quail and reads back its output. Inside Quail, a session host passes the cell to a sandboxed Python kernel, which reads the SQLite dataset index and returns its result; the host writes the cell and its result to the session log, then updates the index and replies. Numbered arrows mark the seven steps; missing embeddings come from an embedding model"></figure>
 </section>

@@ -33,7 +33,7 @@
 
 <div class="page" id="abstract">
 <h2>Abstract</h2>
-<p>Researchers often have more text than anyone can read closely [1]. Retrieval-augmented generation (RAG) [2] helps an AI agent with a large dataset by handing it the few entries that best match a question. This can answer &ldquo;what did the news say about lines at the polls?&rdquo; but not &ldquo;how often, and on which networks?&rdquo;</p>
+<p>Researchers often have more text than anyone can read closely [1]. Retrieval-augmented generation (RAG) [2] helps an AI agent with a large dataset by handing it the few entries that best match a question. This can find what was said about a topic but struggles with questions about the whole dataset: how often, by whom, and how that changed over time.</p>
 <p>Quail lets an agent analyze a text dataset the way a researcher works in a Jupyter notebook [3]. Each cell the agent sends runs in a Python kernel that stays alive between cells and has Quail&rsquo;s analysis language preloaded. Fields, the columns of a dataset, build recipes: expressions such as semantic or keyword scores give a value for each entry, and predicates built from them select entries. Recipes are kept in variables, and nothing runs until one of four functions uses them: <code>count</code> and <code>values</code> work over every match, <code>retrieve</code> returns matches to read, and <code>tag</code> saves the agent&rsquo;s analysis on the entries. For the second question, a cell might run:</p>
 <pre>close = Field("body").semantic("waiting to vote") &gt; 0.5
 print(count(close, by=Field("network")))</pre>
