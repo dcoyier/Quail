@@ -130,7 +130,7 @@
   <text class="b" x="890" y="378" style="font-weight:700">of 40</text>
   <text class="s" x="890" y="408">entries match</text>
   <text class="s" x="790" y="450">and this subset can be</text>
-  <text class="s" x="790" y="482">used for retrieval</text>
+  <text class="s" x="790" y="482">scoped for retrieval</text>
   <text class="h" x="28" y="552" style="font-size:30px">Values</text>
   <text class="s" x="28" y="592">returns one value</text>
   <text class="s" x="28" y="622">from every match</text>
