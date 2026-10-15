@@ -61,7 +61,7 @@
   <rect class="fieldmark" x="49" y="756" width="60.8" height="30" rx="4"/>
   <text class="code" x="53" y="778" xml:space="preserve">body</text>
   <text class="code" x="112.8" y="778" xml:space="preserve">.lower().search("long lines?")</text>
-  <text class="s" x="32" y="820">methods in a row: the first match, or none</text>
+  <text class="s" x="32" y="820">lowercase the text, then find the first match</text>
   <rect class="exprchip" x="28" y="844" width="220.8" height="44" rx="22"/>
   <text class="code" x="46" y="874" xml:space="preserve">sem + 0.2 * kw</text>
   <text class="s" x="32" y="916">scores added together</text>
