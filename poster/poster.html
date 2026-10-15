@@ -61,7 +61,7 @@
 
 <section id="where">
   <h2>Where Quail can run</h2>
-  <p>Quail needs only a shell, so it can run wherever an agent does, on a laptop or a cloud VM. In one tested setup, TV news transcripts from six U.S. presidential election years, a Carleton College research dataset, were prepared as a study. The dataset was processed with Cursor cloud agents, and Cursor&rsquo;s Slack integration was set up. With the integration in place, mentioning @Cursor in a Slack thread started a new Cursor cloud agent, whose VM booted from a snapshot that already held Quail, an embedding model, and the processed dataset. This allowed the agent&rsquo;s responses to be easily visible and its work to begin with minimal setup.</p>
+  <p>Quail needs only a shell, so it can run wherever an agent does, on a laptop or a cloud VM. In one tested setup, TV news transcripts from six U.S. presidential election years, a Carleton College research dataset, were prepared as a study. Mentioning @Cursor in a Slack thread started a new Cursor cloud agent, whose VM booted from a snapshot that already held Quail, an embedding model, and the election news transcripts, indexed and embedded. This allowed the agent&rsquo;s responses to be easily visible and its work to begin with minimal setup.</p>
   <figure><img src="figures/deploy.svg" alt="A question in Slack starts a cloud VM that boots from a snapshot holding Quail, an embedding model and the dataset, indexed and embedded; on the VM the agent sends cells to Quail, reads their output and posts its reply in the same thread"></figure>
   <div class="thread">
     <div><span class="who">Dashiell Coyier</span></div>
