@@ -52,7 +52,7 @@
   <h2>Studies live in git</h2>
   <p>Sessions in Quail are organized into studies. Because a study is a folder of text files, git can share it the way any piece of code is shared. The file structure is designed so that agents working in parallel can push logs without conflict and pick up where another agent left off.</p>
   <figure><img src="figures/study.svg" alt="A study folder holding quail.toml, the notes.csv dataset, a session with one log per kernel run, exports/, warm/ and a local .quail/ index, next to two agents sharing it through git: one works in session first-pass, the other in second-pass, forked from it. Below, embeddings computed in four shards are saved to warm/, so every clone&rsquo;s first semantic search is fast"></figure>
-  <p>Semantic search needs the entire search space to be embedded, which can take hours to compute. <code>quail warm</code> can do this work ahead of time, in shards on several machines, and save the embeddings in <code>warm/</code>.</p>
+  <p>Semantic search needs the entire search space to be embedded, which can take hours to compute. <code>quail warm</code> can do this work ahead of time, distributed on several machines, and save the embeddings in <code>warm/</code>.</p>
 </section>
 
 </div>
