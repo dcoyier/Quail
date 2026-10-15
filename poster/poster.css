@@ -220,14 +220,15 @@ footer {
   border-top: 4px solid var(--blue);
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 80px;
+  gap: 14px 80px;
   font-size: 27px;
   line-height: 1.45;
   color: var(--muted);
 }
 footer ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, auto); gap: 4px 60px; }
 footer ol li span { color: var(--ink); font-weight: 700; margin-right: 10px; }
-footer .right { text-align: right; }
+footer .right { text-align: right; grid-column: 2; grid-row: 1; }
+footer .ack { grid-column: 1 / -1; margin: 0; }
 .cell .fp { color: #A39E99; }
 .cell .note { font-family: var(--sans); font-size: 26px; font-weight: 700; color: var(--ink); }
 .cell .note::before { content: "\2190\00a0"; font-family: var(--mono); }

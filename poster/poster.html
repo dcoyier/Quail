@@ -44,7 +44,7 @@
 
 <section id="language">
   <h2>The analysis language</h2>
-  <p>Inside the Python kernel, Quail&rsquo;s analysis language acts as the bridge between the kernel and the dataset. The components of the language build on one another, from a dataset&rsquo;s columns to the four core functions. The language also gives a researcher and an agent a concise, shared vocabulary, so a researcher can efficiently interrogate an agent&rsquo;s actions.</p>
+  <p>Inside the Python kernel, Quail&rsquo;s analysis language acts as the bridge between the kernel and the dataset. The components of the language build on one another, from a dataset&rsquo;s columns to the four core functions. The language also gives a researcher and an agent a concise, shared vocabulary; this allows a researcher to efficiently interrogate an agent&rsquo;s actions.</p>
   <figure><img src="figures/language.svg" alt="The analysis language in three levels. Fields, the columns of the dataset, such as body, year and network, build recipes: expressions, a value for each entry, such as a semantic or keyword score, and predicates, true or false for each entry, such as close = sem &gt; 0.5. Recipes are kept in variables and nothing runs until a function uses them. They plug into four functions: count, retrieve, values and tag. Tag writes a new field, such as topic, that can be used like any other"></figure>
 </section>
 
@@ -116,6 +116,7 @@ for name, pat in labels:
     <li><span>4</span>K. Varda, S. Pai. Code Mode: the better way to use MCP. Cloudflare Blog, 2025.</li>
   </ol>
   <div class="right">USRSE&rsquo;26, San Jose</div>
+  <p class="ack">Developed with the Carleton College DataSquad. Drafted with help from Anthropic&rsquo;s Claude; reviewed and verified by the author.</p>
 </footer>
 
 </div>
