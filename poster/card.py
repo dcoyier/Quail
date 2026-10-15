@@ -1,4 +1,5 @@
-"""Writes the business card pages: python3 poster/card.py OUT_DIR, then print each HTML file to PDF.
+"""Writes the business card pages: python3 poster/card.py OUT_DIR [PHONE], then print each HTML file to PDF.
+The phone number is an argument so that it stays out of the repository.
 
 card.html:       one single-sided 3.5 x 2 in card with 0.125 in bleed.
 card-sheet.html: ten cards on US Letter with crop marks."""
@@ -7,6 +8,7 @@ import sys
 
 here = os.path.dirname(os.path.abspath(__file__))
 out = sys.argv[1]
+phone = f"<br>{sys.argv[2]}" if len(sys.argv) > 2 else ""
 fonts = os.path.join(here, "fonts")
 logo = os.path.join(os.path.dirname(here), "quail.png")
 
@@ -22,8 +24,7 @@ body {{ font-family: "Source Sans 3", sans-serif; color: #141414; -webkit-print-
 .front .tile {{ position: absolute; top: 0.24in; right: 0.26in; width: 0.5in; height: 0.5in; border-radius: 0.07in; background: #003069; display: flex; align-items: center; justify-content: center; }}
 .front .tile img {{ width: 0.4in; height: 0.4in; filter: invert(1); mix-blend-mode: screen; }}
 .front .name {{ font-family: "Source Serif 4", serif; font-weight: 700; font-size: 16pt; line-height: 1.05; color: #003069; }}
-.front .rule {{ width: 0.42in; height: 2.2pt; background: #FFD24F; margin: 0.09in 0 0.08in; }}
-.front .role {{ font-size: 8.6pt; line-height: 1.35; color: #3A3632; }}
+.front .role {{ margin-top: 0.1in; font-size: 8.6pt; line-height: 1.35; color: #3A3632; }}
 .front .contact {{ margin-top: auto; font-size: 8.6pt; line-height: 1.4; color: #141414; }}
 .front .contact b {{ font-weight: 600; }}
 """
@@ -31,9 +32,8 @@ body {{ font-family: "Source Sans 3", sans-serif; color: #141414; -webkit-print-
 FRONT = f"""<div class="card front" style="{{pos}}">
   <div class="tile"><img src="file://{logo}" alt="Quail logo"></div>
   <div class="name">Dashiell Coyier</div>
-  <div class="rule"></div>
-  <div class="role">Computer Science and Mathematics<br>Carleton College, Class of 2029<br>Data Scientist, DataSquad</div>
-  <div class="contact"><b>coyierd@carleton.edu</b><br>github.com/dcoyier/Quail</div>
+  <div class="role">Computer Science and Math<br>Carleton College, Class of 2029<br>Data Scientist, DataSquad</div>
+  <div class="contact"><b>coyierd@carleton.edu</b>{phone}<br>github.com/dcoyier</div>
 </div>"""
 
 
