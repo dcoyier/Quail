@@ -1,0 +1,234 @@
+@page { size: 44in 44in; margin: 0; }
+
+/* Headings use Source Serif 4, the companion to Source Sans, in its sturdy small-text optical size. */
+@font-face { font-family: "Source Serif 4"; src: url("fonts/SourceSerif4SmText-Semibold.ttf"); font-weight: 600; }
+@font-face { font-family: "Source Serif 4"; src: url("fonts/SourceSerif4SmText-Bold.ttf"); font-weight: 700; }
+/* Static instances, not variable fonts: Chrome writes variable fonts into the PDF as Type 3. */
+@font-face { font-family: "Source Sans 3"; src: url("fonts/SourceSans3-Regular.ttf"); font-weight: 400; }
+@font-face { font-family: "Source Sans 3"; src: url("fonts/SourceSans3-Semibold.ttf"); font-weight: 600; }
+@font-face { font-family: "Source Sans 3"; src: url("fonts/SourceSans3-Bold.ttf"); font-weight: 700; }
+@font-face { font-family: "Source Sans 3"; src: url("fonts/SourceSans3-It.ttf"); font-weight: 400; font-style: italic; }
+@font-face { font-family: "Source Code Pro"; src: url("fonts/SourceCodePro-Regular.ttf"); font-weight: 400; }
+@font-face { font-family: "Source Code Pro"; src: url("fonts/SourceCodePro-Medium.ttf"); font-weight: 500; }
+@font-face { font-family: "Source Code Pro"; src: url("fonts/SourceCodePro-Bold.ttf"); font-weight: 700; }
+
+:root {
+  --ink: #141414;
+  --ink-2: #3A3633;
+  --muted: #625D58;
+  --rule: #D8D3CD;
+  --fill: #F4F2EF;
+  --fill-2: #E4E2DE;
+  --blue: #003069;    /* Carleton Blue, PMS 294 */
+  --maize: #FFD24F;   /* Carleton Maize, PMS 120 */
+  --tint: #D6E2F0;    /* matched text, as in the predicate chips */
+  --pad: 110px;
+  --gap: 110px;
+  --sans: "Source Sans 3", sans-serif;
+  --display: "Source Serif 4", serif;
+  --mono: "Source Code Pro", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  width: 4224px;
+  height: 4224px;
+  background: #fff;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 37px;
+  line-height: 1.42;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.poster {
+  width: 4224px;
+  height: 4224px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+header {
+  flex: none;
+  background: var(--blue);
+  border-bottom: 18px solid var(--maize);
+  color: #fff;
+  padding: 70px var(--pad);
+  display: grid;
+  grid-template-columns: 330px 1fr 400px;
+  gap: 84px;
+  align-items: center;
+}
+header .logo { width: 497px; height: 497px; margin: -48px -82px -48px -85px; transform: translateY(10px); display: block; filter: invert(1); mix-blend-mode: screen; }
+header h1 { margin: 0; font-family: var(--display); font-weight: 700; line-height: 1; }
+header h1 .name { display: block; font-size: 200px; letter-spacing: -2px; margin-left: -8px; }
+header h1 .sub { display: block; font-size: 86px; font-weight: 600; letter-spacing: -0.5px; margin-top: 10px; }
+header .authors { margin-top: 34px; font-size: 42px; color: #C9D4E4; }
+header .authors b { color: #fff; font-weight: 700; }
+
+.qr {
+  justify-self: end;
+  width: 400px;
+  background: #fff;
+  color: var(--ink);
+  border-radius: 28px;
+  padding: 32px 28px 26px;
+  text-align: center;
+  font-size: 30px;
+  line-height: 1.3;
+}
+.qr img { width: 250px; height: 250px; display: block; margin: 0 auto 14px; }
+.qr b { font-weight: 700; }
+
+main {
+  flex: 1;
+  min-height: 0;
+  padding: 72px var(--pad) 0;
+  display: grid;
+  grid-template-columns: 1200px 1fr 1200px;
+  column-gap: var(--gap);
+}
+.col { display: flex; flex-direction: column; gap: 84px; min-width: 0; min-height: 0; }
+
+section { min-width: 0; }
+
+h2 {
+  margin: 0 0 28px;
+  color: var(--blue);
+  font-family: var(--display);
+  font-size: 62px;
+  line-height: 1.08;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+p { margin: 0 0 26px; }
+p:last-child { margin-bottom: 0; }
+.lede { font-size: 46px; line-height: 1.3; font-weight: 600; margin-bottom: 40px; }
+.small { font-size: 31px; line-height: 1.4; }
+figure { margin: 34px 0; }
+figure:last-child { margin-bottom: 0; }
+figure img { display: block; width: 100%; height: auto; }
+b { font-weight: 700; }
+sup { position: relative; top: -0.45em; vertical-align: baseline; font-size: 0.72em; line-height: 0; }
+
+code, .mono { font-family: var(--mono); font-size: 0.84em; font-weight: 500; }
+code, pre, .mono { font-variant-ligatures: none; font-feature-settings: "calt" 0, "liga" 0; }
+
+/* the language, as a glossary */
+table.lang { width: 100%; border-collapse: collapse; margin: 0 0 40px; font-size: 31px; line-height: 1.3; }
+table.lang td { padding: 12px 0; border-top: 3px solid var(--rule); vertical-align: baseline; }
+table.lang tr:last-child td { border-bottom: 3px solid var(--rule); }
+table.lang td:first-child { width: 600px; padding-right: 24px; font-family: var(--mono); font-size: 26px; white-space: nowrap; }
+
+/* the example notebook */
+.notebook {
+  background: var(--fill);
+  border-radius: 36px;
+  padding: 48px 56px 50px;
+}
+.notebook .intro { margin-bottom: 34px; }
+.say { margin: 0 0 14px; }
+.step { margin-bottom: 30px; }
+.cellrow { display: grid; grid-template-columns: 70px 1fr; align-items: start; }
+.cellrow .no { font-family: var(--mono); font-size: 24px; color: var(--muted); padding-top: 16px; }
+.cell { border-radius: 16px; overflow: hidden; background: #fff; border: 3px solid var(--rule); }
+.cell pre {
+  margin: 0;
+  padding: 14px 24px;
+  font-family: var(--mono);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.38;
+  white-space: pre;
+}
+.cell .out { background: #FBFAF8; color: var(--ink-2); border-top: 3px solid var(--rule); }
+.st { color: #5E5954; }
+.el { color: var(--muted); }
+
+.restart {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin: 6px 0 26px;
+  color: var(--muted);
+  font-size: 28px;
+  font-weight: 700;
+}
+.restart::before, .restart::after { content: ""; flex: 1; border-top: 3px dashed #BDB7B1; }
+.restart code { font-size: 25px; letter-spacing: 0; font-weight: 500; color: var(--ink-2); }
+
+.nowrap { white-space: nowrap; }
+
+/* Slack excerpt */
+.thread {
+  border: 3px solid var(--rule);
+  border-radius: 22px;
+  padding: 22px 30px 24px;
+  font-size: 31px;
+  line-height: 1.38;
+}
+.thread .who { font-weight: 700; }
+.thread .meta { color: var(--muted); font-size: 27px; margin-left: 10px; }
+.thread .q { margin: 2px 0 14px; }
+.thread .a { margin: 4px 0 0; color: var(--ink-2); }
+.thread .mention { font-weight: 700; color: var(--blue); }
+.thread .a + .a { margin-top: 12px; }
+.thread .work { margin: 6px 0 22px; padding-left: 26px; border-left: 5px solid var(--rule); }
+.thread .work p { margin: 0 0 14px; color: var(--muted); font-size: 29px; line-height: 1.36; }
+.thread .cell pre { font-size: 23px; padding: 12px 22px; }
+.hl { background: var(--tint); border-radius: 4px; }
+
+/* open questions, set apart to invite conversation */
+.questions {
+  margin: 36px 0 30px;
+  background: var(--fill);
+  border-radius: 24px;
+  padding: 32px 44px 34px;
+}
+.questions h3 { margin: 0 0 16px; font-family: var(--display); font-size: 48px; font-weight: 700; letter-spacing: 0; color: var(--blue); }
+.questions ol { margin: 0; padding-left: 1.3em; }
+.questions li { margin: 0 0 16px; font-size: 37px; line-height: 1.32; }
+.questions li:last-child { margin-bottom: 0; }
+.questions li::marker { font-weight: 700; color: var(--blue); }
+
+.term {
+  margin-top: 34px;
+  border-radius: 16px;
+  background: #fff;
+  border: 3px solid var(--rule);
+  color: var(--ink);
+  padding: 22px 28px;
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.55;
+  white-space: pre;
+  font-variant-ligatures: none;
+}
+.after-term { margin-top: 26px; }
+.term .cmt { font-family: var(--sans); font-size: 32px; color: var(--muted); }
+
+footer {
+  flex: none;
+  margin: 50px var(--pad) 0;
+  padding: 26px 0 50px;
+  border-top: 4px solid var(--blue);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px 80px;
+  font-size: 27px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+footer ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, auto); gap: 4px 60px; }
+footer ol li span { color: var(--ink); font-weight: 700; margin-right: 10px; }
+footer .right { text-align: right; grid-column: 2; grid-row: 1; }
+footer .ack { grid-column: 1 / -1; margin: 0; }
+.cell .fp { color: #A39E99; }
+.cell .note { font-family: var(--sans); font-size: 26px; font-weight: 700; color: var(--ink); }
+.cell .note::before { content: "\2190\00a0"; font-family: var(--mono); }

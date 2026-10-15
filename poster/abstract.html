@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Introducing Quail: An Environment for Agentic Qualitative Analysis</title>
+<!-- Layout copies the USRSE'26 Poster Submission Template as filled in for the submitted abstract:
+     US Letter, 1 in margins, Google Sans 11 pt at 1.15 line spacing, 12 pt above and below paragraphs.
+     Google Docs applies line spacing to a font's natural line height (1.26 em for Google Sans,
+     1.32 em for Roboto Mono), hence 1.449 and 1.518 below. The Abstract section must fit on its own page. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans&family=Roboto+Mono&display=block">
+<style>
+  @page { size: letter; margin: 1in; }
+  body { margin: 0; font: 11pt/1.449 "Google Sans", Arial, sans-serif; color: #000; }
+  h2 { font-size: 16pt; font-weight: 400; margin: 0; padding: 18pt 0 6pt; break-after: avoid; }
+  p { margin: 0; }
+  .page { break-after: page; }
+  #abstract p { padding: 12pt 0; }
+  #abstract pre { margin: 0; padding: 0 0 0 18pt; font: 9.5pt/1.518 "Roboto Mono", monospace; }
+  code { font: 9.5pt "Roboto Mono", monospace; }
+  ol { margin: 0; padding-left: 36pt; }
+  a { color: #1155cc; }
+</style>
+</head>
+<body>
+
+<div class="page">
+<h2>Introducing Quail: An Environment for Agentic Qualitative Analysis</h2>
+<h2>Presenters</h2>
+<p>Dashiell Coyier &lt;<a href="mailto:coyierd@carleton.edu">coyierd@carleton.edu</a>&gt;, Data Scientist for the DataSquad, Carleton College, 0009-0003-1650-9370</p>
+<h2>Keywords</h2>
+<p>Agentic AI, qualitative analysis, research software</p>
+</div>
+
+<div class="page" id="abstract">
+<h2>Abstract</h2>
+<p>Researchers often have more text than anyone can read closely [1]. Retrieval-augmented generation (RAG) [2] hands an AI agent the few entries in a dataset that best match a question. This can find what was said about a topic but struggles with questions that require context over the whole dataset, like how often something was said and how it changed over time.</p>
+<p>Quail lets an agent analyze a text dataset the way a researcher works in a Jupyter notebook [3]. Each cell the agent sends runs in a Python kernel that stays alive between cells and has Quail&rsquo;s analysis language preloaded. Fields, the columns of a dataset, build recipes: expressions such as semantic or keyword scores give a value for each entry, and predicates built from them select entries. Recipes are kept in variables, and nothing runs until one of four functions uses them: <code>count</code> and <code>values</code> work over every match, <code>retrieve</code> returns matches to read, and <code>tag</code> saves the agent&rsquo;s analysis on the entries. For the second question, a cell might run:</p>
+<pre>close = Field("body").semantic("waiting to vote") &gt; 0.5
+print(count(close, by=Field("network")))</pre>
+<p>A later cell can tag the matches that fit, as in qualitative coding, and the tag becomes a field that can be counted like any other. Because all four are Python functions, one cell can combine them and return only what matters. Agents often work better this way than by calling tools one at a time [4], an approach now commonly called &ldquo;code mode&rdquo; [5]. The language also gives a researcher and an agent a shared vocabulary: what the agent counts, reads, or tags is defined in code, so a researcher can see exactly what it did and question it.</p>
+<p>Each cell&rsquo;s code, output, and tags are saved to the session log before the agent sees the result, and the kernel blocks network, file, and subprocess access. A study is an ordinary folder of text files that git can share like code. Each kernel run writes its own log file, so agents working in parallel push separate files that merge without conflicts.</p>
+<p>Operating Quail requires only a shell, so it runs wherever an agent does, on a laptop or a cloud VM. In one test, TV news transcripts from six U.S. presidential election years, 2004 to 2024, were prepared as a study. Asked in Slack how Obama is characterized, a Cursor cloud agent [6], started from a snapshot holding Quail and the indexed study, ran nearly 20 cells and replied 27 minutes later. One cell found &ldquo;Obama is not ready&rdquo; in 185 entries from 2008 (including CNN 70, Fox 41, MSNBC 37). Quail 0.94 is an alpha release for Linux and macOS under the Apache-2.0 license [7]. Its results have not yet been formally evaluated, which is our next step.</p>
+</div>
+
+<div>
+<h2>References</h2>
+<ol>
+  <li>The DataSquad Experiment: Lessons for Preparing Data and Computer Scientists for Work. Paula Lackie, Elliot Pickens, and Dashiell Coyier. arXiv:2511.19688. 2025. <a href="https://arxiv.org/abs/2511.19688">https://arxiv.org/abs/2511.19688</a></li>
+  <li>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks. Patrick Lewis et al. Advances in Neural Information Processing Systems 33. 2020. <a href="https://arxiv.org/abs/2005.11401">https://arxiv.org/abs/2005.11401</a></li>
+  <li>Jupyter Notebooks &ndash; a publishing format for reproducible computational workflows. Thomas Kluyver et al. Positioning and Power in Academic Publishing: Players, Agents and Agendas. IOS Press. 2016. <a href="https://doi.org/10.3233/978-1-61499-649-1-87">https://doi.org/10.3233/978-1-61499-649-1-87</a></li>
+  <li>Executable Code Actions Elicit Better LLM Agents. Xingyao Wang et al. Proceedings of the 41st International Conference on Machine Learning, PMLR 235. 2024. <a href="https://arxiv.org/abs/2402.01030">https://arxiv.org/abs/2402.01030</a></li>
+  <li>Code Mode: the better way to use MCP. Kenton Varda and Sunil Pai. Cloudflare Blog. September 26, 2025. <a href="https://blog.cloudflare.com/code-mode/">https://blog.cloudflare.com/code-mode/</a></li>
+  <li>Cursor agents can now control their own computers. Jonas Nelle and Alexi Robbins. Cursor. February 24, 2026. <a href="https://cursor.com/blog/agent-computer-use">https://cursor.com/blog/agent-computer-use</a></li>
+  <li>Quail. Dashiell Coyier. GitHub repository. 2026. <a href="https://github.com/dcoyier/Quail">https://github.com/dcoyier/Quail</a></li>
+</ol>
+
+<h2>Connection to Mission, Goals, &amp; Interests of US-RSE Community</h2>
+<p>This poster connects to US-RSE&rsquo;s Resources and Advocacy goals. For Resources, Quail is an open-source reference, under the Apache-2.0 license, for research software engineers building AI-assisted tools whose results researchers need to be able to check. The design decisions it presents come up in other projects as well: giving an agent a Python kernel with a small analysis language instead of a separate tool for each operation, so that a researcher can see exactly what it did; keeping the source data read-only; saving each cell to a log before the agent sees its result; and storing a study as text files that git can share and review.</p>
+<p style="padding-top:11pt">For Advocacy, Quail is an example of what a campus data and software support group can build in response to a local need. It came out of the DataSquad, a student-staffed group at Carleton College, after we saw campus offices collect open-ended survey answers they did not have time to analyze. It also addresses this year&rsquo;s theme, Advancing Science in the Age of AI: in qualitative research, researchers need to see exactly what an agent did, and question it, before they can trust its analysis.</p>
+
+<h2>AI Acknowledgement</h2>
+<p>All sections were drafted with help from Anthropic&rsquo;s Claude. The author modified, reviewed, and verified the content and takes responsibility for it.</p>
+</div>
+
+</body>
+</html>

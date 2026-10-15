@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Quail: An Environment for Agentic Qualitative Analysis</title>
+<link rel="stylesheet" href="poster.css">
+</head>
+<body>
+<div class="poster">
+
+<header>
+  <img class="logo" src="../quail.png" alt="Quail logo">
+  <div>
+    <h1><span class="name">Quail</span><span class="sub">An Environment for Agentic Qualitative Analysis</span></h1>
+    <div class="authors"><b>Dashiell Coyier</b> &nbsp;&middot;&nbsp; DataSquad, Carleton College &nbsp;&middot;&nbsp; coyierd@carleton.edu</div>
+  </div>
+  <div class="qr">
+    <img src="figures/qr.svg" alt="QR code for github.com/dcoyier/Quail">
+    <b>github.com/dcoyier/Quail</b><br>Apache-2.0
+  </div>
+</header>
+
+<main>
+
+<div class="col">
+
+<section id="why">
+  <h2>Beyond retrieval</h2>
+  <p class="lede">While text retrieval shows an agent a few examples, Quail gives it a Python kernel and an analysis language, in order to make sense of the whole dataset.</p>
+  <p>Researchers often have more text than anyone can read closely.<sup>1</sup> LLMs can help, and one common way is through retrieval-augmented generation (RAG),<sup>2</sup> which gives a language model the few entries that best match a query. Standard RAG can find what was said about a topic but struggles with questions that require context over the whole dataset, like how often something was said and how it changed over time.</p>
+  <figure><img src="figures/corpus.svg" alt="The same 40-entry dataset four times: retrieval picks five entries; counting finds all twelve matches; values returns one value from each match as a Python list; tagging marks ten as fitting and two as not"></figure>
+</section>
+
+<section id="notebook">
+  <h2>A notebook for an agent</h2>
+  <p>Notebooks like Jupyter let researchers iteratively explore. Quail gives an agent the same loop, where each cell (a block of Python) from the agent runs in a kernel that stays alive between cells. After each one, the agent receives printed output and the last line&rsquo;s value, just what a notebook would show.</p>
+  <p>Many systems give an agent a separate tool for each operation. Quail instead relies on an analysis language inside its Python kernel, where functions to search, count, and tag are highly composable. Agents often work better this way than by calling tools one at a time,<sup>3</sup> an approach now commonly called &ldquo;code mode.&rdquo;<sup>4</sup></p>
+  <figure><img src="figures/loop.svg" alt="The agent sends cell 13 to Quail and reads back its output. Inside Quail, a session host passes the cell to a sandboxed Python kernel, which reads the SQLite dataset index and returns its result; the host writes the cell and its result to the session log, then updates the index and replies. Numbered arrows mark the seven steps; missing embeddings come from an embedding model"></figure>
+</section>
+
+</div>
+
+<div class="col">
+
+<section id="language">
+  <h2>The analysis language</h2>
+  <p>Inside the Python kernel, Quail&rsquo;s analysis language acts as the bridge between the kernel and the dataset. The components of the language build on one another, from a dataset&rsquo;s columns to the four core functions. The language also gives a researcher and an agent a concise, shared vocabulary; this allows a researcher to efficiently interrogate an agent&rsquo;s actions.</p>
+  <figure><img src="figures/language.svg" alt="The analysis language in three levels. Fields, the columns of the dataset, such as body, year and network, build recipes: expressions, a value for each entry, such as a semantic or keyword score, and predicates, true or false for each entry, such as close = sem &gt; 0.5. Recipes are kept in variables and nothing runs until a function uses them. They plug into four functions: count, retrieve, values and tag. Tag writes a new field, such as topic, that can be used like any other"></figure>
+</section>
+
+<section id="study">
+  <h2>Studies live in git</h2>
+  <p>Sessions in Quail are organized into studies. Because a study is a folder of text files, git can share it the way any piece of code is shared. The file structure is designed so that agents working in parallel can push logs without conflict and pick up where another agent left off.</p>
+  <figure><img src="figures/study.svg" alt="A study folder holding quail.toml, the notes.csv dataset, a session with one log per kernel run, exports/, warm/ and a local .quail/ index, next to two agents sharing it through git: one works in session first-pass, the other in second-pass, forked from it. Below, embeddings computed in four shards are saved to warm/, so every clone&rsquo;s first semantic search is fast"></figure>
+  <p>Semantic search needs the entire search space to be embedded, which can take hours to compute. <code>quail warm</code> can do this work ahead of time, distributed on several machines.</p>
+</section>
+
+</div>
+
+<div class="col">
+
+<section id="where">
+  <h2>Where Quail can run</h2>
+  <p>Operating Quail requires only a shell, so it can run wherever an agent does, on a laptop or a cloud VM. In one tested setup, TV news transcripts from six U.S. presidential election years, a Carleton College research dataset, were prepared as a study. Mentioning @Cursor in a Slack thread started a new Cursor cloud agent, whose VM booted from a snapshot that already held Quail, an embedding model, and the election news transcripts, indexed&nbsp;and&nbsp;embedded.</p>
+  <figure><img src="figures/deploy.svg" alt="A question in Slack starts a cloud VM that boots from a snapshot holding Quail, an embedding model and the dataset, indexed and embedded; on the VM the agent sends cells to Quail, reads their output and posts its reply in the same thread"></figure>
+  <div class="thread">
+    <div><span class="who">Dashiell Coyier</span></div>
+    <p class="q"><span class="mention">@Cursor</span> how is Obama characterized?</p>
+    <div class="work">
+      <p>Before responding, the agent ran nearly 20 cells. Here&rsquo;s part of one cell:</p>
+      <div class="cell"><pre>labels = [
+    <span class="el">&hellip;</span>
+    ("is_celebrity", r"(?i)\bObama is a celebrity\b"),
+    ("is_not_ready", r"(?i)\b<span class="hl">Obama is not ready</span>\b"),
+    <span class="el">&hellip;</span>
+]
+<span class="el">&hellip;</span>
+for name, pat in labels:
+    hit = body.search(pat) != None
+    print(name, count(hit),
+          count(where=hit, by=Field("network")).most_common(8))</pre></div>
+    </div>
+    <div><span class="who">Cursor</span><span class="meta">27 minutes later</span></div>
+    <p class="a">The portrait moves from rising uniter (2004), to a fight over whether he is a historic, gifted candidate or an unready celebrity with a suspect identity (2008)&nbsp;&hellip; and by 2024 to a celebrated speaker and campaign headliner.</p>
+    <p class="a">&hellip; &ldquo;<span class="hl">Obama is not ready</span>&rdquo; 185 (CNN 70, Fox 41, MSNBC 37), often Biden&rsquo;s primary quote reused by McCain.</p>
+  </div>
+</section>
+
+<section id="status">
+  <h2>Status and next steps</h2>
+  <p>Quail 0.94 is an early release for Linux and macOS, open source under the <span class="nowrap">Apache-2.0</span> license.</p>
+  <div class="questions">
+    <h3>Open questions</h3>
+    <ol>
+      <li>How does Quail add value to coding agents such as Codex or Claude&nbsp;Code?</li>
+      <li>Should Quail run on a central server with MCP or locally for each&nbsp;agent?</li>
+      <li>Is semantic search really helpful? And is it worth the costs?</li>
+      <li>Could Quail search and tag passages within a text without chunking&nbsp;it&nbsp;first?</li>
+      <li>How could &ldquo;System&nbsp;1&rdquo; decision models such as Jev be integrated into&nbsp;Quail?</li>
+      <li>How can an agent communicate its method efficiently, so that researchers can trust its analysis?</li>
+      <li>Could a small analysis language in a persistent kernel help agents in other&nbsp;domains?</li>
+    </ol>
+  </div>
+  <p class="after-term">If you try Quail, let me know your thoughts in a GitHub issue or by&nbsp;email!</p>
+</section>
+
+</div>
+
+</main>
+
+<footer>
+  <ol>
+    <li><span>1</span>P. Lackie, E. Pickens, D. Coyier. The DataSquad Experiment: Lessons for Preparing Data and Computer Scientists for Work. arXiv:2511.19688, 2025.</li>
+    <li><span>3</span>X. Wang et al. Executable Code Actions Elicit Better LLM Agents. ICML, 2024.</li>
+    <li><span>2</span>P. Lewis et al. Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks. NeurIPS, 2020.</li>
+    <li><span>4</span>K. Varda, S. Pai. Code Mode: the better way to use MCP. Cloudflare Blog, 2025.</li>
+  </ol>
+  <div class="right">USRSE&rsquo;26, San Jose</div>
+  <p class="ack">Developed with the Carleton College DataSquad. Drafted with help from Anthropic&rsquo;s Claude; modified, reviewed, and verified by the author.</p>
+</footer>
+
+</div>
+</body>
+</html>
