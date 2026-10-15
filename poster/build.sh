@@ -39,7 +39,6 @@ done
 timeout 120 "$chrome" "${flags[@]}" --no-pdf-header-footer \
   --print-to-pdf="$out/poster.pdf" "file://$here/poster.html" >/dev/null 2>&1
 render_png "$here/poster.html" 4224 4224 0.5 "$out/poster-preview.png"
-python3 "$here/sheet.py" "$out" || echo "Skipped poster-44x48.pdf (needs pypdf)" >&2
 
 # The abstract loads Google Sans from Google Fonts, so it needs network access to match the doc.
 timeout 60 "$chrome" "${flags[@]}" --no-pdf-header-footer --virtual-time-budget=20000 \
