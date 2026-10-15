@@ -27,7 +27,7 @@
 <section id="why">
   <h2>Beyond retrieval</h2>
   <p class="lede">While text retrieval shows an agent a few examples, Quail gives it a Python kernel and an analysis language, in order to make sense of the whole dataset.</p>
-  <p>Researchers often have more text than anyone can read closely.<sup>1</sup> LLMs can help, and one common way is through retrieval-augmented generation (RAG),<sup>2</sup> which gives a language model the few entries that best match a query. Standard RAG can find what was said about a topic but struggles with questions about the whole dataset: how often something was said, by whom, and how it changed over time.</p>
+  <p>Researchers often have more text than anyone can read closely.<sup>1</sup> LLMs can help, and one common way is through retrieval-augmented generation (RAG),<sup>2</sup> which gives a language model the few entries that best match a query. Standard RAG can find what was said about a topic but struggles with questions that require context over the whole dataset, like how often something was said and how it changed over time.</p>
   <figure><img src="figures/corpus.svg" alt="The same 40-entry dataset four times: retrieval picks five entries; counting finds all twelve matches; values returns one value from each match as a Python list; tagging marks ten as fitting and two as not"></figure>
 </section>
 
