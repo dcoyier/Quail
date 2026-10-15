@@ -44,7 +44,7 @@
 
 <section id="language">
   <h2>The analysis language</h2>
-  <p>Inside the Python kernel, Quail&rsquo;s analysis language acts as the bridge between the kernel and the dataset. The components of the language build on one another, from the columns of a dataset to the four core functions. The language also gives a researcher and an agent a concise, shared vocabulary; this allows a researcher to efficiently interrogate an agent&rsquo;s actions.</p>
+  <p>Inside the Python kernel, Quail&rsquo;s analysis language acts as the bridge between the kernel and the dataset. The components of the language build on one another, from a dataset&rsquo;s columns to the four core functions. The language also gives a researcher and an agent a concise, shared vocabulary, so a researcher can efficiently interrogate an agent&rsquo;s actions.</p>
   <figure><img src="figures/language.svg" alt="The analysis language in three levels. Fields, the columns of the dataset, such as body, year and network, build recipes: expressions, a value for each entry, such as a semantic or keyword score, and predicates, true or false for each entry, such as close = sem &gt; 0.5. Recipes are kept in variables and nothing runs until a function uses them. They plug into four functions: count, retrieve, values and tag. Tag writes a new field, such as topic, that can be used like any other"></figure>
 </section>
 
@@ -61,7 +61,7 @@
 
 <section id="where">
   <h2>Where Quail can run</h2>
-  <p>Operating Quail requires only a shell, so it can run wherever an agent does, on a laptop or a cloud VM. In one tested setup, TV news transcripts from six U.S. presidential election years, a Carleton College research dataset, were prepared as a study. Mentioning @Cursor in a Slack thread started a new Cursor cloud agent, whose VM booted from a snapshot that already held Quail, an embedding model, and the election news transcripts, indexed and embedded.</p>
+  <p>Operating Quail requires only a shell, so it can run wherever an agent does, on a laptop or a cloud VM. In one tested setup, TV news transcripts from six U.S. presidential election years, a Carleton College research dataset, were prepared as a study. Mentioning @Cursor in a Slack thread started a new Cursor cloud agent, whose VM booted from a snapshot that already held Quail, an embedding model, and the election news transcripts, indexed&nbsp;and&nbsp;embedded.</p>
   <figure><img src="figures/deploy.svg" alt="A question in Slack starts a cloud VM that boots from a snapshot holding Quail, an embedding model and the dataset, indexed and embedded; on the VM the agent sends cells to Quail, reads their output and posts its reply in the same thread"></figure>
   <div class="thread">
     <div><span class="who">Dashiell Coyier</span></div>
