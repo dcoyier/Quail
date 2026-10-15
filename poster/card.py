@@ -1,5 +1,4 @@
-"""Writes the business card pages: python3 poster/card.py OUT_DIR [PHONE], then print each HTML file to PDF.
-The phone number is an argument so that it stays out of the repository.
+"""Writes the business card pages: python3 poster/card.py OUT_DIR, then print each HTML file to PDF.
 
 card.html:       one single-sided 3.5 x 2 in card with 0.125 in bleed.
 card-sheet.html: ten cards on US Letter with crop marks."""
@@ -8,7 +7,6 @@ import sys
 
 here = os.path.dirname(os.path.abspath(__file__))
 out = sys.argv[1]
-phone = f"<br>{sys.argv[2]}" if len(sys.argv) > 2 else ""
 fonts = os.path.join(here, "fonts")
 logo = os.path.join(os.path.dirname(here), "quail.png")
 
@@ -33,7 +31,7 @@ FRONT = f"""<div class="card front" style="{{pos}}">
   <div class="tile"><img src="file://{logo}" alt="Quail logo"></div>
   <div class="name">Dashiell Coyier</div>
   <div class="role">Computer Science and Math<br>Carleton College, Class of 2029<br>Data Scientist, DataSquad</div>
-  <div class="contact"><b>coyierd@carleton.edu</b>{phone}<br>github.com/dcoyier</div>
+  <div class="contact"><b>coyierd@carleton.edu</b><br>515-732-8372<br>github.com/dcoyier</div>
 </div>"""
 
 
