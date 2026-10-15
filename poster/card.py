@@ -18,12 +18,12 @@ STYLE = f"""
 html, body {{ margin: 0; padding: 0; }}
 body {{ font-family: "Source Sans 3", sans-serif; color: #141414; -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
 .card {{ position: absolute; width: 3.5in; height: 2in; overflow: hidden; }}
-.front {{ background: #fff; padding: 0.24in 0.26in; display: flex; flex-direction: column; }}
-.front .tile {{ position: absolute; top: 0.24in; right: 0.26in; width: 0.5in; height: 0.5in; border-radius: 0.07in; background: #003069; display: flex; align-items: center; justify-content: center; }}
+.front {{ background: #fff; padding: 0.2in 0.26in; display: flex; flex-direction: column; }}
+.front .tile {{ position: absolute; top: 0.2in; right: 0.26in; width: 0.5in; height: 0.5in; border-radius: 0.07in; background: #003069; display: flex; align-items: center; justify-content: center; }}
 .front .tile img {{ width: 0.4in; height: 0.4in; filter: invert(1); mix-blend-mode: screen; }}
 .front .name {{ font-family: "Source Serif 4", serif; font-weight: 700; font-size: 16pt; line-height: 1.05; color: #003069; }}
 .front .role {{ margin-top: 0.1in; font-size: 8.6pt; line-height: 1.35; color: #3A3632; }}
-.front .contact {{ margin-top: auto; font-size: 8.6pt; line-height: 1.4; color: #141414; }}
+.front .contact {{ margin-top: auto; font-size: 8.6pt; line-height: 1.3; color: #141414; }}
 .front .contact b {{ font-weight: 600; }}
 """
 
@@ -31,7 +31,7 @@ FRONT = f"""<div class="card front" style="{{pos}}">
   <div class="tile"><img src="file://{logo}" alt="Quail logo"></div>
   <div class="name">Dashiell Coyier</div>
   <div class="role">Computer Science and Math<br>Carleton College, Class of 2029<br>Data Scientist, DataSquad</div>
-  <div class="contact"><b>coyierd@carleton.edu</b><br>515-732-8372<br>github.com/dcoyier</div>
+  <div class="contact"><b>coyierd@carleton.edu</b><br>515-732-8372<br>github.com/dcoyier<br>linkedin.com/in/dashiell-coyier-a9a518293</div>
 </div>"""
 
 
