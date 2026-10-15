@@ -77,7 +77,7 @@ t(tx + tw / 2, chip_y - 12, "a tag becomes a field", anchor="middle")
 # ---------- Level 2: Recipes ----------
 GAP_LV = 130
 R_Y = F_Y + F_H + GAP_LV
-R_H = HS + 556
+R_H = HS + 510
 level(R_Y, R_H, "Recipes", "kept in variables and reused; nothing runs until a function uses them", 7)
 mid = CONTENT / 2
 col_l, col_r = PAD, mid + 24
@@ -87,11 +87,7 @@ for cx, title, gloss in [(col_l, "Expressions", "a value for each entry"), (col_
 
 def rows(cx, items, kind):
     y = R_Y + HS + 162
-    for k, (parts, gloss) in enumerate(items):
-        if k == 2:
-            add(f'<path d="M{cx:g},{y-32:g} H{cx+mid-PAD-24:g}" stroke="#CFC9C2" stroke-width="2"/>')
-            t(cx, y, "Chain them", "chain")
-            y += 46
+    for parts, gloss in items:
         w = measure(parts)
         if kind == "p":
             hexagon(cx, y - 30, w + 48, 44, "predchip"); code_line(cx + 24, y, parts)
@@ -103,7 +99,7 @@ def rows(cx, items, kind):
 rows(col_l, [
     ([("sem", None), (" = ", None), ("body", "f"), ('.semantic("waiting to vote")', None)], "closeness in meaning to a phrase"),
     ([("kw", None), (" = ", None), ("body", "f"), ('.lexical("polls")', None)], "keyword score; above 0 when the word appears"),
-    ([("body", "f"), ('.lower().search("long lines?")', None)], "methods in a row: the first match, or none"),
+    ([("body", "f"), ('.lower().search("long lines?")', None)], "lowercase the text, then find the first match"),
     ([("sem + 0.2 * kw", None)], "scores added together"),
 ], "e")
 rows(col_r, [
@@ -163,7 +159,6 @@ svg = f'''<?xml version="1.0" encoding="UTF-8"?>
     .lvgloss {{ font-size: 26px; fill: {BLUE_TINT}; }}
     .coltitle {{ font-size: 32px; font-weight: 700; }}
     .idea {{ font-size: 27px; font-weight: 600; }}
-    .chain {{ font-size: 22px; font-weight: 700; fill: #625D58; }}
     .fname {{ font-family: 'Source Code Pro', monospace; font-size: 36px; font-weight: 700; fill: {BLUE}; font-variant-ligatures: none; }}
     .code {{ font-family: 'Source Code Pro', monospace; font-size: {MONO}px; font-weight: 500; font-variant-ligatures: none; }}
     .card {{ fill: #fff; stroke: {INK}; stroke-width: 3; }}
