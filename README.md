@@ -4,34 +4,16 @@
 
 # Quail
 
-Quail lets AI agents search, count, and annotate a text dataset from a persistent Python session without changing the source data.
+**Best Poster, US-RSE ’26:** [Introducing Quail: An Environment for Agentic Qualitative Analysis](https://doi.org/10.5281/zenodo.23465689).
 
-The Quail poster received Best Poster at US-RSE ’26: [Introducing Quail: An Environment for Agentic Qualitative Analysis](https://doi.org/10.5281/zenodo.23465689).
+Quail is an environment for agentic qualitative analysis. An agent works in 
+a Python kernel to study a corpus of text.
 
 Agents using Quail should also read [`USING_QUAIL.md`](USING_QUAIL.md) completely.
 It is the manual for using Quail and details the analysis language, the CLI,
 how to share work, and how to start and continue studies.
 
-## Try it
-
-After [installing Quail](#installation), run this to create a fresh toy study. No embedding service is needed.
-
-```sh
-demo_dir="$(mktemp -d)/quail-demo"
-quail init "$demo_dir"
-cd "$demo_dir"
-cat > notes.csv <<'CSV'
-id,body
-n1,The parking permit is too expensive.
-n2,The staff were helpful.
-CSV
-quail import notes.csv
-quail exec first-pass -c 'body = Field("body"); parking = body.lexical("parking") > 0; count(parking)'
-# Expected output: 1
-quail exec first-pass --close
-```
-
-## How Quail is organized
+Here's some vocab about Quail to provide an initial understanding:
 
 - A **dataset** is an immutable grid of entries by fields (rows x columns),
   and it's imported from a CSV. Every entry has an `id` field, which is
@@ -70,4 +52,9 @@ cd Quail && uv sync --locked --no-dev --python 3.12 && . .venv/bin/activate
 Semantic search through the **analysis language** requires also
 setting up Ollama locally or an OpenAI-compatible endpoint, configured per study
 and per dataset. You're now ready to read [`USING_QUAIL.md`](USING_QUAIL.md).
+\
+\
+The goal of Quail is to provide a medium to *explore* a dataset, usually one with
+plenty of text.
+
 Apache-2.0 · Python 3.12+
